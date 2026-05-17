@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Review"
+  short_description: "구조화된 리뷰 결과를 GitHub PR에 직접 게시하는 스킬"
+  default_prompt: "Use $pr-review to review the current branch changes, locate the target open PR, produce structured review findings, and post them to GitHub with inline comments first, general comment fallback, and an overall summary."

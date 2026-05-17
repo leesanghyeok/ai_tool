@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Review Apply"
+  short_description: "열린 GitHub PR 리뷰를 검토하고 반영하며 thread 답글까지 완료하는 스킬"
+  default_prompt: "Use $pr-review-apply to resolve the current branch open GitHub PR reviews by reading all active threads, evaluating each review, applying valid changes with repository-local editing rules, and replying directly on the existing review thread when possible. Do not create new inline review comments for this skill. Do not use pending-review flows for thread replies. Prefer immediately published thread replies, fall back to a top-level PR comment when a direct thread reply is not possible, commit each completed task, and push once at the end."
