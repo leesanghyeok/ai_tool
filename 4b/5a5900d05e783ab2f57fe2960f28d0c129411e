@@ -1,0 +1,21 @@
+README.md
+  s_6a44de9b4984ac::t_04a116b159bff1 1-38
+.codex-plugin/plugin.json
+  s_6a44de9b4984ac::t_04a116b159bff1 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "4b5a5900d05e783ab2f57fe2960f28d0c129411e",
+  "prompts": {},
+  "sessions": {
+    "s_6a44de9b4984ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e364b-d079-72c0-96d1-347eab0ba993",
+        "model": "gpt-5.5"
+      },
+      "human_author": "leesanghyeok <1004xlsrn@gmail.com>"
+    }
+  }
+}
