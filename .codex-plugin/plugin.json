@@ -1,0 +1,40 @@
+{
+  "name": "ai-tool",
+  "version": "0.1.0",
+  "description": "Codex skills and utilities for PR review workflows.",
+  "author": {
+    "name": "leesanghyeok",
+    "email": "404jsh@gmail.com",
+    "url": "https://github.com/leesanghyeok"
+  },
+  "homepage": "https://github.com/leesanghyeok/ai_tool",
+  "repository": "https://github.com/leesanghyeok/ai_tool",
+  "license": "UNLICENSED",
+  "keywords": [
+    "codex",
+    "skills",
+    "github",
+    "pull-request",
+    "review"
+  ],
+  "skills": "./codex/skills/",
+  "interface": {
+    "displayName": "AI Tool",
+    "shortDescription": "PR review and review-apply skills for Codex.",
+    "longDescription": "AI Tool packages Codex skills for reviewing GitHub pull requests and applying PR review feedback with structured verification rules.",
+    "developerName": "leesanghyeok",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "websiteURL": "https://github.com/leesanghyeok/ai_tool",
+    "privacyPolicyURL": "https://github.com/leesanghyeok/ai_tool",
+    "termsOfServiceURL": "https://github.com/leesanghyeok/ai_tool",
+    "defaultPrompt": [
+      "Use $pr-review to post review findings on the current PR.",
+      "Use $pr-review-apply to apply current PR review feedback."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
