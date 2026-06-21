@@ -1,7 +1,7 @@
 {
   "name": "ai-tool",
   "version": "0.1.0",
-  "description": "Codex skills and utilities for PR review workflows.",
+  "description": "Codex skills and utilities for PR review and AI feedback logging workflows.",
   "author": {
     "name": "leesanghyeok",
     "email": "1004xlsrn@gmail.com",
@@ -15,13 +15,14 @@
     "skills",
     "github",
     "pull-request",
-    "review"
+    "review",
+    "feedback"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "AI Tool",
-    "shortDescription": "PR review and review-apply skills for Codex.",
-    "longDescription": "AI Tool packages Codex skills for reviewing GitHub pull requests and applying PR review feedback with structured verification rules.",
+    "shortDescription": "PR review, review-apply, and feedback logging skills for Codex.",
+    "longDescription": "AI Tool packages Codex skills for reviewing GitHub pull requests, applying PR review feedback, and logging AI output dissatisfaction as structured feedback records.",
     "developerName": "leesanghyeok",
     "category": "Productivity",
     "capabilities": [
@@ -31,6 +32,7 @@
     "privacyPolicyURL": "https://github.com/leesanghyeok/ai_tool",
     "termsOfServiceURL": "https://github.com/leesanghyeok/ai_tool",
     "defaultPrompt": [
+      "Use $feedback-ai-loggin to record AI output dissatisfaction as a feedback log.",
       "Use $pr-review to post review findings on the current PR.",
       "Use $pr-review-apply to apply current PR review feedback."
     ],
