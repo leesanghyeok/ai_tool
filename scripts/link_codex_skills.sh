@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_ROOT="${SCRIPT_DIR%/scripts}/skills"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_ROOT="$REPO_ROOT/skills"
 TARGET_ROOT="${CODEX_HOME:-$HOME/.codex}/skills"
 
 mkdir -p "$TARGET_ROOT"

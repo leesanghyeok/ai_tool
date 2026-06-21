@@ -17,7 +17,7 @@
     "pull-request",
     "review"
   ],
-  "skills": "./codex/skills/",
+  "skills": "./skills/",
   "interface": {
     "displayName": "AI Tool",
     "shortDescription": "PR review and review-apply skills for Codex.",

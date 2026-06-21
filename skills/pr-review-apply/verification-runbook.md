@@ -4,8 +4,8 @@ Use this runbook to verify that `pr-review-apply` behaves correctly in both simu
 
 ## Verification Targets
 
-- Skill under test: `codex/skills/pr-review-apply/SKILL.md`
-- Scenario source: `codex/skills/pr-review-apply/verification-scenarios.md`
+- Skill under test: `skills/pr-review-apply/SKILL.md`
+- Scenario source: `skills/pr-review-apply/verification-scenarios.md`
 - Live PR target: `leesanghyeok/subtitle_translator_web#14`
 
 ## Evidence Rules

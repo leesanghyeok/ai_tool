@@ -1,6 +1,7 @@
 # PR Review Apply Verification Scenarios
 
 Use this file as the source of truth for what `pr-review-apply` must prove during simulation and live PR verification.
+The prompts use Codex-style `$skill-name` invocation examples; adapt the invocation syntax when running the same shared skill in another agent runtime.
 
 ## Scenario Format
 
