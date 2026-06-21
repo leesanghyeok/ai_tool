@@ -429,9 +429,28 @@ Reason:
 - [ ] 각 source가 어떤 claim을 뒷받침하는지 연결되어 있다.
 ````
 
+## 자동 session-end 수확 연동 (Automation Integration)
+
+사용자가 Hermes 세션 종료 시점에 이 스킬을 자동 호출하고 싶어 하면, raw feedback 파일 생성 로직을 hook에 직접 복제하지 않는다. 대신 Hermes user plugin이 session boundary를 감지하고, 별도 one-shot Hermes child process를 띄워 이 스킬을 preload한 뒤 끝나는 세션을 resume해서 수확하게 한다.
+
+권장 hook은 gateway 전용 `session:end`보다 plugin lifecycle hook `on_session_finalize`다. `on_session_finalize`는 CLI와 gateway의 shutdown, `/new`, `/reset`, session expiry 같은 session boundary에 더 넓게 걸린다. Hook callback은 빠르게 return해야 하므로 장시간 분석을 직접 수행하지 말고 subprocess를 spawn한다.
+
+필수 안전장치:
+
+- 재귀 방지 env var를 둔다. 예: child process에는 `HERMES_FEEDBACK_AUTOLOG_CHILD=1`을 설정하고, hook callback은 이 값이 있으면 skip한다.
+- 초기 운영은 dry-run 또는 `HERMES_FEEDBACK_AUTOLOG_ENABLED=1` 같은 opt-in gate 뒤에서 시작한다.
+- hook 실패가 session 종료를 막지 않게 로그만 남기고 return한다.
+- 같은 `session_id + reason` 반복 spawn을 줄이는 lightweight seen ledger를 둘 수 있지만, 최종 중복 방지는 이 스킬의 raw feedback idempotency 규칙에 맡긴다.
+- hook plugin은 wiki markdown을 직접 쓰지 않는다. 파일 경로, taxonomy, sha256, incident 분리, 중복 판단은 이 스킬 workflow가 담당한다.
+
+상세 구현 패턴은 `references/session-finalize-hook-automation.md`를 참고한다.
+
 ## 흔한 실수 (Common Pitfalls)
 
-1. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
+1. **Session-end hook에 raw file writer를 직접 구현하기.** 자동화 hook은 이 스킬을 호출하는 orchestration만 담당해야 한다. raw markdown 작성, 중복 검사, sha256 계산, taxonomy 적용은 이 스킬 workflow에 남겨 둔다.
+2. **Gateway `session:end`만 보고 CLI 자동화를 설계하기.** CLI와 gateway를 모두 다루려면 plugin `on_session_finalize`를 우선 검토한다.
+3. **재귀 guard 없이 child Hermes를 띄우기.** 자동 수확용 child process도 종료 hook을 발생시킬 수 있으므로 `HERMES_FEEDBACK_AUTOLOG_CHILD=1` 같은 guard가 필요하다.
+4. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
 2. **Raw file에 processing state 추가하기.** Frontmatter에 status, triage, derived-page, promotion field를 추가하지 않는다.
 3. **`session_id.md`만 사용하기.** 같은 session에서 여러 feedback log가 생기면 충돌한다. 파일명은 time으로 시작하고 session id와 slug를 포함한다.
 4. **모호한 category 사용하기.** 나중에 집계할 수 있도록 controlled category label을 우선한다.
