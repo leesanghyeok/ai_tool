@@ -29,19 +29,39 @@ summarizes, cross-references, files, and maintains consistency.
 Use this skill when the user:
 - Asks to create, build, or start a wiki or knowledge base
 - Asks to ingest, add, or process a source into their wiki
-- Asks a question and an existing wiki is present at the configured path
+- Asks a question and an existing wiki is present at the selected path
 - Asks to lint, audit, or health-check their wiki
 - References their wiki, knowledge base, or "notes" in a research context
 
 ## Wiki Location
 
-**Location:** Set via `WIKI_PATH` environment variable (e.g. in `${HERMES_HOME:-~/.hermes}/.env`).
-
-If unset, defaults to `~/wiki`.
+**Location can be a single wiki or a named multi-wiki registry.** Configure these
+environment variables in `${HERMES_HOME:-~/.hermes}/.env` or the agent runtime:
 
 ```bash
-WIKI="${WIKI_PATH:-$HOME/wiki}"
+# Multi-wiki mode: semicolon-separated key=path pairs.
+WIKI_PATHS="ai=$HOME/wiki/ai;work=$HOME/wiki/work;feedback=$HOME/wiki/feedback"
+
+# Optional default key used when the user does not name a wiki.
+WIKI_DEFAULT="ai"
+
+# Legacy single-wiki mode remains supported.
+WIKI_PATH="$HOME/wiki"
 ```
+
+Resolve the active wiki for each task using this precedence:
+
+1. User-provided explicit path (absolute path, `~/...`, or clear relative path).
+2. User-provided wiki key/topic matched against `WIKI_PATHS` keys (e.g. "ai wiki", "work wiki").
+3. `WIKI_DEFAULT` key, if set and present in `WIKI_PATHS`.
+4. Legacy `WIKI_PATH`.
+5. `~/wiki`.
+
+After resolution, set `WIKI` to the selected directory for the rest of the task.
+When multiple wiki paths are configured and a write operation is ambiguous, ask
+which wiki to use before creating, ingesting, updating, deleting, archiving, or
+logging. For read-only queries, you may use the default wiki but report which
+wiki key/path was used.
 
 The wiki is just a directory of markdown files — open it in Obsidian, VS Code, or
 any editor. No database, no special tooling required.
@@ -78,7 +98,11 @@ When the user has an existing wiki, **always orient yourself before doing anythi
 ③ **Scan recent `log.md`** — read the last 20-30 entries to understand recent activity.
 
 ```bash
-WIKI="${WIKI_PATH:-$HOME/wiki}"
+# First resolve the active wiki from the user's requested key/topic/path,
+# WIKI_PATHS + WIKI_DEFAULT, legacy WIKI_PATH, or ~/wiki.
+WIKI="<selected wiki path>"
+WIKI_KEY="<selected key, or explicit-path/legacy/default>"
+
 # Orientation reads at session start
 read_file "$WIKI/SCHEMA.md"
 read_file "$WIKI/index.md"
@@ -98,13 +122,16 @@ at hand before creating anything new.
 
 When the user asks to create or start a wiki:
 
-1. Determine the wiki path (from `$WIKI_PATH` env var, or ask the user; default `~/wiki`)
-2. Create the directory structure above
-3. Ask the user what domain the wiki covers — be specific
-4. Write `SCHEMA.md` customized to the domain (see template below)
-5. Write initial `index.md` with sectioned header
-6. Write initial `log.md` with creation entry
-7. Confirm the wiki is ready and suggest first sources to ingest
+1. Determine the wiki path using the resolution order above. If multi-wiki mode
+   is configured and the target is ambiguous, ask for a key/path before writing.
+2. If this is a new named wiki, choose or confirm a stable lowercase key for
+   `WIKI_PATHS` (e.g. `ai`, `work`, `feedback`, `project-x`).
+3. Create the directory structure above
+4. Ask the user what domain the wiki covers — be specific
+5. Write `SCHEMA.md` customized to the domain (see template below)
+6. Write initial `index.md` with sectioned header
+7. Write initial `log.md` with creation entry that includes the wiki key/path
+8. Confirm the wiki is ready and suggest first sources to ingest
 
 ### SCHEMA.md Template
 
@@ -321,10 +348,10 @@ When the user asks to lint, health-check, or audit the wiki:
 
 ① **Orphan pages:** Find pages with no inbound `[[wikilinks]]` from other pages.
 ```python
-# Use execute_code for this — programmatic scan across all wiki pages
+# Use execute_code for this — programmatic scan across all pages in the selected wiki
 import os, re
 from collections import defaultdict
-wiki = "<WIKI_PATH>"
+wiki = "<selected wiki path>"
 # Scan all .md files in entities/, concepts/, comparisons/, queries/
 # Extract all [[wikilinks]] — build inbound link map
 # Pages with zero inbound links are orphans
@@ -368,6 +395,10 @@ wiki = "<WIKI_PATH>"
 ## Working with the Wiki
 
 ### Searching
+
+All examples below assume `WIKI` has already been resolved to the selected wiki
+path. When reporting results from multiple configured wikis, prefix paths with
+the wiki key (for example, `ai:concepts/transformers.md`) or use absolute paths.
 
 ```bash
 # Find pages by content
@@ -416,7 +447,8 @@ For best results:
 - Install Dataview plugin for queries like `TABLE tags FROM "entities" WHERE contains(tags, "company")`
 
 If using the Obsidian skill alongside this one, set `OBSIDIAN_VAULT_PATH` to the
-same directory as the wiki path.
+same directory as the selected wiki path. For multiple wikis, switch it to the
+same path as the active `WIKI` before Obsidian-specific operations.
 
 ### Obsidian Headless (servers and headless machines)
 
@@ -436,7 +468,7 @@ ob login --email <email> --password '<password>'
 ob sync-create-remote --name "LLM Wiki"
 
 # Connect the wiki directory to the vault
-cd ~/wiki
+cd "$WIKI"
 ob sync-setup --vault "<vault-id>"
 
 # Initial sync
@@ -456,7 +488,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/path/to/ob sync --continuous
-WorkingDirectory=/home/user/wiki
+WorkingDirectory=<selected wiki path>
 Restart=on-failure
 RestartSec=10
 
@@ -471,12 +503,14 @@ systemctl --user enable --now obsidian-wiki-sync
 sudo loginctl enable-linger $USER
 ```
 
-This lets the agent write to `~/wiki` on a server while you browse the same
-vault in Obsidian on your laptop/phone — changes appear within seconds.
+This lets the agent write to the selected wiki on a server while you browse the
+same vault in Obsidian on your laptop/phone — changes appear within seconds.
 
 ## Pitfalls
 
 - **Never modify files in `raw/`** — sources are immutable. Corrections go in wiki pages.
+- **Resolve the wiki first** — with multiple configured wikis, identify the target key/path
+  before orientation. Never write to an ambiguous wiki; ask the user to choose.
 - **Always orient first** — read SCHEMA + index + recent log before any operation in a new session.
   Skipping this causes duplicates and missed cross-references.
 - **Always update index.md and log.md** — skipping this makes the wiki degrade. These are the
