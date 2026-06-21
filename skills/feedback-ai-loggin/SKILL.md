@@ -56,6 +56,19 @@ Where:
 - `HHMMSS` is local 24-hour time.
 - `short-slug` is a short English lowercase summary of the failure, using hyphens.
 
+## Session Identifier Discovery
+
+Keep the identifier rule runtime-agnostic: `session_id` should be the best available conversation, session, or thread identifier for the environment currently running the skill. Do not assume a specific agent runtime such as Hermes, Codex, Claude CLI, or another tool. Discover the identifier first, then fall back to `unknown-session` only after the discovery procedure finds no usable candidate.
+
+Use this priority order:
+
+1. **Explicit platform or user-provided identifier.** Prefer a concrete source identifier when the feedback comes from a platform or linked artifact, such as a Discord thread id, Telegram topic id, GitHub issue/PR/comment thread id, browser URL, chat permalink, or an id the user explicitly provides.
+2. **Runtime-provided session variables.** Inspect the current execution environment for session-like variables. Look for known names when available, such as `HERMES_SESSION_ID`, `CODEX_SESSION_ID`, or `CLAUDE_SESSION_ID`, and also for generic patterns like `*_SESSION_ID`, `*_CONVERSATION_ID`, `*_THREAD_ID`, or `*_CHAT_ID`. Use only values actually present in the current environment; do not invent or assume them.
+3. **Runtime metadata or status commands.** If the active CLI/runtime exposes a safe status command or non-secret metadata file containing the current session/conversation id, use it. Avoid reading secrets, credentials, tokens, or unrelated private state just to find an id.
+4. **Fallback.** Use `unknown-session` only when no explicit platform id, runtime environment value, or safe runtime metadata value is available.
+
+When an id is discovered, record its source in `source_ref` when useful, for example `discord-thread:<id>`, `github-pr:<owner>/<repo>#<number>`, `cli-session:hermes:<id>`, `cli-session:codex:<id>`, `cli-session:claude:<id>`, or `cli-session:env:<variable-name>`. If no id is discoverable, use a source reference such as `cli:no-session-id-discovered` rather than leaving the reason ambiguous.
+
 Examples:
 
 ```text
@@ -103,8 +116,8 @@ sha256: "<body-sha256>"
 | `type` | yes | Always `feedback-log` |
 | `source_type` | yes | Always `ai-dissatisfaction` for this skill |
 | `source_platform` | yes | Source surface such as `discord`, `cli`, `github`, `web`, `local`, or `unknown` |
-| `source_ref` | no | Link, thread id, message reference, file path, or other source pointer if available |
-| `session_id` | yes | Best available session/thread/conversation id; use `unknown-session` only if unavailable |
+| `source_ref` | no | Link, thread id, message reference, file path, runtime session source, or other source pointer if available |
+| `session_id` | yes | Best available session/thread/conversation id; run Session Identifier Discovery before using `unknown-session` |
 | `ingested` | yes | Date the log is written into the wiki |
 | `created_at` | yes | Precise local timestamp for the log |
 | `task_type` | yes | Controlled task type; see below |
@@ -286,7 +299,7 @@ This follows the LLM Wiki raw-source pattern: frontmatter describes the source, 
 
 1. **Identify the wiki path.** Use `${WIKI_PATH:-$HOME/wiki}` unless the user specifies a path.
 2. **Create date directory.** Ensure `raw/feedback/YYYY-MM-DD/` exists.
-3. **Choose identifiers.** Determine `session_id`, `HHMMSS`, and `short-slug`.
+3. **Discover identifiers.** Determine `session_id`, `HHMMSS`, and `short-slug`. For `session_id`, run the runtime-agnostic Session Identifier Discovery procedure before falling back to `unknown-session`.
 4. **Classify lightly.** Pick `task_type`, `severity`, and `categories` from the controlled taxonomies.
 5. **Write the incident body.** Focus on situation, dissatisfaction, expected behavior, and evidence.
 6. **Add candidate learning.** Include a candidate agent rule and checklist items when there is a clear preventable pattern.
@@ -374,6 +387,7 @@ Reason:
 6. **Skipping candidate rule/checklist.** When the preventable pattern is clear, capture it while context is fresh.
 7. **Hashing the whole file.** Hash only the body, not the frontmatter.
 8. **Promoting immediately by default.** Logging and promotion are separate workflows; only promote when the user asks for analysis or guide/rubric updates.
+9. **Hard-coding one agent runtime for session ids.** This skill is shared across Hermes, Codex, Claude CLI, and other environments. Do not fix missing `session_id` by assuming one runtime-specific variable. Preserve the generic `session_id` rule and add/execute a discovery procedure that checks platform ids, runtime env vars, and safe metadata before using `unknown-session`.
 
 ## Verification Checklist
 
@@ -387,4 +401,7 @@ Before reporting completion, verify:
 - [ ] `categories` are from the failure category taxonomy.
 - [ ] Body includes `Situation`, `Dissatisfaction`, `Expected Behavior`, `Evidence`, `Failure Categories`, `Severity`, `Candidate Agent Rule`, and `Candidate Checklist Items`.
 - [ ] `sha256` was computed over the body only.
+- [ ] `session_id` was chosen through the Session Identifier Discovery procedure, without assuming a specific runtime.
+- [ ] If `unknown-session` is used, explicit platform ids, runtime environment variables, and safe runtime metadata/status sources were checked first.
+- [ ] `source_ref` records the id source when an id is discovered, or records that no session id was discoverable.
 - [ ] The final response gives the user the created path and a one-line summary of severity/categories.
