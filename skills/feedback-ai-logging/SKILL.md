@@ -345,6 +345,23 @@ failure
 
 ## 작업 절차 (Workflow)
 
+### Hermes session-finalize 자동화 통합
+
+Hermes session 종료 시 자동으로 이 스킬을 실행하려는 요청이 있으면, hook handler가 `raw/feedback/` 파일을 직접 쓰게 하지 말고 Hermes plugin의 `on_session_finalize`에서 별도 Hermes one-shot을 spawn해 이 스킬을 로드하게 한다. 이유는 feedback incident 판별, 멱등성, frontmatter, body sha256 규칙이 이 스킬에 있으므로 Python hook에서 재구현하면 drift가 생기기 때문이다.
+
+권장 구조:
+
+```text
+plugin on_session_finalize
+  → child env HERMES_FEEDBACK_AUTOLOG_CHILD=1
+  → hermes --resume <session_id> --skills feedback-ai-logging chat -q "현재 세션 feedback 수확"
+  → 이 스킬이 raw/feedback 파일 작성/중복 확인 담당
+```
+
+주의: Discord thread archive/close 자체와 Hermes session finalize는 같은 lifecycle이 아니다. `on_session_finalize`는 Hermes가 해당 session을 `/new`, `/reset`, idle/daily expiry, gateway shutdown 등으로 finalize할 때 호출된다. Discord thread close 즉시 수확이 필요하면 Discord adapter의 thread lifecycle event를 별도로 연결해야 한다.
+
+자세한 구현 패턴은 `references/hermes-session-finalize-autolog.md`를 참고한다.
+
 1. **Wiki path 식별.** 사용자가 경로를 지정하지 않으면 `${WIKI_PATH:-$HOME/wiki}`를 사용한다.
 2. **Identifier 발견.** `session_id`를 정한다. `session_id`는 `unknown-session`으로 fallback하기 전에 runtime-agnostic Session Identifier Discovery 절차를 실행한다.
 3. **현재 세션 수확.** 현재 세션에서 사용자 수정, 불만족, 재작업, 검증 누락, 포맷/언어 불일치, scope mismatch, evidence gap 후보를 수집한다.
@@ -445,9 +462,39 @@ Reason:
 
 상세 구현 패턴은 `references/session-finalize-hook-automation.md`를 참고한다.
 
+## 자동 실행/세션 종료 Hook 설계 (Automation Hook Design)
+
+이 스킬을 세션 종료 시 자동으로 실행하려면, hook handler가 `raw/feedback/` Markdown을 직접 생성하지 않는 것을 우선한다. 직접 파일 쓰기는 사건 판별, 멱등성, frontmatter, body hash, taxonomy, session id discovery를 Python hook 코드에 중복 구현하게 만들어 스킬 규칙과 쉽게 drift된다.
+
+권장 패턴은 Hermes plugin lifecycle hook에서 별도 Hermes one-shot을 띄우는 것이다.
+
+```text
+on_session_finalize(session_id, platform, reason, **kwargs)
+  -> HERMES_FEEDBACK_AUTOLOG_CHILD=1 hermes --resume <session_id> --skills feedback-ai-logging chat -q "현재 resume된 세션에서 feedback-ai-logging 규칙으로 피드백 사건을 수확하라..."
+```
+
+설계 규칙:
+
+- `on_session_finalize`를 기본 hook으로 사용한다. CLI/gateway session boundary에 모두 걸리며 `/new`, `/reset`, shutdown, gateway idle/daily expiry 같은 Hermes session finalization을 포착한다.
+- 재귀 방지를 위해 child Hermes process에는 `HERMES_FEEDBACK_AUTOLOG_CHILD=1` 같은 guard env를 설정하고, hook handler는 이 값이 있으면 즉시 skip한다.
+- hook handler는 트리거/로그/spawn만 담당하고, 실제 feedback 파일 작성은 이 스킬을 로드한 child Hermes가 수행한다.
+- Discord에서 `on_session_finalize`는 Discord thread archive/close 이벤트 자체가 아니라, 그 thread에 매핑된 Hermes session이 finalize될 때 호출된다. thread close 즉시 수확이 필요하면 Discord adapter의 thread lifecycle event listener를 별도로 구현해야 한다.
+- gateway event hook의 `session:end`는 gateway 전용이고 context가 제한적이므로, CLI/gateway 공통 자동 feedback 수확에는 plugin lifecycle hook을 우선한다.
+
+## 자동 Session Finalize 수확 (Automation Integration)
+
+Hermes session 종료 시 자동으로 이 스킬을 실행해야 하는 경우, hook handler가 직접 `raw/feedback/` Markdown을 쓰지 말고 Hermes user plugin의 `on_session_finalize` hook에서 별도 Hermes one-shot을 spawn해 이 스킬을 preload한다. 자세한 구현/검증 패턴은 `references/session-finalize-autolog.md`를 따른다.
+
+핵심 원칙:
+
+- Python hook은 trigger만 담당한다.
+- 실제 incident 판별, 중복 검사, frontmatter/body/sha256 작성은 이 스킬이 담당한다.
+- child Hermes에는 재귀 방지 env guard를 설정한다.
+- Discord thread close와 Hermes session finalize는 다른 lifecycle임을 설명한다.
+
 ## 흔한 실수 (Common Pitfalls)
 
-1. **Session-end hook에 raw file writer를 직접 구현하기.** 자동화 hook은 이 스킬을 호출하는 orchestration만 담당해야 한다. raw markdown 작성, 중복 검사, sha256 계산, taxonomy 적용은 이 스킬 workflow에 남겨 둔다.
+1. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
 2. **Gateway `session:end`만 보고 CLI 자동화를 설계하기.** CLI와 gateway를 모두 다루려면 plugin `on_session_finalize`를 우선 검토한다.
 3. **재귀 guard 없이 child Hermes를 띄우기.** 자동 수확용 child process도 종료 hook을 발생시킬 수 있으므로 `HERMES_FEEDBACK_AUTOLOG_CHILD=1` 같은 guard가 필요하다.
 4. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
