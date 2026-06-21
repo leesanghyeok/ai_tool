@@ -1,6 +1,6 @@
 ---
 name: llm-wiki
-description: "Karpathy's LLM Wiki: build/query interlinked markdown KB."
+description: "Karpathy LLM Wiki: 상호 링크된 Markdown 지식 베이스 생성/조회."
 version: 2.1.0
 author: Hermes Agent
 license: MIT
@@ -12,136 +12,124 @@ metadata:
     related_skills: [obsidian, arxiv]
 ---
 
-# Karpathy's LLM Wiki
+# Karpathy의 LLM Wiki
 
-Build and maintain a persistent, compounding knowledge base as interlinked markdown files.
-Based on [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+상호 링크된 Markdown 파일로 지속적으로 축적되고 복리처럼 성장하는 지식 베이스를 만든다.
+[Andrej Karpathy의 LLM Wiki 패턴](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)을 기반으로 한다.
 
-Unlike traditional RAG (which rediscovers knowledge from scratch per query), the wiki
-compiles knowledge once and keeps it current. Cross-references are already there.
-Contradictions have already been flagged. Synthesis reflects everything ingested.
+전통적인 RAG가 매 질의마다 지식을 다시 탐색하는 방식이라면, 이 wiki는 지식을 한 번 컴파일하고 계속 최신 상태로 유지한다. 교차 참조가 이미 마련되어 있고, 모순은 표시되어 있으며, 종합 분석은 지금까지 수집한 내용을 반영한다.
 
-**Division of labor:** The human curates sources and directs analysis. The agent
-summarizes, cross-references, files, and maintains consistency.
+**역할 분담:** 사람은 소스를 큐레이션하고 분석 방향을 정한다. 에이전트는 요약, 교차 참조, 파일 정리, 일관성 유지를 맡는다.
 
-## When This Skill Activates
+## 이 스킬이 활성화되는 경우
 
-Use this skill when the user:
-- Asks to create, build, or start a wiki or knowledge base
-- Asks to ingest, add, or process a source into their wiki
-- Asks a question and an existing wiki is present at the selected path
-- Asks to lint, audit, or health-check their wiki
-- References their wiki, knowledge base, or "notes" in a research context
+사용자가 다음을 요청하면 이 스킬을 사용한다:
+- wiki 또는 지식 베이스를 만들거나 시작해 달라고 요청할 때
+- 소스를 wiki에 ingest/add/process 해 달라고 요청할 때
+- 선택된 경로에 기존 wiki가 있고 그 wiki에 대한 질문을 할 때
+- wiki lint, audit, health-check를 요청할 때
+- 연구 맥락에서 wiki, knowledge base, notes를 언급할 때
 
-## Wiki Location
+## Wiki 위치
 
-**Location can be a single wiki or a named multi-wiki registry.** Configure these
-environment variables in `${HERMES_HOME:-~/.hermes}/.env` or the agent runtime:
+**위치는 단일 wiki 또는 이름이 붙은 다중 wiki registry로 설정할 수 있다.** `${HERMES_HOME:-~/.hermes}/.env` 또는 에이전트 런타임에 다음 환경변수를 설정한다:
 
 ```bash
-# Multi-wiki mode: semicolon-separated key=path pairs.
+# 다중 wiki 모드: 세미콜론으로 구분한 key=path 쌍.
 WIKI_PATHS="ai=$HOME/wiki/ai;work=$HOME/wiki/work;feedback=$HOME/wiki/feedback"
 
-# Optional default key used when the user does not name a wiki.
+# 사용자가 wiki를 명시하지 않았을 때 사용할 기본 key. 선택 사항.
 WIKI_DEFAULT="ai"
 
-# Legacy single-wiki mode remains supported.
+# 기존 단일 wiki 모드도 계속 지원한다.
 WIKI_PATH="$HOME/wiki"
 ```
 
-Resolve the active wiki for each task using this precedence:
+각 작업마다 다음 우선순위로 활성 wiki를 결정한다:
 
-1. User-provided explicit path (absolute path, `~/...`, or clear relative path).
-2. User-provided wiki key/topic matched against `WIKI_PATHS` keys (e.g. "ai wiki", "work wiki").
-3. `WIKI_DEFAULT` key, if set and present in `WIKI_PATHS`.
-4. Legacy `WIKI_PATH`.
+1. 사용자가 명시한 경로(절대 경로, `~/...`, 또는 명확한 상대 경로).
+2. 사용자가 말한 wiki key/topic을 `WIKI_PATHS` key와 매칭한 결과(예: "ai wiki", "work wiki").
+3. `WIKI_DEFAULT`가 설정되어 있고 `WIKI_PATHS`에 존재하는 경우 해당 key.
+4. 기존 방식의 `WIKI_PATH`.
 5. `~/wiki`.
 
-After resolution, set `WIKI` to the selected directory for the rest of the task.
-When multiple wiki paths are configured and a write operation is ambiguous, ask
-which wiki to use before creating, ingesting, updating, deleting, archiving, or
-logging. For read-only queries, you may use the default wiki but report which
-wiki key/path was used.
+경로를 결정한 뒤에는 해당 작업이 끝날 때까지 `WIKI`를 선택된 디렉터리로 간주한다.
+여러 wiki 경로가 설정되어 있고 쓰기 작업의 대상이 모호하면, 생성, ingest, 업데이트, 삭제, archive, log 기록을 하기 전에 어떤 wiki를 사용할지 사용자에게 물어본다. 읽기 전용 질의는 기본 wiki를 사용할 수 있지만, 어떤 wiki key/path를 사용했는지 보고한다.
 
-The wiki is just a directory of markdown files — open it in Obsidian, VS Code, or
-any editor. No database, no special tooling required.
+wiki는 Markdown 파일이 들어 있는 디렉터리일 뿐이다. Obsidian, VS Code 또는 아무 편집기에서 열 수 있다. 데이터베이스나 특수 도구는 필요 없다.
 
-## Architecture: Three Layers
+## 아키텍처: 세 계층
 
 ```
 wiki/
-├── SCHEMA.md           # Conventions, structure rules, domain config
-├── index.md            # Sectioned content catalog with one-line summaries
-├── log.md              # Chronological action log (append-only, rotated yearly)
-├── raw/                # Layer 1: Immutable source material
-│   ├── articles/       # Web articles, clippings
-│   ├── papers/         # PDFs, arxiv papers
-│   ├── transcripts/    # Meeting notes, interviews
-│   └── assets/         # Images, diagrams referenced by sources
-├── entities/           # Layer 2: Entity pages (people, orgs, products, models)
-├── concepts/           # Layer 2: Concept/topic pages
-├── comparisons/        # Layer 2: Side-by-side analyses
-└── queries/            # Layer 2: Filed query results worth keeping
+├── SCHEMA.md           # 규칙, 구조, 도메인 설정
+├── index.md            # 한 줄 요약이 포함된 섹션별 콘텐츠 카탈로그
+├── log.md              # 시간순 작업 로그(append-only, 연 단위 회전)
+├── raw/                # Layer 1: 변경하지 않는 원본 소스
+│   ├── articles/       # 웹 글, 클리핑
+│   ├── papers/         # PDF, arXiv 논문
+│   ├── transcripts/    # 회의록, 인터뷰
+│   └── assets/         # 소스에서 참조하는 이미지, 다이어그램
+├── entities/           # Layer 2: 엔티티 페이지(사람, 조직, 제품, 모델)
+├── concepts/           # Layer 2: 개념/주제 페이지
+├── comparisons/        # Layer 2: 비교 분석
+└── queries/            # Layer 2: 보존할 가치가 있는 질의 결과
 ```
 
-**Layer 1 — Raw Sources:** Immutable. The agent reads but never modifies these.
-**Layer 2 — The Wiki:** Agent-owned markdown files. Created, updated, and
-cross-referenced by the agent.
-**Layer 3 — The Schema:** `SCHEMA.md` defines structure, conventions, and tag taxonomy.
+**Layer 1 — 원본 소스:** 변경하지 않는다. 에이전트는 읽기만 하고 수정하지 않는다.
+**Layer 2 — Wiki 본문:** 에이전트가 관리하는 Markdown 파일이다. 생성, 업데이트, 교차 참조를 수행한다.
+**Layer 3 — Schema:** `SCHEMA.md`가 구조, 규칙, 태그 taxonomy를 정의한다.
 
-## Resuming an Existing Wiki (CRITICAL — do this every session)
+## 기존 Wiki 재개하기 (중요 — 매 세션마다 수행)
 
-When the user has an existing wiki, **always orient yourself before doing anything**:
+기존 wiki가 있으면, 어떤 작업을 하기 전에 **반드시 먼저 방향을 잡는다**:
 
-① **Read `SCHEMA.md`** — understand the domain, conventions, and tag taxonomy.
-② **Read `index.md`** — learn what pages exist and their summaries.
-③ **Scan recent `log.md`** — read the last 20-30 entries to understand recent activity.
+① **`SCHEMA.md` 읽기** — 도메인, 규칙, 태그 taxonomy를 이해한다.
+② **`index.md` 읽기** — 어떤 페이지가 있고 각 페이지의 요약이 무엇인지 파악한다.
+③ **최근 `log.md` 확인** — 최근 작업을 이해하기 위해 마지막 20~30개 항목을 읽는다.
 
 ```bash
-# First resolve the active wiki from the user's requested key/topic/path,
-# WIKI_PATHS + WIKI_DEFAULT, legacy WIKI_PATH, or ~/wiki.
+# 먼저 사용자가 요청한 key/topic/path, WIKI_PATHS + WIKI_DEFAULT,
+# legacy WIKI_PATH 또는 ~/wiki를 기준으로 활성 wiki를 결정한다.
 WIKI="<selected wiki path>"
 WIKI_KEY="<selected key, or explicit-path/legacy/default>"
 
-# Orientation reads at session start
+# 세션 시작 시 orientation 읽기
 read_file "$WIKI/SCHEMA.md"
 read_file "$WIKI/index.md"
 read_file "$WIKI/log.md" offset=<last 30 lines>
 ```
 
-Only after orientation should you ingest, query, or lint. This prevents:
-- Creating duplicate pages for entities that already exist
-- Missing cross-references to existing content
-- Contradicting the schema's conventions
-- Repeating work already logged
+orientation을 마친 뒤에만 ingest, query, lint를 수행한다. 이렇게 해야 다음 문제를 막을 수 있다:
+- 이미 존재하는 엔티티에 중복 페이지 생성
+- 기존 콘텐츠와의 교차 참조 누락
+- schema 규칙과 충돌
+- 이미 log에 기록된 작업 반복
 
-For large wikis (100+ pages), also run a quick `search_files` for the topic
-at hand before creating anything new.
+큰 wiki(100페이지 이상)에서는 새 페이지를 만들기 전에 관련 주제로 `search_files`를 빠르게 실행한다.
 
-## Initializing a New Wiki
+## 새 Wiki 초기화
 
-When the user asks to create or start a wiki:
+사용자가 wiki 생성 또는 시작을 요청하면:
 
-1. Determine the wiki path using the resolution order above. If multi-wiki mode
-   is configured and the target is ambiguous, ask for a key/path before writing.
-2. If this is a new named wiki, choose or confirm a stable lowercase key for
-   `WIKI_PATHS` (e.g. `ai`, `work`, `feedback`, `project-x`).
-3. Create the directory structure above
-4. Ask the user what domain the wiki covers — be specific
-5. Write `SCHEMA.md` customized to the domain (see template below)
-6. Write initial `index.md` with sectioned header
-7. Write initial `log.md` with creation entry that includes the wiki key/path
-8. Confirm the wiki is ready and suggest first sources to ingest
+1. 위의 경로 결정 우선순위에 따라 wiki 경로를 정한다. 다중 wiki 모드이고 대상이 모호하면 쓰기 전에 key/path를 물어본다.
+2. 새로 이름 붙일 wiki라면 `WIKI_PATHS`에 사용할 안정적인 lowercase key를 선택하거나 확인한다(예: `ai`, `work`, `feedback`, `project-x`).
+3. 위 디렉터리 구조를 생성한다.
+4. wiki가 다룰 도메인을 사용자에게 묻는다. 구체적으로 확인한다.
+5. 도메인에 맞춘 `SCHEMA.md`를 작성한다(아래 템플릿 참고).
+6. 섹션 헤더가 있는 초기 `index.md`를 작성한다.
+7. wiki key/path가 포함된 생성 항목을 초기 `log.md`에 작성한다.
+8. wiki 준비가 끝났음을 알리고 처음 ingest할 소스를 제안한다.
 
-### SCHEMA.md Template
+### SCHEMA.md 템플릿
 
-Adapt to the user's domain. The schema constrains agent behavior and ensures consistency:
+사용자 도메인에 맞게 조정한다. schema는 에이전트 행동을 제약하고 일관성을 보장한다:
 
 ```markdown
 # Wiki Schema
 
 ## Domain
-[What this wiki covers — e.g., "AI/ML research", "personal health", "startup intelligence"]
+[이 wiki가 다루는 범위 — 예: "AI/ML research", "personal health", "startup intelligence"]
 
 ## Conventions
 - File names: lowercase, hyphens, no spaces (e.g., `transformer-architecture.md`)
@@ -171,77 +159,72 @@ Adapt to the user's domain. The schema constrains agent behavior and ensures con
   ---
   ```
 
-`confidence` and `contested` are optional but recommended for opinion-heavy or fast-moving
-topics. Lint surfaces `contested: true` and `confidence: low` pages for review so weak claims
-don't silently harden into accepted wiki fact.
+`confidence`와 `contested`는 선택 사항이지만, 의견이 많거나 빠르게 변하는 주제에는 권장한다. lint는 `contested: true`와 `confidence: low` 페이지를 검토 대상으로 표시하여 약한 주장이 조용히 확정 사실처럼 굳어지는 것을 막는다.
 
 ### raw/ Frontmatter
 
-Raw sources ALSO get a small frontmatter block so re-ingests can detect drift:
+Raw source에도 작은 frontmatter block을 추가하여 재 ingest 시 drift를 감지한다:
 
 ```yaml
 ---
-source_url: https://example.com/article   # original URL, if applicable
+source_url: https://example.com/article   # 원본 URL, 있는 경우
 ingested: YYYY-MM-DD
-sha256: <hex digest of the raw content below the frontmatter>
+sha256: <frontmatter 아래 본문에 대한 hex digest>
 ---
 ```
 
-The `sha256:` lets a future re-ingest of the same URL skip processing when content is unchanged,
-and flag drift when it has changed. Compute over the body only (everything after the closing
-`---`), not the frontmatter itself.
+`sha256:`을 사용하면 같은 URL을 나중에 다시 ingest할 때 콘텐츠가 같으면 건너뛰고, 달라졌으면 drift로 표시할 수 있다. 해시는 frontmatter가 아니라 닫는 `---` 뒤의 본문만 대상으로 계산한다.
 
 ## Tag Taxonomy
-[Define 10-20 top-level tags for the domain. Add new tags here BEFORE using them.]
+[도메인에 맞는 상위 태그 10~20개를 정의한다. 새 태그는 사용하기 전에 여기에 먼저 추가한다.]
 
-Example for AI/ML:
+AI/ML 예시:
 - Models: model, architecture, benchmark, training
 - People/Orgs: person, company, lab, open-source
 - Techniques: optimization, fine-tuning, inference, alignment, data
 - Meta: comparison, timeline, controversy, prediction
 
-Rule: every tag on a page must appear in this taxonomy. If a new tag is needed,
-add it here first, then use it. This prevents tag sprawl.
+규칙: 페이지에서 사용하는 모든 태그는 이 taxonomy에 있어야 한다. 새 태그가 필요하면 먼저 여기에 추가한 뒤 사용한다. 이렇게 해야 tag sprawl을 막을 수 있다.
 
 ## Page Thresholds
-- **Create a page** when an entity/concept appears in 2+ sources OR is central to one source
-- **Add to existing page** when a source mentions something already covered
-- **DON'T create a page** for passing mentions, minor details, or things outside the domain
-- **Split a page** when it exceeds ~200 lines — break into sub-topics with cross-links
-- **Archive a page** when its content is fully superseded — move to `_archive/`, remove from index
+- **페이지 생성:** 엔티티/개념이 2개 이상의 소스에 등장하거나, 하나의 소스에서 중심 주제일 때
+- **기존 페이지에 추가:** 소스가 이미 다뤄진 내용을 언급할 때
+- **페이지 생성 금지:** 지나가는 언급, 사소한 세부사항, 도메인 밖의 내용
+- **페이지 분할:** 약 200줄을 넘으면 하위 주제로 나누고 교차 링크를 추가
+- **페이지 archive:** 내용이 완전히 대체되면 `_archive/`로 이동하고 index에서 제거
 
 ## Entity Pages
-One page per notable entity. Include:
-- Overview / what it is
-- Key facts and dates
-- Relationships to other entities ([[wikilinks]])
-- Source references
+주요 엔티티마다 한 페이지를 둔다. 포함 항목:
+- 개요 / 무엇인지
+- 핵심 사실과 날짜
+- 다른 엔티티와의 관계(`[[wikilinks]]`)
+- 소스 참조
 
 ## Concept Pages
-One page per concept or topic. Include:
-- Definition / explanation
-- Current state of knowledge
-- Open questions or debates
-- Related concepts ([[wikilinks]])
+개념 또는 주제마다 한 페이지를 둔다. 포함 항목:
+- 정의 / 설명
+- 현재 지식 상태
+- 열린 질문 또는 논쟁
+- 관련 개념(`[[wikilinks]]`)
 
 ## Comparison Pages
-Side-by-side analyses. Include:
-- What is being compared and why
-- Dimensions of comparison (table format preferred)
-- Verdict or synthesis
-- Sources
+나란히 비교하는 분석이다. 포함 항목:
+- 무엇을 왜 비교하는지
+- 비교 차원(표 형식 권장)
+- 결론 또는 종합
+- 소스
 
 ## Update Policy
-When new information conflicts with existing content:
-1. Check the dates — newer sources generally supersede older ones
-2. If genuinely contradictory, note both positions with dates and sources
-3. Mark the contradiction in frontmatter: `contradictions: [page-name]`
-4. Flag for user review in the lint report
+새 정보가 기존 내용과 충돌하면:
+1. 날짜를 확인한다. 일반적으로 더 최신 소스가 오래된 소스를 대체한다.
+2. 실제로 모순이면 날짜와 소스를 포함해 양쪽 입장을 모두 적는다.
+3. frontmatter에 모순을 표시한다: `contradictions: [page-name]`
+4. lint report에서 사용자 검토 대상으로 표시한다.
 ```
 
-### index.md Template
+### index.md 템플릿
 
-The index is sectioned by type. Each entry is one line: wikilink + summary.
+index는 type별 섹션으로 구성한다. 각 항목은 wikilink + 한 줄 요약이다.
 
 ```markdown
 # Wiki Index
@@ -260,11 +243,9 @@ The index is sectioned by type. Each entry is one line: wikilink + summary.
 ## Queries
 ```
 
-**Scaling rule:** When any section exceeds 50 entries, split it into sub-sections
-by first letter or sub-domain. When the index exceeds 200 entries total, create
-a `_meta/topic-map.md` that groups pages by theme for faster navigation.
+**확장 규칙:** 한 섹션이 50개 항목을 넘으면 첫 글자 또는 하위 도메인별 subsection으로 나눈다. index가 총 200개 항목을 넘으면 `_meta/topic-map.md`를 만들어 theme별로 페이지를 묶어 탐색 속도를 높인다.
 
-### log.md Template
+### log.md 템플릿
 
 ```markdown
 # Wiki Log
@@ -279,206 +260,173 @@ a `_meta/topic-map.md` that groups pages by theme for faster navigation.
 - Structure created with SCHEMA.md, index.md, log.md
 ```
 
-## Core Operations
+## 핵심 작업
 
 ### 1. Ingest
 
-When the user provides a source (URL, file, paste), integrate it into the wiki:
+사용자가 소스(URL, 파일, 붙여넣기)를 제공하면 wiki에 통합한다:
 
-① **Capture the raw source:**
-   - URL → use `web_extract` to get markdown, save to `raw/articles/`
-   - PDF → use `web_extract` (handles PDFs), save to `raw/papers/`
-   - Pasted text → save to appropriate `raw/` subdirectory
-   - Name the file descriptively: `raw/articles/karpathy-llm-wiki-2026.md`
-   - **Add raw frontmatter** (`source_url`, `ingested`, `sha256` of the body).
-     On re-ingest of the same URL: recompute the sha256, compare to the stored value —
-     skip if identical, flag drift and update if different. This is cheap enough to
-     do on every re-ingest and catches silent source changes.
+① **원본 소스 캡처:**
+   - URL → `web_extract`로 markdown을 가져와 `raw/articles/`에 저장
+   - PDF → `web_extract`(PDF 지원)를 사용해 `raw/papers/`에 저장
+   - 붙여넣은 텍스트 → 적절한 `raw/` 하위 디렉터리에 저장
+   - 파일명은 설명적으로 작성: `raw/articles/karpathy-llm-wiki-2026.md`
+   - **raw frontmatter 추가**(`source_url`, `ingested`, 본문의 `sha256`).
+     같은 URL을 재 ingest할 때는 sha256을 다시 계산해 저장된 값과 비교한다. 같으면 건너뛰고, 다르면 drift로 표시한 뒤 업데이트한다. 비용이 낮으므로 매번 수행해 조용한 원본 변경을 감지한다.
 
-② **Discuss takeaways** with the user — what's interesting, what matters for
-   the domain. (Skip this in automated/cron contexts — proceed directly.)
+② **사용자와 핵심 takeaways 논의** — 도메인에서 무엇이 흥미롭고 중요한지 확인한다. 자동화/cron 맥락에서는 이 단계를 건너뛰고 바로 진행한다.
 
-③ **Check what already exists** — search index.md and use `search_files` to find
-   existing pages for mentioned entities/concepts. This is the difference between
-   a growing wiki and a pile of duplicates.
+③ **이미 존재하는 내용 확인** — `index.md`를 검색하고 `search_files`로 언급된 엔티티/개념의 기존 페이지를 찾는다. 이것이 성장하는 wiki와 중복 파일 더미를 가르는 차이다.
 
-④ **Write or update wiki pages:**
-   - **New entities/concepts:** Create pages only if they meet the Page Thresholds
-     in SCHEMA.md (2+ source mentions, or central to one source)
-   - **Existing pages:** Add new information, update facts, bump `updated` date.
-     When new info contradicts existing content, follow the Update Policy.
-   - **Cross-reference:** Every new or updated page must link to at least 2 other
-     pages via `[[wikilinks]]`. Check that existing pages link back.
-   - **Tags:** Only use tags from the taxonomy in SCHEMA.md
-   - **Provenance:** On pages synthesizing 3+ sources, append `^[raw/articles/source.md]`
-     markers to paragraphs whose claims trace to a specific source.
-   - **Confidence:** For opinion-heavy, fast-moving, or single-source claims, set
-     `confidence: medium` or `low` in frontmatter. Don't mark `high` unless the
-     claim is well-supported across multiple sources.
+④ **wiki 페이지 작성 또는 업데이트:**
+   - **새 엔티티/개념:** `SCHEMA.md`의 Page Thresholds를 만족할 때만 생성한다(2개 이상 소스 언급 또는 한 소스의 중심 주제).
+   - **기존 페이지:** 새 정보를 추가하고, 사실을 업데이트하며, `updated` 날짜를 갱신한다. 새 정보가 기존 내용과 충돌하면 Update Policy를 따른다.
+   - **교차 참조:** 새로 만들거나 업데이트한 모든 페이지는 적어도 2개의 다른 페이지에 `[[wikilinks]]`로 링크한다. 기존 페이지가 역방향으로 링크하는지도 확인한다.
+   - **태그:** `SCHEMA.md` taxonomy에 있는 태그만 사용한다.
+   - **출처 표시(Provenance):** 3개 이상의 소스를 종합한 페이지에서는 특정 소스에서 온 주장 문단 끝에 `^[raw/articles/source.md]` marker를 붙인다.
+   - **신뢰도(Confidence):** 의견이 많거나 빠르게 변하거나 단일 소스에 의존하는 주장은 frontmatter에 `confidence: medium` 또는 `low`를 설정한다. 여러 소스로 잘 뒷받침되지 않으면 `high`로 표시하지 않는다.
 
-⑤ **Update navigation:**
-   - Add new pages to `index.md` under the correct section, alphabetically
-   - Update the "Total pages" count and "Last updated" date in index header
-   - Append to `log.md`: `## [YYYY-MM-DD] ingest | Source Title`
-   - List every file created or updated in the log entry
+⑤ **navigation 업데이트:**
+   - 새 페이지를 `index.md`의 올바른 섹션에 알파벳 순으로 추가한다.
+   - index header의 "Total pages" 수와 "Last updated" 날짜를 갱신한다.
+   - `log.md`에 append한다: `## [YYYY-MM-DD] ingest | Source Title`
+   - 생성/수정한 모든 파일을 log 항목에 나열한다.
 
-⑥ **Report what changed** — list every file created or updated to the user.
+⑥ **변경 내용 보고** — 생성 또는 수정한 모든 파일을 사용자에게 나열한다.
 
-A single source can trigger updates across 5-15 wiki pages. This is normal
-and desired — it's the compounding effect.
+단일 소스 하나가 5~15개 wiki 페이지 업데이트로 이어질 수 있다. 이것은 정상이며, wiki가 복리처럼 성장하는 효과다.
 
 ### 2. Query
 
-When the user asks a question about the wiki's domain:
+사용자가 wiki 도메인에 대해 질문하면:
 
-① **Read `index.md`** to identify relevant pages.
-② **For wikis with 100+ pages**, also `search_files` across all `.md` files
-   for key terms — the index alone may miss relevant content.
-③ **Read the relevant pages** using `read_file`.
-④ **Synthesize an answer** from the compiled knowledge. Cite the wiki pages
-   you drew from: "Based on [[page-a]] and [[page-b]]..."
-⑤ **File valuable answers back** — if the answer is a substantial comparison,
-   deep dive, or novel synthesis, create a page in `queries/` or `comparisons/`.
-   Don't file trivial lookups — only answers that would be painful to re-derive.
-⑥ **Update log.md** with the query and whether it was filed.
+① **`index.md` 읽기** — 관련 페이지를 식별한다.
+② **100페이지 이상의 wiki**에서는 모든 `.md` 파일에 대해 핵심 용어로 `search_files`도 실행한다. index만으로는 관련 내용을 놓칠 수 있다.
+③ **관련 페이지 읽기** — `read_file`을 사용한다.
+④ **컴파일된 지식으로 답변 종합** — 근거로 사용한 wiki 페이지를 인용한다: "[[page-a]]와 [[page-b]]를 기준으로..."
+⑤ **가치 있는 답변을 다시 저장** — 답변이 중요한 비교, deep dive, 새로운 종합이라면 `queries/` 또는 `comparisons/`에 페이지를 만든다. 단순 조회는 저장하지 않는다. 다시 도출하기 번거로운 답변만 저장한다.
+⑥ **`log.md` 업데이트** — 질의와 저장 여부를 기록한다.
 
 ### 3. Lint
 
-When the user asks to lint, health-check, or audit the wiki:
+사용자가 wiki lint, health-check, audit를 요청하면:
 
-① **Orphan pages:** Find pages with no inbound `[[wikilinks]]` from other pages.
+① **고립 페이지(Orphan pages):** 다른 페이지에서 inbound `[[wikilinks]]`가 없는 페이지를 찾는다.
 ```python
-# Use execute_code for this — programmatic scan across all pages in the selected wiki
+# execute_code로 수행 — 선택된 wiki의 모든 페이지를 프로그램으로 스캔
 import os, re
 from collections import defaultdict
 wiki = "<selected wiki path>"
-# Scan all .md files in entities/, concepts/, comparisons/, queries/
-# Extract all [[wikilinks]] — build inbound link map
-# Pages with zero inbound links are orphans
+# entities/, concepts/, comparisons/, queries/의 모든 .md 파일 스캔
+# 모든 [[wikilinks]]를 추출해 inbound link map 생성
+# inbound link가 0개인 페이지가 orphan
 ```
 
-② **Broken wikilinks:** Find `[[links]]` that point to pages that don't exist.
+② **깨진 wikilink:** 존재하지 않는 페이지를 가리키는 `[[links]]`를 찾는다.
 
-③ **Index completeness:** Every wiki page should appear in `index.md`. Compare
-   the filesystem against index entries.
+③ **Index 완전성:** 모든 wiki 페이지가 `index.md`에 있어야 한다. 파일시스템과 index 항목을 비교한다.
 
-④ **Frontmatter validation:** Every wiki page must have all required fields
-   (title, created, updated, type, tags, sources). Tags must be in the taxonomy.
+④ **Frontmatter 검증:** 모든 wiki 페이지에 필수 필드(title, created, updated, type, tags, sources)가 있어야 한다. 태그는 taxonomy에 있어야 한다.
 
-⑤ **Stale content:** Pages whose `updated` date is >90 days older than the most
-   recent source that mentions the same entities.
+⑤ **오래된 콘텐츠:** 같은 엔티티를 언급하는 가장 최신 source보다 `updated` 날짜가 90일 이상 오래된 페이지를 찾는다.
 
-⑥ **Contradictions:** Pages on the same topic with conflicting claims. Look for
-   pages that share tags/entities but state different facts. Surface all pages
-   with `contested: true` or `contradictions:` frontmatter for user review.
+⑥ **모순:** 같은 주제의 페이지들이 서로 충돌하는 주장을 하는지 확인한다. 태그/엔티티를 공유하지만 다른 사실을 말하는 페이지를 찾는다. `contested: true` 또는 `contradictions:` frontmatter가 있는 모든 페이지를 사용자 검토 대상으로 표시한다.
 
-⑦ **Quality signals:** List pages with `confidence: low` and any page that cites
-   only a single source but has no confidence field set — these are candidates
-   for either finding corroboration or demoting to `confidence: medium`.
+⑦ **품질 신호:** `confidence: low` 페이지와, 단일 소스만 인용하면서 confidence 필드가 없는 페이지를 나열한다. 이들은 추가 corroboration을 찾거나 `confidence: medium`으로 낮출 후보이다.
 
-⑧ **Source drift:** For each file in `raw/` with a `sha256:` frontmatter, recompute
-   the hash and flag mismatches. Mismatches indicate the raw file was edited
-   (shouldn't happen — raw/ is immutable) or ingested from a URL that has since
-   changed. Not a hard error, but worth reporting.
+⑧ **소스 drift:** `raw/`의 각 파일 중 `sha256:` frontmatter가 있는 파일은 해시를 재계산해 mismatch를 표시한다. mismatch는 raw 파일이 수정되었거나(원칙상 수정하면 안 됨), URL에서 ingest한 원본이 이후 변경되었음을 의미한다. hard error는 아니지만 보고할 가치가 있다.
 
-⑨ **Page size:** Flag pages over 200 lines — candidates for splitting.
+⑨ **페이지 크기:** 200줄을 넘는 페이지를 표시한다. 분할 후보이다.
 
-⑩ **Tag audit:** List all tags in use, flag any not in the SCHEMA.md taxonomy.
+⑩ **태그 감사:** 사용 중인 모든 태그를 나열하고 `SCHEMA.md` taxonomy에 없는 태그를 표시한다.
 
-⑪ **Log rotation:** If log.md exceeds 500 entries, rotate it.
+⑪ **Log rotation:** `log.md`가 500개 항목을 넘으면 rotate한다.
 
-⑫ **Report findings** with specific file paths and suggested actions, grouped by
-   severity (broken links > orphans > source drift > contested pages > stale content > style issues).
+⑫ **결과 보고:** 구체적 파일 경로와 제안 조치를 severity별로 묶어 보고한다. 우선순위는 broken links > orphans > source drift > contested pages > stale content > style issues.
 
-⑬ **Append to log.md:** `## [YYYY-MM-DD] lint | N issues found`
+⑬ **`log.md`에 append:** `## [YYYY-MM-DD] lint | N issues found`
 
-## Working with the Wiki
+## Wiki 작업 방식
 
-### Searching
+### 검색
 
-All examples below assume `WIKI` has already been resolved to the selected wiki
-path. When reporting results from multiple configured wikis, prefix paths with
-the wiki key (for example, `ai:concepts/transformers.md`) or use absolute paths.
+아래 예시는 모두 `WIKI`가 이미 선택된 wiki path로 결정되었다고 가정한다. 여러 wiki에서 가져온 결과를 보고할 때는 wiki key를 prefix로 붙이거나(예: `ai:concepts/transformers.md`) 절대 경로를 사용한다.
 
 ```bash
-# Find pages by content
+# 내용으로 페이지 찾기
 search_files "transformer" path="$WIKI" file_glob="*.md"
 
-# Find pages by filename
+# 파일명으로 페이지 찾기
 search_files "*.md" target="files" path="$WIKI"
 
-# Find pages by tag
+# 태그로 페이지 찾기
 search_files "tags:.*alignment" path="$WIKI" file_glob="*.md"
 
-# Recent activity
+# 최근 활동
 read_file "$WIKI/log.md" offset=<last 20 lines>
 ```
 
-### Bulk Ingest
+### 대량 Ingest
 
-When ingesting multiple sources at once, batch the updates:
-1. Read all sources first
-2. Identify all entities and concepts across all sources
-3. Check existing pages for all of them (one search pass, not N)
-4. Create/update pages in one pass (avoids redundant updates)
-5. Update index.md once at the end
-6. Write a single log entry covering the batch
+여러 소스를 한 번에 ingest할 때는 업데이트를 batch로 처리한다:
+1. 모든 소스를 먼저 읽는다.
+2. 모든 소스에서 엔티티와 개념을 식별한다.
+3. 모든 엔티티/개념에 대해 기존 페이지를 확인한다(N번 검색하지 말고 한 번의 search pass로 처리).
+4. 한 번의 pass에서 페이지를 생성/업데이트한다(중복 업데이트 방지).
+5. 마지막에 `index.md`를 한 번만 업데이트한다.
+6. batch 전체를 다루는 log 항목 하나를 작성한다.
 
-### Archiving
+### Archive
 
-When content is fully superseded or the domain scope changes:
-1. Create `_archive/` directory if it doesn't exist
-2. Move the page to `_archive/` with its original path (e.g., `_archive/entities/old-page.md`)
-3. Remove from `index.md`
-4. Update any pages that linked to it — replace wikilink with plain text + "(archived)"
-5. Log the archive action
+내용이 완전히 대체되었거나 도메인 범위가 바뀌었을 때:
+1. `_archive/` 디렉터리가 없으면 생성한다.
+2. 페이지를 원래 경로를 유지해 `_archive/`로 이동한다(예: `_archive/entities/old-page.md`).
+3. `index.md`에서 제거한다.
+4. 해당 페이지에 링크하던 모든 페이지를 업데이트한다. wikilink를 일반 텍스트 + "(archived)"로 바꾼다.
+5. archive 작업을 log에 기록한다.
 
-### Obsidian Integration
+### Obsidian 연동
 
-The wiki directory works as an Obsidian vault out of the box:
-- `[[wikilinks]]` render as clickable links
-- Graph View visualizes the knowledge network
-- YAML frontmatter powers Dataview queries
-- The `raw/assets/` folder holds images referenced via `![[image.png]]`
+wiki 디렉터리는 기본적으로 Obsidian vault로 사용할 수 있다:
+- `[[wikilinks]]`가 클릭 가능한 링크로 렌더링된다.
+- Graph View가 지식 네트워크를 시각화한다.
+- YAML frontmatter는 Dataview query에 활용된다.
+- `raw/assets/` 폴더는 `![[image.png]]`로 참조하는 이미지를 담는다.
 
-For best results:
-- Set Obsidian's attachment folder to `raw/assets/`
-- Enable "Wikilinks" in Obsidian settings (usually on by default)
-- Install Dataview plugin for queries like `TABLE tags FROM "entities" WHERE contains(tags, "company")`
+권장 설정:
+- Obsidian attachment folder를 `raw/assets/`로 설정한다.
+- Obsidian 설정에서 "Wikilinks"를 활성화한다(대개 기본 활성화).
+- Dataview plugin을 설치해 `TABLE tags FROM "entities" WHERE contains(tags, "company")` 같은 query를 사용한다.
 
-If using the Obsidian skill alongside this one, set `OBSIDIAN_VAULT_PATH` to the
-same directory as the selected wiki path. For multiple wikis, switch it to the
-same path as the active `WIKI` before Obsidian-specific operations.
+Obsidian skill을 이 스킬과 함께 사용할 때는 `OBSIDIAN_VAULT_PATH`를 선택된 wiki path와 같은 디렉터리로 설정한다. 여러 wiki가 있으면 Obsidian 관련 작업 전에 활성 `WIKI`와 같은 경로로 전환한다.
 
-### Obsidian Headless (servers and headless machines)
+### Obsidian Headless (서버와 headless 머신)
 
-On machines without a display, use `obsidian-headless` instead of the desktop app.
-It syncs vaults via Obsidian Sync without a GUI — perfect for agents running on
-servers that write to the wiki while Obsidian desktop reads it on another device.
+디스플레이가 없는 머신에서는 desktop app 대신 `obsidian-headless`를 사용한다. GUI 없이 Obsidian Sync로 vault를 동기화하므로, 서버에서 실행되는 에이전트가 wiki에 쓰고 다른 기기의 Obsidian desktop에서 읽는 환경에 적합하다.
 
-**Setup:**
+**설정:**
 ```bash
-# Requires Node.js 22+
+# Node.js 22+ 필요
 npm install -g obsidian-headless
 
-# Login (requires Obsidian account with Sync subscription)
+# 로그인(Obsidian Sync subscription이 있는 Obsidian 계정 필요)
 ob login --email <email> --password '<password>'
 
-# Create a remote vault for the wiki
+# wiki용 remote vault 생성
 ob sync-create-remote --name "LLM Wiki"
 
-# Connect the wiki directory to the vault
+# wiki 디렉터리를 vault에 연결
 cd "$WIKI"
 ob sync-setup --vault "<vault-id>"
 
-# Initial sync
+# 초기 sync
 ob sync
 
-# Continuous sync (foreground — use systemd for background)
+# 지속 sync(foreground — background는 systemd 사용)
 ob sync --continuous
 ```
 
-**Continuous background sync via systemd:**
+**systemd로 지속 background sync:**
 ```ini
 # ~/.config/systemd/user/obsidian-wiki-sync.service
 [Unit]
@@ -499,43 +447,23 @@ WantedBy=default.target
 ```bash
 systemctl --user daemon-reload
 systemctl --user enable --now obsidian-wiki-sync
-# Enable linger so sync survives logout:
+# logout 후에도 sync가 살아 있도록 linger 활성화:
 sudo loginctl enable-linger $USER
 ```
 
-This lets the agent write to the selected wiki on a server while you browse the
-same vault in Obsidian on your laptop/phone — changes appear within seconds.
+이렇게 하면 서버의 에이전트가 선택된 wiki에 쓰고, 노트북/폰의 Obsidian에서 같은 vault를 볼 수 있다. 변경 사항은 몇 초 안에 나타난다.
 
-## Pitfalls
+## 주의사항
 
-- **Never modify files in `raw/`** — sources are immutable. Corrections go in wiki pages.
-- **Resolve the wiki first** — with multiple configured wikis, identify the target key/path
-  before orientation. Never write to an ambiguous wiki; ask the user to choose.
-- **Always orient first** — read SCHEMA + index + recent log before any operation in a new session.
-  Skipping this causes duplicates and missed cross-references.
-- **Always update index.md and log.md** — skipping this makes the wiki degrade. These are the
-  navigational backbone.
-- **Don't create pages for passing mentions** — follow the Page Thresholds in SCHEMA.md. A name
-  appearing once in a footnote doesn't warrant an entity page.
-- **Don't create pages without cross-references** — isolated pages are invisible. Every page must
-  link to at least 2 other pages.
-- **Frontmatter is required** — it enables search, filtering, and staleness detection.
-- **Tags must come from the taxonomy** — freeform tags decay into noise. Add new tags to SCHEMA.md
-  first, then use them.
-- **Keep pages scannable** — a wiki page should be readable in 30 seconds. Split pages over
-  200 lines. Move detailed analysis to dedicated deep-dive pages.
-- **Ask before mass-updating** — if an ingest would touch 10+ existing pages, confirm
-  the scope with the user first.
-- **Rotate the log** — when log.md exceeds 500 entries, rename it `log-YYYY.md` and start fresh.
-  The agent should check log size during lint.
-- **Handle contradictions explicitly** — don't silently overwrite. Note both claims with dates,
-  mark in frontmatter, flag for user review.
-
-## Related Tools
-
-[llm-wiki-compiler](https://github.com/atomicmemory/llm-wiki-compiler) is a Node.js CLI that
-compiles sources into a concept wiki with the same Karpathy inspiration. It's Obsidian-compatible,
-so users who want a scheduled/CLI-driven compile pipeline can point it at the same vault this
-skill maintains. Trade-offs: it owns page generation (replaces the agent's judgment on page
-creation) and is tuned for small corpora. Use this skill when you want agent-in-the-loop curation;
-use llmwiki when you want batch compile of a source directory.
+- **`raw/`의 파일은 절대 수정하지 않는다** — 소스는 immutable이다. 수정/정정은 wiki page에서 처리한다.
+- **먼저 wiki를 결정한다** — 여러 wiki가 설정되어 있으면 orientation 전에 대상 key/path를 식별한다. 모호한 wiki에는 절대 쓰지 말고 사용자에게 선택을 요청한다.
+- **항상 먼저 orientation한다** — 새 세션에서 어떤 작업을 하든 SCHEMA + index + 최근 log를 먼저 읽는다. 이 단계를 건너뛰면 중복 페이지와 교차 참조 누락이 생긴다.
+- **항상 index.md와 log.md를 업데이트한다** — 이를 빼먹으면 wiki가 퇴화한다. 이 둘은 탐색의 backbone이다.
+- **지나가는 언급만으로 페이지를 만들지 않는다** — `SCHEMA.md`의 Page Thresholds를 따른다. 각주에 한 번 등장한 이름은 entity page로 만들 이유가 없다.
+- **교차 참조 없는 페이지를 만들지 않는다** — 고립된 페이지는 보이지 않는다. 모든 페이지는 최소 2개의 다른 페이지에 링크해야 한다.
+- **Frontmatter는 필수다** — 검색, 필터링, stale content 감지에 필요하다.
+- **태그는 taxonomy에서 가져온다** — 자유 태그는 noise로 무너진다. 새 태그가 필요하면 먼저 `SCHEMA.md`에 추가한 뒤 사용한다.
+- **페이지는 훑어보기 쉽게 유지한다** — wiki page는 30초 안에 읽을 수 있어야 한다. 200줄을 넘으면 분할한다. 상세 분석은 별도 deep-dive page로 옮긴다.
+- **대량 업데이트 전에는 묻는다** — ingest가 기존 페이지 10개 이상을 건드릴 것 같으면 먼저 사용자에게 scope를 확인한다.
+- **log를 rotate한다** — `log.md`가 500개 항목을 넘으면 `log-YYYY.md`로 이름을 바꾸고 새로 시작한다. lint 중 log 크기를 확인해야 한다.
+- **모순은 명시적으로 처리한다** — 조용히 덮어쓰지 않는다. 날짜와 소스로 양쪽 주장을 기록하고, frontmatter에 표시하며, 사용자 검토 대상으로 flag한다.
