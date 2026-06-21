@@ -286,37 +286,43 @@ index는 type별 섹션으로 구성한다. 각 항목은 wikilink + 한 줄 요
 
 ## 핵심 작업
 
-### 1. Ingest
+### 3. Ingest
 
 사용자가 소스(URL, 파일, 붙여넣기)를 제공하면 wiki에 통합한다:
 
 ① **원본 소스 캡처:**
-   - URL → `web_extract`로 markdown을 가져와 `raw/articles/`에 저장
-   - PDF → `web_extract`(PDF 지원)를 사용해 `raw/papers/`에 저장
+   - URL → 웹 글/랜딩은 `web_extract` 기반으로 `raw/articles/` 또는 `raw/reports/`에 저장
+   - PDF/슬라이드/학회 논문은 `raw/papers/`에 저장
+   - 연차보고서, annual report, marketplace annual filing 등은 `raw/reports/` 또는 `raw/papers/`로 분류해 별도 추적
    - 붙여넣은 텍스트 → 적절한 `raw/` 하위 디렉터리에 저장
-   - 파일명은 설명적으로 작성: `raw/articles/karpathy-llm-wiki-2026.md`
-   - **raw frontmatter 추가**(`source_url`, `ingested`, 본문의 `sha256`).
-     같은 URL을 재 ingest할 때는 sha256을 다시 계산해 저장된 값과 비교한다. 같으면 건너뛰고, 다르면 drift로 표시한 뒤 업데이트한다. 비용이 낮으므로 매번 수행해 조용한 원본 변경을 감지한다.
+   - 파일명은 설명적으로 작성: `raw/reports/` 또는 `raw/papers/` 기준으로 슬러그화
+   - **raw frontmatter 추가**(`source_url`, `ingested`, 본문의 `sha256`, `cluster`, `questions`, `file_type`).
+     같은 URL을 재 ingest할 때는 sha256을 다시 계산해 저장된 값과 비교한다. 같으면 건너뛰고, 다르면 drift로 표시한 뒤 업데이트한다.
 
-② **사용자와 핵심 takeaways 논의** — 도메인에서 무엇이 흥미롭고 중요한지 확인한다. 자동화/cron 맥락에서는 이 단계를 건너뛰고 바로 진행한다.
+② **수집 소스 타입 전략:**
+   - “웹글만”으로 끝내지 말고 PDF, ppt/x, 공개 guide/report, annual report를 함께 후보화한다.
+   - 초기 후보군은 `raw_type`(예: `articles`, `reports`, `papers`)로 분리해 관리한다.
+   - 단일 벤더의 블로그가 아니라, 서로 다른 유형의 원천(컨설팅 리포트/학술 paper/산업 보고서/벤더 가이드)을 교차조합해 근거 편향을 줄인다.
 
-③ **이미 존재하는 내용 확인** — `index.md`를 검색하고 `search_files`로 언급된 엔티티/개념의 기존 페이지를 찾는다. 이것이 성장하는 wiki와 중복 파일 더미를 가르는 차이다.
+③ **사용자와 핵심 takeaways 논의** — 도메인에서 무엇이 흥미롭고 중요한지 확인한다. 자동화/cron 맥락에서는 이 단계를 건너뛰고 바로 진행한다.
 
-④ **wiki 페이지 작성 또는 업데이트:**
+④ **이미 존재하는 내용 확인** — `index.md`를 검색하고 `search_files`로 언급된 엔티티/개념의 기존 페이지를 찾는다. 이것이 성장하는 wiki와 중복 파일 더미를 가르는 차이다.
+
+⑤ **wiki 페이지 작성 또는 업데이트:**
    - **새 엔티티/개념:** `SCHEMA.md`의 페이지 생성 기준을 만족할 때만 생성한다(2개 이상 소스 언급 또는 한 소스의 중심 주제).
    - **기존 페이지:** 새 정보를 추가하고, 사실을 업데이트하며, `updated` 날짜를 갱신한다. 새 정보가 기존 내용과 충돌하면 업데이트 정책을 따른다.
    - **교차 참조:** 새로 만들거나 업데이트한 모든 페이지는 적어도 2개의 다른 페이지에 `[[wikilinks]]`로 링크한다. 기존 페이지가 역방향으로 링크하는지도 확인한다.
    - **태그:** `SCHEMA.md` taxonomy에 있는 태그만 사용한다.
-   - **출처 표시(Provenance):** 3개 이상의 소스를 종합한 페이지에서는 특정 소스에서 온 주장 문단 끝에 `^[raw/articles/source.md]` marker를 붙인다.
-   - **신뢰도(Confidence):** 의견이 많거나 빠르게 변하거나 단일 소스에 의존하는 주장은 frontmatter에 `confidence: medium` 또는 `low`를 설정한다. 여러 소스로 잘 뒷받침되지 않으면 `high`로 표시하지 않는다.
+   - **출처 표시(Provenance):** 3개 이상의 소스를 종합한 페이지에서는 특정 소스에서 온 주장 문단 끝에 `^[raw/articles/source.md]` marker를 붙인다. (비-article 자료는 `raw/reports/..` 또는 `raw/papers/..` 경로를 문단 marker에 반영)
+   - **신뢰도(Confidence):** 의견이 많거나 빠르게 변하는 주제에는 frontmatter에 `confidence: medium` 또는 `low`를 설정한다. 여러 소스로 잘 뒷받침되지 않으면 `high`로 설정하지 않는다.
 
-⑤ **navigation 업데이트:**
+⑥ **navigation 업데이트:**
    - 새 페이지를 `index.md`의 올바른 섹션에 알파벳 순으로 추가한다.
    - index header의 "Total pages" 수와 "Last updated" 날짜를 갱신한다.
    - `log.md`에 append한다: `## [YYYY-MM-DD] ingest | Source Title`
-   - 생성/수정한 모든 파일을 log 항목에 나열한다.
+   - 생성/수정한 모든 파일을 로그 항목에 나열한다.
 
-⑥ **변경 내용 보고** — 생성 또는 수정한 모든 파일을 사용자에게 나열한다.
+⑦ **변경 내용 보고** — 생성 또는 수정한 모든 파일을 사용자에게 나열한다.
 
 단일 소스 하나가 5~15개 wiki 페이지 업데이트로 이어질 수 있다. 이것은 정상이며, wiki가 복리처럼 성장하는 효과다.
 
@@ -325,6 +331,8 @@ index는 type별 섹션으로 구성한다. 각 항목은 wikilink + 한 줄 요
 사용자가 wiki 도메인에 대해 질문하면:
 
 > Strict grounding note: 사용자가 “이 wiki 안의 내용만”, “여기에 있는 내용만”처럼 범위를 제한하면, 반드시 `references/strict-wiki-grounding-and-rubric-corpus.md`를 따른다. `llm-wiki` 스킬 본문은 절차 지침일 뿐 도메인 근거가 아니며, `SCHEMA.md` taxonomy만으로 구체 전략을 추론하면 안 된다.
+
+> 루브릭/정량 KPI 질문처럼 목표 점수(예: 90점)를 명시한 경우, 웹 아티클 단일군이 아니라 `raw/articles`, `raw/reports`, `raw/papers`를 동시에 확장해 근거군을 다양화하고, 질문별 커버리지가 cluster/question 단위로 충분한지 점검한다. 질문당 근거군이 적으면 수치형 decision-rule만 주장하는 형태로 과신하지 않는다.
 
 ① **`index.md` 읽기** — 관련 페이지를 식별한다.
 ② **100페이지 이상의 wiki**에서는 모든 `.md` 파일에 대해 핵심 용어로 `search_files`도 실행한다. index만으로는 관련 내용을 놓칠 수 있다.
@@ -496,6 +504,8 @@ sudo loginctl enable-linger $USER
 ## 참고 워크플로우
 
 - `references/wiki-rubric-corpus-workflow.md` — wiki-only 답변을 위해 공개 자료를 raw에 수집·ingest하고, 평가 루브릭/종료조건이 회사별 데이터를 요구할 때 정직하게 한계를 표시하는 대량 corpus 구축 패턴.
+- `references/wiki-non-article-source-workflow.md` — 웹 아티클 외(보고서/PDF/학술/연차보고서) 소스 후보 발굴·분류·저장 실패 복구까지 포함한 수집 워크플로우.
+- `references/marketing-rubric-source-diversification-workflow.md` — 루브릭 Q07/Q10/Q13/Q16/Q19 같은 hard-cap 문항에서 `articles/reports/papers` 분산 전략, 실패 복구, 질문별 커버리지 점검 패턴을 담은 실전 체크리스트.
 
 ## 주의사항
 
