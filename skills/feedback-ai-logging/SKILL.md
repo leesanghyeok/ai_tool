@@ -14,9 +14,11 @@ metadata:
 
 ## 개요
 
-이 스킬은 사용자가 AI/agent 출력에 불만족했고 그 사건을 구조화된 Markdown 원본으로 LLM Wiki에 남기고 싶을 때 사용한다. 목적은 wiki의 개념 페이지나 루브릭을 즉시 고치는 것이 아니다. 목적은 나중에 실패 분류, agent 규칙, 루브릭, 품질 가이드로 일괄 분석할 수 있도록 깨끗한 역사 기록을 보존하는 것이다.
+이 스킬은 사용자가 특정 시점에 AI/agent 세션의 불만족, 수정 요구, 재작업 사건을 구조화된 Markdown 원본으로 LLM Wiki에 일괄 기록하고 싶을 때 사용한다. 목적은 wiki의 개념 페이지나 루브릭을 즉시 고치는 것이 아니다. 목적은 나중에 실패 분류, agent 규칙, 루브릭, 품질 가이드로 일괄 분석할 수 있도록 깨끗한 역사 기록을 보존하는 것이다.
 
 피드백 로그는 **raw data**다. 개별 사건은 `concepts/`, `comparisons/`, `queries/`가 아니라 `raw/feedback/` 아래에 둔다. 불만족 사건 하나마다 Markdown 파일 하나를 만든다.
+
+스킬 실행 단위는 **현재 세션 수확(session harvest)** 이다. 스킬이 호출되면 현재 세션에서 확인 가능한 불만족 사건을 모두 수집한다. 직전 사건도 현재 세션의 일부이므로 별도 "직전 사건 모드"나 "즉시 기록 모드"를 두지 않는다.
 
 로그는 다음 두 가지를 함께 담아야 한다.
 
@@ -27,8 +29,9 @@ metadata:
 
 다음 경우에 이 스킬을 사용한다.
 
-- 사용자가 AI/agent 답변이 불만족스러웠다고 말하고 그 내용을 기록하길 원할 때.
-- 사용자가 “log this”, “record this failure”, “save this feedback”, “이 실패를 기록해”, “피드백으로 남겨”처럼 말할 때.
+- 사용자가 `/feedback-ai-logging`, `$feedback-ai-logging`, “이번 세션 피드백 정리해”, “내가 고치라고 한 것들 feedback으로 남겨”처럼 현재 세션의 불만족 사건 수확을 요청할 때.
+- 사용자가 AI/agent 답변이 불만족스러웠다고 말했고, 현재 세션에서 관련 사건들을 함께 기록하길 원할 때.
+- 사용자가 “log this”, “record this failure”, “save this feedback”, “이 실패를 기록해”, “피드백으로 남겨”처럼 말할 때. 이 경우에도 직전 사건만 보지 말고 현재 세션에서 같은 실행 시점까지 확인 가능한 불만족 사건 전체를 수확한다.
 - 작업 결과가 명시적 사용자 요구사항을 놓쳤고, 사용자가 그 패턴을 피드백 데이터로 기억하길 원할 때.
 - 사용자가 미래 AI/agent 출력 품질 개선을 위한 feedback loop를 만들고 있을 때.
 - 사용자가 불만족 로그를 일관된 Markdown 형식으로 LLM Wiki에 저장하길 원할 때.
@@ -39,6 +42,7 @@ metadata:
 - 피드백이 AI/agent 출력이나 워크플로우 품질에 관한 것이 아닐 때.
 - 사용자가 정제된 guide, rubric, taxonomy, concept page를 직접 업데이트하라고 요청했을 때. 이 경우 `llm-wiki` 및/또는 `rubric-design`를 사용한다.
 - 사용자가 안정적인 개인 선호를 전역으로 저장하길 원할 때. 오래 지속될 사실이면 memory 사용 여부를 별도로 판단한다.
+- 사용자의 새 요구사항 추가, 정상적인 범위 조정, 승인/거절, 단순 취향 표현처럼 실패 사건으로 볼 근거가 부족할 때.
 
 ## 저장 경로
 
@@ -82,11 +86,53 @@ raw/feedback/2026-06-02/092015-unknown-session-missing-decision-criteria.md
 `raw/feedback/` 아래의 피드백 로그는 raw source material이다. 다음 규칙을 따른다.
 
 1. **사건 하나, 파일 하나.** 관련 없는 여러 피드백 사건을 한 파일에 이어 붙이지 않는다.
-2. **이력을 보존한다.** 파일은 기록 시점에 무슨 일이 있었는지를 남긴다.
-3. **Raw file에 처리 상태를 저장하지 않는다.** frontmatter나 본문에 `status`, `triage_status`, `derived_pages`, `converted_to_rule`, `converted_to_rubric` 같은 처리 상태 필드를 추가하지 않는다.
-4. **Raw file에 승격 결정을 기록하지 않는다.** 이후 분석, triage, `concepts/`, `queries/`, rubric으로의 승격은 별도 관리/분석 문서에서 다룬다.
-5. **후보 규칙은 허용된다.** `Candidate Agent Rule`과 `Candidate Checklist Items`는 기록 시점의 사건 해석에 포함되는 자료이지 처리 상태가 아니다. 유용하면 포함한다.
-6. **개별 사건용 concept page를 만들지 않는다.** 개별 사건은 `raw/feedback/`에 남긴다. 반복 패턴만 나중에 승격할 수 있다.
+2. **한 번의 실행에서 여러 파일을 만들 수 있다.** 현재 세션에서 여러 불만족 사건을 찾으면 각 사건을 별도 Markdown 파일로 저장한다.
+3. **이력을 보존한다.** 파일은 기록 시점에 무슨 일이 있었는지를 남긴다.
+4. **멱등성을 보장한다.** 같은 세션과 같은 사건에 대해 스킬을 여러 번 실행해도 중복 파일을 만들지 않는다.
+5. **Raw file에 처리 상태를 저장하지 않는다.** frontmatter나 본문에 `status`, `triage_status`, `derived_pages`, `converted_to_rule`, `converted_to_rubric` 같은 처리 상태 필드를 추가하지 않는다.
+6. **Raw file에 승격 결정을 기록하지 않는다.** 이후 분석, triage, `concepts/`, `queries/`, rubric으로의 승격은 별도 관리/분석 문서에서 다룬다.
+7. **후보 규칙은 허용된다.** `Candidate Agent Rule`과 `Candidate Checklist Items`는 기록 시점의 사건 해석에 포함되는 자료이지 처리 상태가 아니다. 유용하면 포함한다.
+8. **개별 사건용 concept page를 만들지 않는다.** 개별 사건은 `raw/feedback/`에 남긴다. 반복 패턴만 나중에 승격할 수 있다.
+
+## 세션 수확 기준 (Session Harvest Criteria)
+
+스킬을 호출하면 현재 세션에서 확인 가능한 대화, tool 결과, 생성/수정 artifact를 검토해 feedback 후보 사건을 수집한다. 현재 컨텍스트에 없는 과거 대화를 추측하지 않는다. 사용자가 특정 session id, 링크, 날짜 범위를 제공한 경우에만 안전한 조회 도구로 해당 범위를 확인한다.
+
+다음 신호가 있으면 후보 사건으로 본다.
+
+1. **User correction.** 사용자가 “아니”, “그게 아니라”, “빠졌어”, “잘못됐어”, “고쳐”, “수정해”처럼 이전 agent 출력이나 행동을 바로잡았다.
+2. **Rework caused by agent error.** agent가 요구사항 누락, 맥락 오독, 검증 누락, 잘못된 실행 때문에 같은 작업을 다시 했다.
+3. **Verification failure.** 실행, 테스트, lint, source 확인, current-state 확인 등 필요한 검증을 빼먹어 사용자가 지적했거나 재작업이 필요했다.
+4. **Format/language/tone mismatch.** 요청한 출력 형식, 언어, 톤, 상세도와 달라 수정했다.
+5. **Scope mismatch.** 승인된 범위보다 넓게 행동했거나, 필요한 범위보다 좁게 처리했다.
+6. **Evidence gap.** 근거, 출처, 날짜, tool-backed 확인 없이 단정했고 사용자가 이를 문제로 삼았다.
+
+파일로 만들 후보는 다음 조건을 모두 만족해야 한다.
+
+1. 사용자가 기대한 동작이 식별 가능하다.
+2. agent가 실제로 한 동작이나 출력이 식별 가능하다.
+3. 기대와 실제의 차이가 구체적이다.
+4. Evidence에 짧게 인용하거나 요약할 수 있는 현재 세션 근거가 있다.
+5. 후보 agent rule 또는 checklist item으로 바꿀 수 있는 재발 방지 패턴이 있다.
+
+다음은 제외한다.
+
+- 사용자의 새 요구사항 추가나 정상적인 방향 전환.
+- 승인, 보류, 단순 확인처럼 실패 판단이 없는 대화.
+- 사용자가 불만족이나 수정 의도를 보이지 않은 일반 질의응답.
+- evidence가 부족해 기대/실제 차이를 안정적으로 설명할 수 없는 후보.
+- 이미 같은 세션에서 같은 사건으로 기록된 항목.
+
+## 멱등성 규칙 (Idempotency Rules)
+
+같은 세션에서 이 스킬을 여러 번 실행해도 기존 feedback log를 중복 생성하지 않아야 한다. 멱등성은 raw file에 처리 상태를 추가하지 않고, 기존 파일과 deterministic incident key를 비교해 보장한다.
+
+1. **Incident key 생성.** 각 후보 사건마다 `session_id`, normalized user expectation, normalized agent actual behavior, primary category, candidate rule을 결합해 stable incident key를 만든다. 표현이 조금 달라도 같은 실패를 가리키면 같은 key가 되도록 핵심 의미를 기준으로 정규화한다.
+2. **기존 로그 검색.** 새 파일을 쓰기 전에 `$WIKI/raw/feedback/**/{*}-{session_id}-*.md`를 우선 검색하고, 필요한 경우 해당 날짜뿐 아니라 전체 `raw/feedback/`에서 같은 `session_id` 또는 같은 `source_ref`를 가진 파일을 확인한다.
+3. **본문 의미 비교.** 기존 파일의 Situation, Dissatisfaction, Expected Behavior, Evidence, Candidate Agent Rule을 읽고 incident key와 같은 사건인지 비교한다. 파일명 slug나 생성 시각만으로 중복 여부를 판단하지 않는다.
+4. **중복이면 건너뛰기.** 같은 사건이 이미 있으면 새 파일을 만들지 않는다. raw log는 immutable로 취급하므로 기존 파일에 append하거나 frontmatter를 수정하지 않는다.
+5. **새 정보가 실질적으로 다른 사건일 때만 생성.** 기존 사건의 표현 보강에 그치는 내용은 중복으로 본다. 기대/실제 차이나 예방 규칙이 달라 별도 학습 자료가 될 때만 새 사건으로 만든다.
+6. **최종 보고.** 생성한 파일 수와 경로, 중복으로 건너뛴 사건 수, evidence 부족 또는 비실패로 제외한 후보 수를 보고한다.
 
 ## 필수 Frontmatter
 
@@ -198,6 +244,8 @@ critical:
 
 Frontmatter 뒤에는 이 body를 사용한다. 나중에 분석이 가능하도록 섹션의 의미를 안정적으로 유지한다. 한국어 대화에서는 섹션명을 한국어로 써도 되지만, 가능하면 괄호에 English semantic label을 함께 둔다.
 
+Evidence에는 전체 transcript를 붙이지 않는다. 현재 세션에서 확인 가능한 짧은 user correction/request excerpt, agent actual behavior summary, 재작업 또는 수정 근거만 담는다. 세션 수확으로 발견한 사건임을 설명할 필요가 있으면 Evidence 본문에서 짧게 언급하되, 별도 frontmatter field를 추가하지 않는다.
+
 ````markdown
 # Feedback Log: {Title}
 
@@ -298,14 +346,18 @@ failure
 ## 작업 절차 (Workflow)
 
 1. **Wiki path 식별.** 사용자가 경로를 지정하지 않으면 `${WIKI_PATH:-$HOME/wiki}`를 사용한다.
-2. **Date directory 생성.** `raw/feedback/YYYY-MM-DD/`가 있는지 확인하고 없으면 만든다.
-3. **Identifier 발견.** `session_id`, `HHMMSS`, `short-slug`를 정한다. `session_id`는 `unknown-session`으로 fallback하기 전에 runtime-agnostic Session Identifier Discovery 절차를 실행한다.
-4. **가볍게 분류.** Controlled taxonomy에서 `task_type`, `severity`, `categories`를 고른다.
-5. **Incident body 작성.** Situation, dissatisfaction, expected behavior, evidence에 집중한다.
-6. **후보 학습 내용 추가.** 예방 가능한 패턴이 분명하면 candidate agent rule과 checklist items를 포함한다.
-7. **`sha256` 계산.** Body만 hash한다.
-8. **Markdown 파일 하나 작성.** 사용자가 별도로 promotion 또는 analysis를 요청하지 않는 한 concept/rubric page를 업데이트하지 않는다.
-9. **생성 경로 보고.** 사용자에게 저장된 경로와 categories/severity 요약을 알려준다.
+2. **Identifier 발견.** `session_id`를 정한다. `session_id`는 `unknown-session`으로 fallback하기 전에 runtime-agnostic Session Identifier Discovery 절차를 실행한다.
+3. **현재 세션 수확.** 현재 세션에서 사용자 수정, 불만족, 재작업, 검증 누락, 포맷/언어 불일치, scope mismatch, evidence gap 후보를 수집한다.
+4. **후보 필터링.** Session Harvest Criteria를 적용해 정상 요구사항 변경, 단순 확인, evidence 부족 후보를 제외한다.
+5. **사건 단위 분리.** 남은 후보를 Expected Behavior와 Agent Actual Behavior가 하나씩 대응되는 독립 사건으로 나눈다.
+6. **멱등성 확인.** 각 사건의 incident key를 만들고 기존 `raw/feedback/` 로그와 비교해 이미 기록된 사건은 건너뛴다.
+7. **Date directory 생성.** 새로 기록할 사건이 있으면 `raw/feedback/YYYY-MM-DD/`가 있는지 확인하고 없으면 만든다.
+8. **각 사건 분류.** Controlled taxonomy에서 `task_type`, `severity`, `categories`, `short-slug`를 고른다.
+9. **Incident body 작성.** Situation, dissatisfaction, expected behavior, evidence에 집중한다.
+10. **후보 학습 내용 추가.** 예방 가능한 패턴이 분명하면 candidate agent rule과 checklist items를 포함한다.
+11. **`sha256` 계산.** 각 사건 body만 따로 hash한다.
+12. **Markdown 파일 작성.** 새 사건마다 Markdown 파일 하나를 작성한다. 사용자가 별도로 promotion 또는 analysis를 요청하지 않는 한 concept/rubric page를 업데이트하지 않는다.
+13. **생성/스킵 결과 보고.** 사용자에게 생성된 경로, categories/severity 요약, 중복으로 건너뛴 사건 수, evidence 부족 또는 비실패로 제외한 후보 수를 알려준다.
 
 ## 예시 (Example)
 
@@ -388,6 +440,11 @@ Reason:
 7. **파일 전체를 hash하기.** Frontmatter가 아니라 body만 hash한다.
 8. **기본적으로 즉시 promotion하기.** Logging과 promotion은 별도 workflow다. 사용자가 analysis 또는 guide/rubric update를 요청할 때만 승격한다.
 9. **한 agent runtime에 session id 규칙을 hard-code하기.** 이 스킬은 Hermes, Codex, Claude CLI, 기타 환경에서 공유된다. 특정 runtime-specific variable 하나를 가정해서 `unknown-session` 문제를 고치지 않는다. Generic `session_id` 규칙을 보존하고, platform id, runtime env vars, safe metadata를 확인하는 discovery procedure를 추가/실행한다.
+10. **직전 사건만 기록하기.** 스킬 호출 시점의 현재 세션 전체에서 불만족 사건을 수확한다. 직전 사건은 그중 하나일 뿐이다.
+11. **세션 전체를 하나의 거대한 feedback 파일로 합치기.** 한 번에 여러 파일을 만들 수 있지만, 파일 하나에는 사건 하나만 담는다.
+12. **멱등성 확인 없이 중복 파일 만들기.** 같은 세션에서 여러 번 실행할 수 있으므로 기존 `raw/feedback/` 로그와 의미 중복을 먼저 확인한다.
+13. **모든 수정 요청을 실패로 과잉 기록하기.** 새 요구사항 추가나 정상적인 방향 조정은 feedback incident가 아니다.
+14. **현재 컨텍스트 밖의 사건을 기억으로 지어내기.** 현재 세션 근거가 부족하면 파일을 만들지 않고 제외 사유로 보고한다.
 
 ## 검증 체크리스트 (Verification Checklist)
 
@@ -404,4 +461,10 @@ Reason:
 - [ ] 특정 runtime을 가정하지 않고 Session Identifier Discovery 절차로 `session_id`를 선택했다.
 - [ ] `unknown-session`을 사용했다면 explicit platform ids, runtime environment variables, safe runtime metadata/status sources를 먼저 확인했다.
 - [ ] `source_ref`가 발견한 id source를 기록하거나, id를 발견하지 못한 이유를 기록한다.
-- [ ] 최종 응답이 생성된 경로와 severity/categories 한 줄 요약을 제공한다.
+- [ ] 현재 세션에서 feedback 후보 사건을 먼저 수집하고, 각 후보에 Session Harvest Criteria를 적용했다.
+- [ ] 생성된 각 파일은 하나의 독립 사건만 담는다.
+- [ ] 단순 추가 요청/정상 작업 진행을 feedback으로 오분류하지 않았다.
+- [ ] 새 파일 작성 전에 기존 `raw/feedback/` 로그를 검색해 같은 session/source의 중복 사건을 확인했다.
+- [ ] 중복 사건은 새 파일을 만들거나 기존 raw file을 수정하지 않고 건너뛰었다.
+- [ ] 모든 파일의 `sha256`은 각 body별로 따로 계산했다.
+- [ ] 최종 응답이 생성된 경로, severity/categories 요약, 중복으로 건너뛴 사건 수, evidence 부족 또는 비실패로 제외한 후보 수를 제공한다.
