@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/rubric/skill/score_schema.json",
+  "title": "Skill Quality Rubric Score Schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_path",
+    "skill_name",
+    "total_score",
+    "max_score",
+    "grade",
+    "summary",
+    "global_caps_applied",
+    "dimension_scores",
+    "top_strengths",
+    "critical_weaknesses",
+    "recommended_patches",
+    "needs_human_review",
+    "confidence"
+  ],
+  "properties": {
+    "skill_path": {
+      "type": "string"
+    },
+    "skill_name": {
+      "type": "string"
+    },
+    "total_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "max_score": {
+      "type": "number",
+      "const": 100
+    },
+    "grade": {
+      "type": "string",
+      "enum": ["excellent", "good", "adequate", "weak", "poor"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "global_caps_applied": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "cap", "reason"],
+        "properties": {
+          "rule": {
+            "type": "string"
+          },
+          "cap": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dimension_scores": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension",
+          "score",
+          "max_score",
+          "checklist",
+          "local_caps_or_penalties",
+          "summary"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "A. Trigger & Scope Precision",
+              "B. Operational Procedure Quality",
+              "C. User Preference / Boundary Alignment",
+              "D. Verification & Evidence Discipline",
+              "E. Failure Handling & Recovery",
+              "F. Reusability & Portability",
+              "G. Structure, Concision, and Cognitive Load",
+              "H. Integration with Agent Tooling / Environment"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_score": {
+            "type": "number",
+            "minimum": 1
+          },
+          "checklist": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "criterion",
+                "score",
+                "max_score",
+                "evidence",
+                "missing_or_issue"
+              ],
+              "properties": {
+                "criterion": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_score": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "evidence": {
+                  "type": "string"
+                },
+                "missing_or_issue": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "local_caps_or_penalties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rule", "effect", "reason"],
+              "properties": {
+                "rule": {
+                  "type": "string"
+                },
+                "effect": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "top_strengths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "critical_weaknesses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommended_patches": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "needs_human_review": {
+      "type": "boolean"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    }
+  }
+}
