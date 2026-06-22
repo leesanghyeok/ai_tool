@@ -346,11 +346,37 @@ index는 type별 섹션으로 구성한다. 각 항목은 wikilink + 한 줄 요
 
 ### 3. Lint
 
-사용자가 wiki lint, health-check, audit를 요청하면:
+사용자가 wiki lint, health-check, audit, 상태점검을 요청하면 **항상 재현 가능한 고정 프로토콜**로 수행한다. 즉석 감상식 점검을 피하고, 같은 wiki를 다시 점검해도 같은 규칙/필드/severity가 나오도록 한다. Read-only 요청이면 `log.md` append를 포함한 어떤 수정도 하지 않는다.
 
-① **고립 페이지(Orphan pages):** 다른 페이지에서 inbound `[[wikilinks]]`가 없는 페이지를 찾는다.
+#### Health-check levels
+
+- **Level 0 — Orientation:** 활성 wiki path, `SCHEMA.md`, `index.md`, 최근 `log.md`, 파일/페이지 수를 확인한다.
+- **Level 1 — Structural lint:** 필수 파일, index count 일치, index 누락/초과, frontmatter 필수 필드, type 값, tag taxonomy, wiki 본문 간 broken wikilink, orphan/inbound 0, outbound link 수, log rotation을 검사한다.
+- **Level 2 — Source integrity:** raw frontmatter(`source_url`, `ingested`, `sha256`) 존재, raw category 분포, fetch report와 실제 raw count 차이, source drift를 검사한다.
+- **Level 3 — Corpus coverage:** entities/concepts/comparisons/queries 비율, raw cluster 대비 compiled page coverage, 반복 등장 source/entity 후보 중 page 없는 항목, concept page별 source 수, long page split 후보, low-confidence/contested/single-source pages를 검사한다.
+- **Level 4 — Purpose-specific audit:** 루브릭/질문셋/도메인 목표가 있으면 질문별 evidence coverage, articles/reports/papers 분산, private-data 필요 여부, wiki-only 답변 가능/불가능을 별도 판정한다.
+
+#### Fixed report shape
+
+가능하면 내부 결과를 다음 스키마로 정리하고, 사용자 보고도 같은 섹션 순서를 유지한다:
+
+```json
+{
+  "scope": {"wiki_path": "...", "read_only": true, "levels": [0,1,2,3]},
+  "counts": {"md_total": 0, "wiki_pages": 0, "raw_md": 0, "entities": 0, "concepts": 0, "comparisons": 0, "queries": 0},
+  "status": "pass | warning | fail",
+  "issues": [
+    {"id": "coverage.entities.empty_with_large_raw_corpus", "severity": "warning", "level": 3, "rule": "...", "path": "...", "evidence": "...", "recommendation": "..."}
+  ],
+  "unverified": []
+}
+```
+
+Severity 우선순위는 기본적으로 `broken wiki links/frontmatter invalid` > `index mismatch` > `raw sha256 drift` > `taxonomy violations` > `coverage gaps` > `style/split candidates` 순서로 둔다. 단, 사용자가 특정 목적(예: 루브릭 통과)을 제시하면 Level 4 이슈가 더 높은 우선순위를 가질 수 있다.
+
+① **고립 페이지(Orphan pages):** `entities/`, `concepts/`, `comparisons/`, `queries/` 안의 wiki 본문 페이지만 대상으로 inbound `[[wikilinks]]`를 계산한다. `raw/`, `_meta/`, `SCHEMA.md`의 pseudo link나 웹 원문 안의 `[[...]]`는 broken/orphan 판정에 섞지 않는다.
 ```python
-# execute_code로 수행 — 선택된 wiki의 모든 페이지를 프로그램으로 스캔
+# execute_code로 수행 — 선택된 wiki의 본문 페이지만 프로그램으로 스캔
 import os, re
 from collections import defaultdict
 wiki = "<selected wiki path>"
@@ -359,7 +385,7 @@ wiki = "<selected wiki path>"
 # inbound link가 0개인 페이지가 orphan
 ```
 
-② **깨진 wikilink:** 존재하지 않는 페이지를 가리키는 `[[links]]`를 찾는다.
+② **깨진 wikilink:** `entities/`, `concepts/`, `comparisons/`, `queries/` 안의 wiki 본문 페이지가 존재하지 않는 wiki page를 가리키는 경우만 hard issue로 잡는다. raw 원문에 포함된 `[[...]]` 문자열은 source 품질/클리핑 이슈로 따로 다루고 structural broken link에 포함하지 않는다.
 
 ③ **Index 완전성:** 모든 wiki 페이지가 `index.md`에 있어야 한다. 파일시스템과 index 항목을 비교한다.
 
@@ -371,17 +397,19 @@ wiki = "<selected wiki path>"
 
 ⑦ **품질 신호:** `confidence: low` 페이지와, 단일 소스만 인용하면서 confidence 필드가 없는 페이지를 나열한다. 이들은 추가 corroboration을 찾거나 `confidence: medium`으로 낮출 후보이다.
 
-⑧ **소스 drift:** `raw/`의 각 파일 중 `sha256:` frontmatter가 있는 파일은 해시를 재계산해 mismatch를 표시한다. mismatch는 raw 파일이 수정되었거나(원칙상 수정하면 안 됨), URL에서 ingest한 원본이 이후 변경되었음을 의미한다. hard error는 아니지만 보고할 가치가 있다.
+⑧ **소스 drift:** `raw/`의 각 파일 중 `sha256:` frontmatter가 있는 파일은 해시를 재계산해 mismatch를 표시한다. 이 wiki의 raw sha256은 frontmatter 종료 뒤 본문에서 선행 blank line을 제외한 내용 기준으로 저장된 경우가 있으므로, drift 검증 시 `body = text[m.end():].lstrip("\n")` 방식도 확인해 false positive를 줄인다. mismatch는 raw 파일이 수정되었거나(원칙상 수정하면 안 됨), URL에서 ingest한 원본이 이후 변경되었음을 의미한다. hard error는 아니지만 보고할 가치가 있다.
 
-⑨ **페이지 크기:** 200줄을 넘는 페이지를 표시한다. 분할 후보이다.
+⑨ **페이지 크기:** 200줄을 넘는 페이지를 표시한다. 분할 후보이다. 단, 보존용 query/deep-dive page는 의도적으로 길 수 있으므로 `style/split candidate`로 보고하고 hard error로 취급하지 않는다.
 
 ⑩ **태그 감사:** 사용 중인 모든 태그를 나열하고 `SCHEMA.md` taxonomy에 없는 태그를 표시한다.
 
-⑪ **Log rotation:** `log.md`가 500개 항목을 넘으면 rotate한다.
+⑪ **Corpus coverage gap:** schema가 특정 page type을 정의하고 raw corpus가 충분히 큰데 해당 type이 비어 있거나 거의 없으면 warning으로 보고한다. 예: `entities/`가 0개이고 raw source가 다수이며 schema에 회사/제품/플랫폼/사람 entity 정책이 있으면 `coverage.entities.empty_with_large_raw_corpus`로 표시한다. 이는 구조 오류가 아니라 탐색성/재사용성 저하 신호이며, 권장 조치는 (a) concept-first wiki 정책을 `SCHEMA.md`에 명시하거나 (b) 반복 등장 핵심 엔티티 5~10개를 짧은 entity page로 생성하는 것이다.
 
-⑫ **결과 보고:** 구체적 파일 경로와 제안 조치를 severity별로 묶어 보고한다. 우선순위는 broken links > orphans > source drift > contested pages > stale content > style issues.
+⑫ **Log rotation:** `log.md`가 500개 항목을 넘으면 rotate한다.
 
-⑬ **`log.md`에 append:** `## [YYYY-MM-DD] lint | N issues found`
+⑬ **결과 보고:** 구체적 파일 경로와 제안 조치를 severity별로 묶어 보고한다. 우선순위는 broken wiki links/frontmatter invalid > index mismatch > source drift > taxonomy violations > coverage gaps > contested pages > stale content > style issues 순으로 둔다. Read-only 요청에서는 `log.md` 업데이트를 하지 않고 `read_only: true`와 미수행 항목을 명시한다.
+
+⑭ **`log.md`에 append:** read-only가 아닐 때만 `## [YYYY-MM-DD] lint | N issues found`를 append한다.
 
 ## Wiki 작업 방식
 
