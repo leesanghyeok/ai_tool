@@ -35,6 +35,7 @@ metadata:
 - 작업 결과가 명시적 사용자 요구사항을 놓쳤고, 사용자가 그 패턴을 피드백 데이터로 기억하길 원할 때.
 - 사용자가 미래 AI/agent 출력 품질 개선을 위한 feedback loop를 만들고 있을 때.
 - 사용자가 불만족 로그를 일관된 Markdown 형식으로 LLM Wiki에 저장하길 원할 때.
+- 사용자가 “6월 19일 이후 세션 전체”, “지난주 세션들”, “이 기간에 빠진 feedback”처럼 날짜 범위나 여러 과거 세션의 누락 feedback 수확을 요청할 때. 이 경우 `references/cross-session-harvest.md`를 참고한다.
 
 다음 경우에는 이 스킬을 사용하지 않는다.
 
@@ -107,6 +108,8 @@ raw/feedback/2026-06-02/092015-unknown-session-missing-decision-criteria.md
 4. **Format/language/tone mismatch.** 요청한 출력 형식, 언어, 톤, 상세도와 달라 수정했다.
 5. **Scope mismatch.** 승인된 범위보다 넓게 행동했거나, 필요한 범위보다 좁게 처리했다.
 6. **Evidence gap.** 근거, 출처, 날짜, tool-backed 확인 없이 단정했고 사용자가 이를 문제로 삼았다.
+7. **Reference/dependency misread.** 사용자가 어떤 스킬, 문서, 패턴, 과거 사례를 “참고”하라고 했는데 agent가 이를 직접 의존성, 호출 단계, 본문 명시, 필수 절차로 바꾸어 계획하거나 실행했다.
+8. **Parameterization/default miss.** 사용자가 workflow, skill, config, rubric, automation 설계에서 기본값, 변수, 고정값, 사용자 조정 가능 항목을 기대했는데 agent가 이를 누락하거나 하드코딩해서 사용자가 정정했다.
 
 파일로 만들 후보는 다음 조건을 모두 만족해야 한다.
 
@@ -119,10 +122,24 @@ raw/feedback/2026-06-02/092015-unknown-session-missing-decision-criteria.md
 다음은 제외한다.
 
 - 사용자의 새 요구사항 추가나 정상적인 방향 전환.
+  - 단, 사용자가 “참고하라/패턴만 따르라”고 했는데 agent가 이를 직접 의존성이나 실행 단계로 해석해 사용자가 정정한 경우는 feedback 후보로 본다.
+  - 단, 사용자가 “기본값”, “변수로 빼자”, “고정하지 말자”, “옵션으로 두자”처럼 설계 파라미터 경계를 정정한 경우는 단순 새 요구사항이 아니라 feedback 후보로 본다.
 - 승인, 보류, 단순 확인처럼 실패 판단이 없는 대화.
 - 사용자가 불만족이나 수정 의도를 보이지 않은 일반 질의응답.
 - evidence가 부족해 기대/실제 차이를 안정적으로 설명할 수 없는 후보.
 - 이미 같은 세션에서 같은 사건으로 기록된 항목.
+
+### 가벼운 계획 교정도 기록할 수 있는 경우
+
+다음은 `low` 또는 `medium` severity로 기록할 수 있다.
+
+- 기본값을 빠뜨려 사용자가 추가한 경우
+- 고정값으로 작성했지만 사용자가 변수로 빼라고 한 경우
+- “참고”와 “직접 사용/명시 의존”을 혼동한 경우
+- skill 본문에 넣지 말아야 할 implementation detail이나 특정 의존성을 넣은 경우
+- 사용자가 설계 경계나 추상화 수준을 바로잡은 경우
+
+단, 단순 취향 변경이나 새 기능 추가는 제외한다. 기대/실제 차이와 예방 규칙이 명확할 때만 기록한다.
 
 ## 멱등성 규칙 (Idempotency Rules)
 
@@ -223,11 +240,15 @@ insufficient-detail    Output was too short, shallow, or under-explained
 low:
 - 주로 preference, tone, wording, 사소한 구조 문제다.
 - 출력은 사용할 수 있었지만 아쉬웠다.
+- skill/plan에서 기본값, 변수명, 표현 같은 작은 설계 누락이 있었고 즉시 수정됐다.
+- 재작업은 작지만 나중에 반복되면 품질 저하로 이어질 수 있다.
 
 medium:
 - 중요한 요구사항 일부가 빠졌다.
 - 출력은 수정이 필요했지만 근본적으로 신뢰 불가능한 수준은 아니었다.
 - decision criteria, specificity, actionability가 약했다.
+- 사용자의 설계 의도, 추상화 수준, reference/dependency 경계를 잘못 해석했다.
+- 결과물은 사용 가능하지만 그대로 두면 잘못된 workflow나 skill 규칙이 남을 수 있다.
 
 high:
 - 핵심 요구사항을 놓쳤다.
@@ -377,6 +398,16 @@ plugin on_session_finalize
 12. **Markdown 파일 작성.** 새 사건마다 Markdown 파일 하나를 작성한다. 사용자가 별도로 promotion 또는 analysis를 요청하지 않는 한 concept/rubric page를 업데이트하지 않는다.
 13. **생성/스킵 결과 보고.** 사용자에게 생성된 경로, categories/severity 요약, 중복으로 건너뛴 사건 수, evidence 부족 또는 비실패로 제외한 후보 수를 알려준다.
 
+### 날짜 범위/과거 세션 수확
+
+사용자가 특정 날짜 이후 또는 여러 과거 세션 전체의 누락 feedback을 요청하면 `references/cross-session-harvest.md`를 따른다. 핵심 차이점:
+
+- 현재 컨텍스트만 보지 말고 session DB/search로 범위 내 세션 후보를 수집한다.
+- 후보가 많으면 기간별로 shard를 나눠 병렬 검토하되, subagent는 후보 JSON만 반환하고 부모가 최종 파일 작성과 중복 검사를 맡는다.
+- 자동으로 생성된 feedback-harvest invocation prompt는 incident가 아니다.
+- subagent가 제안한 `task_type`/`categories`는 반드시 이 스킬의 controlled taxonomy로 정규화한 뒤 frontmatter에 쓴다.
+- 기존 로그 검색은 현재 날짜가 아니라 `$WIKI/raw/feedback/**` 전체에서 수행한다.
+
 ## 예시 (Example)
 
 Path:
@@ -495,6 +526,11 @@ Hermes session 종료 시 자동으로 이 스킬을 실행해야 하는 경우,
 - child Hermes에는 재귀 방지 env guard를 설정한다.
 - Discord thread close와 Hermes session finalize는 다른 lifecycle임을 설명한다.
 
+## 참고 자료
+
+- `references/cross-session-harvest.md`: 특정 날짜 이후 또는 여러 과거 세션에서 누락된 feedback incident를 session DB/search, 병렬 shard, controlled taxonomy normalization으로 수확하는 절차.
+- `references/planning-correction-harvest.md`: “참고”를 직접 의존으로 오독한 사건, 기본값/변수화 누락처럼 가벼운 planning correction을 feedback incident로 수확하는 예시와 분류 기준.
+
 ## 흔한 실수 (Common Pitfalls)
 
 1. **도메인 wiki routing을 feedback 기본 위치로 착각하기.** `WIKI_PATHS`/`WIKI_DEFAULT`가 `marketing`, `work` 같은 프로젝트 wiki를 가리킬 수 있다. 사용자가 명시한 feedback wiki가 없으면 기본 목적지는 `$HOME/wiki/raw/feedback`이며, 도메인 wiki로 들어간 feedback 파일은 발견 즉시 `$HOME/wiki/raw/feedback`으로 옮기고 원 위치를 비운다.
@@ -514,7 +550,8 @@ Hermes session 종료 시 자동으로 이 스킬을 실행해야 하는 경우,
 11. **세션 전체를 하나의 거대한 feedback 파일로 합치기.** 한 번에 여러 파일을 만들 수 있지만, 파일 하나에는 사건 하나만 담는다.
 12. **멱등성 확인 없이 중복 파일 만들기.** 같은 세션에서 여러 번 실행할 수 있으므로 기존 `raw/feedback/` 로그와 의미 중복을 먼저 확인한다.
 13. **모든 수정 요청을 실패로 과잉 기록하기.** 새 요구사항 추가나 정상적인 방향 조정은 feedback incident가 아니다.
-14. **현재 컨텍스트 밖의 사건을 기억으로 지어내기.** 현재 세션 근거가 부족하면 파일을 만들지 않고 제외 사유로 보고한다.
+14. **큰 실패만 기록하고 반복 가능한 가벼운 계획 교정을 놓치기.** 기본값 누락, 변수화 누락, “참고”를 “직접 의존”으로 해석한 사건은 작아 보여도 반복되면 skill/automation 품질을 망친다. 기대/실제 차이와 후보 규칙이 명확하면 low/medium incident로 기록한다.
+15. **현재 컨텍스트 밖의 사건을 기억으로 지어내기.** 현재 세션 근거가 부족하면 파일을 만들지 않고 제외 사유로 보고한다.
 
 ## 검증 체크리스트 (Verification Checklist)
 

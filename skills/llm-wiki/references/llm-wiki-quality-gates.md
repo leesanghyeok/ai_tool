@@ -28,7 +28,7 @@ plain text 또는 backtick raw 경로만으로는 Markdown/Obsidian에서 이동
 - [[raw/articles/source]]
 ```
 
-`## 출처 추적` 또는 `## 출처 보강` 섹션을 만들 때는 모든 raw source 경로를 클릭 가능하게 만든다.
+`## 출처 추적`뿐 아니라 `## 출처 보강`, `추가 근거:` 같은 supplemental source 섹션의 모든 raw source 경로도 클릭 가능해야 한다. Frontmatter `sources:`는 구조 필드이므로 별도이고, 본문에 노출되는 raw path는 사용자가 바로 이동할 수 있어야 한다.
 
 ## 한국어 human-facing 제목
 
@@ -52,7 +52,7 @@ title: Meta
 title: Airbnb
 ```
 
-호환성 표면은 안정적으로 유지한다. 파일명/slug, YAML key, enum 값, tag, raw path, command, identifier는 영어로 남겨도 된다.
+호환성 표면은 안정적으로 유지한다. YAML key, enum 값, tag, raw path, command, identifier는 영어로 남겨도 된다. 단, 한국어 wiki의 설명형 compiled page filename/slug는 한국어를 포함해야 하며, proper noun entity filename은 영어 허용이다.
 
 ## deterministic checker 경계
 
@@ -66,7 +66,7 @@ deterministic check에 적합한 항목:
 - compiled page wikilink만 대상으로 하는 검사(raw source noise 제외)
 - orphan page
 - raw frontmatter와 sha256 drift
-- clickable provenance link
+- clickable provenance/source links
 - 한국어 제목 heuristic
 - log와 `_meta` artifact
 
@@ -89,6 +89,6 @@ deterministic check에 적합한 항목:
 
 - 원점수만으로 인증을 주장하지 않는다. pass/fail은 hard gate가 결정한다.
 - 한국어 wiki에서 설명형 제목을 영어-only로 만들지 않는다.
-- provenance 섹션을 non-clickable raw path로 만들지 않는다.
+- provenance/source 섹션을 non-clickable raw path로 만들지 않는다.
 - `raw/` 파일 안의 pseudo-link를 compiled-page broken-link 검사에 포함하지 않는다.
 - hash drift를 고치기 위해 raw body를 수정하지 않는다. 사용자가 명시 승인한 경우가 아니라면 현재 body를 accepted stored source로 보고 metadata correction만 수행한다.

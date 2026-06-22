@@ -538,6 +538,7 @@ max parallel = 3
 ## 참고 자료
 
 - `references/design-rationale-2026-06-21.md`: 이 스킬을 만들 때 사용자 교정에서 나온 설계 근거와 병렬 검증 파이프라인 요약.
+- `references/skill-quality-rubric-planning-2026-06-23.md`: Hermes/Codex skill library 자체를 평가하는 루브릭을 설계할 때 사용할 차원, cap/gate, artifact layout 참고.
 
 ## Remember
 

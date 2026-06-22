@@ -133,6 +133,16 @@ def h1_title(text: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def filename_slug_needs_korean(path: Path, title_value: str) -> bool:
+    parts = path.parts
+    parent = parts[-2] if len(parts) >= 2 else ""
+    # Proper-noun entity pages such as Google/Meta/Airbnb may keep English filenames.
+    if parent == "entities" and is_likely_proper_noun_title(title_value or path.stem):
+        return False
+    # Descriptive compiled pages should be Korean-first in Korean wikis.
+    return parent in {"entities", "concepts", "comparisons", "queries"}
+
+
 def has_clickable_raw_link(text: str, source: str) -> bool:
     source_no_ext = source[:-3] if source.endswith(".md") else source
     escaped_source = re.escape(source)
@@ -251,6 +261,7 @@ def score_all(wiki: Path) -> dict[str, Any]:
     source_struct_issues: list[Path] = []
     date_issues: list[Path] = []
     title_language_issues: list[Path] = []
+    filename_language_issues: list[Path] = []
     page_fm: dict[Path, dict[str, str]] = {}
     for p in compiled_pages:
         data, _, ok = frontmatter(read_text(p))
@@ -271,6 +282,15 @@ def score_all(wiki: Path) -> dict[str, Any]:
         sources = parse_listish(data.get("sources", ""))
         if "sources" not in data or not sources:
             source_struct_issues.append(p)
+        page_text = read_text(p)
+        title_value = scalar(data.get("title", ""))
+        h1_value = h1_title(page_text)
+        if title_value and not contains_korean(title_value) and not is_likely_proper_noun_title(title_value):
+            title_language_issues.append(p)
+        elif h1_value and not contains_korean(h1_value) and not is_likely_proper_noun_title(h1_value):
+            title_language_issues.append(p)
+        if filename_slug_needs_korean(p.relative_to(wiki), title_value) and not contains_korean(p.stem):
+            filename_language_issues.append(p)
         for k in ("created", "updated"):
             if k in data and not DATE_RE.match(data[k].strip().strip('"\'')):
                 date_issues.append(p)
@@ -280,7 +300,8 @@ def score_all(wiki: Path) -> dict[str, Any]:
         Criterion("valid_frontmatter", 3 if not fm_missing else 0, 3, evidence=[f"missing_or_malformed={len(fm_missing)}"], paths=[rel(wiki, p) for p in fm_missing[:20]]),
         Criterion("required_fields_present", 3 if not missing_fields else 0, 3, evidence=[f"pages_with_missing_fields={len(missing_fields)}"], paths=[rel(wiki, p) for p, _ in missing_fields[:20]]),
         Criterion("valid_type_enum", 1 if not invalid_types else 0, 1, evidence=[f"invalid_types={[(rel(wiki,p),t) for p,t in invalid_types[:20]]}"]),
-        Criterion("human_readable_title_language", 2 if not title_language_issues else 0, 2, evidence=[f"title_language_issues={len(title_language_issues)}"], paths=[rel(wiki, p) for p in title_language_issues[:20]]),
+        Criterion("human_readable_title_language", 1 if not title_language_issues else 0, 1, evidence=[f"title_language_issues={len(title_language_issues)}"], paths=[rel(wiki, p) for p in title_language_issues[:20]]),
+        Criterion("korean_first_compiled_filename_slug", 1 if not filename_language_issues else 0, 1, evidence=[f"filename_language_issues={len(filename_language_issues)}"], paths=[rel(wiki, p) for p in filename_language_issues[:20]]),
         Criterion("tags_in_taxonomy", 3 if not tag_violations else 0, 3, evidence=[f"violations={[(rel(wiki,p),bad) for p,bad in tag_violations[:20]]}"]),
         Criterion("source_paths_structurally_valid", 2 if not source_struct_issues else 0, 2, evidence=[f"issues={len(source_struct_issues)}"], paths=[rel(wiki, p) for p in source_struct_issues[:20]]),
         Criterion("date_fields_valid", 1 if not date_issues else 0, 1, evidence=[f"date_issues={len(date_issues)}"], paths=[rel(wiki, p) for p in date_issues[:20]]),
@@ -294,10 +315,14 @@ def score_all(wiki: Path) -> dict[str, Any]:
         d2.local_caps_applied.append({"rule": "taxonomy_violations", "cap": 12})
     if compiled_pages and len(title_language_issues) / len(compiled_pages) > 0.10:
         d2.local_caps_applied.append({"rule": "english_only_titles_in_korean_wiki", "cap": 12})
+    if compiled_pages and len(filename_language_issues) / len(compiled_pages) > 0.10:
+        d2.local_caps_applied.append({"rule": "english_only_descriptive_filenames_in_korean_wiki", "cap": 12})
     for p, bad in tag_violations:
         add_issue(issues, "critical", "D2", "taxonomy_violation", rel(wiki, p), f"Tags not in taxonomy: {bad}", "Add tags to SCHEMA.md taxonomy or replace with allowed tags.")
     for p in title_language_issues:
-        add_issue(issues, "critical", "D2", "english_only_non_proper_title", rel(wiki, p), "Non-proper-noun page title/H1 appears English-only in a Korean wiki", "Use a Korean-first human-readable title while keeping filename/slug/tool fields stable.")
+        add_issue(issues, "critical", "D2", "english_only_non_proper_title", rel(wiki, p), "Non-proper-noun page title/H1 appears English-only in a Korean wiki", "Use a Korean-first human-readable title/H1.")
+    for p in filename_language_issues:
+        add_issue(issues, "critical", "D2", "english_only_descriptive_filename_slug", rel(wiki, p), "Descriptive compiled page filename/slug appears English-only in a Korean wiki", "Rename descriptive compiled page filename/slug to include Korean, then update wikilinks and index.md.")
 
     # D3
     aliases: dict[str, Path] = {}
@@ -431,7 +456,7 @@ def score_all(wiki: Path) -> dict[str, Any]:
     raw_cluster_score = 3 if raw_clusters and cluster_hits >= max(1, min(5, len(raw_clusters)//2)) else (2 if cluster_hits else 0)
     entity_promotion_score = 3 if entity_count >= 5 else (2 if entity_count > 0 else 0)
     type_mix_score = 2 if entity_count and concept_count and comparison_count and query_count else 1 if concept_count and (comparison_count or query_count) else 0
-    use_case_score = 3 if "marketing-question-to-knowledge-map" in index_text and "marketing-rubric-v3-answers-q01-q20" in index_text else 0
+    use_case_score = 3 if comparison_count >= 1 and query_count >= 1 and ("20문" in index_text or "질문" in index_text) else 0
     gap_docs = [p for p in meta_artifacts if "required" in p.name.lower() or "gap" in p.name.lower() or "review" in p.name.lower()]
     gap_score = 2 if gap_docs else 0
     d5 = Dimension("D5", "Corpus Coverage & Domain Fit", 15, "quality", [
@@ -482,6 +507,8 @@ def score_all(wiki: Path) -> dict[str, Any]:
         global_caps.append({"rule_id": "raw_drift_unexplained", "cap": 75, "reason": "Raw source sha256 drift detected", "evidence": [f"mismatch_count={len(raw_hash_mismatch)}"]})
     if title_language_issues and compiled_pages and len(title_language_issues) / len(compiled_pages) > 0.10:
         global_caps.append({"rule_id": "english_only_titles_in_korean_wiki", "cap": 85, "reason": "Non-proper-noun page titles are not Korean-first", "evidence": [f"title_language_issues={len(title_language_issues)}"]})
+    if filename_language_issues and compiled_pages and len(filename_language_issues) / len(compiled_pages) > 0.10:
+        global_caps.append({"rule_id": "english_only_descriptive_filenames_in_korean_wiki", "cap": 85, "reason": "Descriptive compiled page filenames/slugs are not Korean-first", "evidence": [f"filename_language_issues={len(filename_language_issues)}"]})
     if (multi_source_pages and len(provenance_ok) != len(multi_source_pages)) or nonclickable_body_refs:
         global_caps.append({"rule_id": "non_clickable_raw_source_links", "cap": 90, "reason": "Source-trace or supplemental raw paths are not clickable for all compiled pages", "evidence": [f"multi_source_pages={len(multi_source_pages)}", f"with_clickable_traceability={len(provenance_ok)}", f"nonclickable_body_ref_pages={len(nonclickable_body_refs)}"]})
 

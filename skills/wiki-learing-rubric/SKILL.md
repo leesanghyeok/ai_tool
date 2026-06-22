@@ -9,7 +9,7 @@ metadata:
     tags: [wiki, rubric, corpus, research, evaluation, subagents]
 ---
 
-# Wiki 학습 루브릭
+# 위키 학습 루브릭
 
 ## 개요
 
@@ -370,6 +370,12 @@ notes
 raw/ 외부에 원본 데이터 저장 금지.
 ```
 
+추가 품질 규칙:
+
+- `saved` 파일도 부모 에이전트가 본문 품질을 검증한다.
+- 404/page-not-found, SPA shell, CSS/JS dump, cookie wall, pricing shell처럼 관련 claim이 없는 저장물은 `invalid_content`로 분류하고 compiled page 근거로 쓰지 않는다.
+- fetch report는 가능하면 `saved`, `exists`, `failed`, `invalid_content`를 분리한다.
+
 저장 전 확인:
 
 1. `wiki_path`가 맞는지 확인한다.
@@ -481,7 +487,7 @@ wiki ingest 후에는 다시 단계 1A로 돌아간다.
 - 이전 질문과의 중복 회피 근거
 ```
 
-### Wiki 답변 subagent
+### 위키 답변 subagent
 
 ```text
 너는 wiki 답변 전용 서브에이전트다.
@@ -572,6 +578,8 @@ wiki_path:
 
 루브릭 점수가 낮을 때 웹 글만 추가하면 wiki가 전문화되지 않는다. gap 유형에 따라 source type을 다양화한다.
 
+> 참고: `references/rubric-v3-company-data-blocker-and-raw-validation.md`에는 marketing-expert-rubric-v3처럼 회사별 baseline/재무/실험 데이터 없이는 90점 통과를 주장할 수 없는 루브릭에서의 blocker 처리와 raw fetch 품질 검증 체크가 정리되어 있다.
+
 - 정의/개념 부족: 교과서, open textbook, 표준 문서, 공식 docs
 - 실무 운영 부족: product docs, vendor docs, implementation guide, case study
 - 학술 근거 부족: peer-reviewed paper, arXiv, SSRN, NBER, 학회 발표자료
@@ -633,6 +641,12 @@ wiki_path:
 
 1. 한 에이전트가 질문 생성, 답변, 채점을 모두 수행하는 것
    - 평가 오염이 발생한다. 반드시 신규 서브에이전트를 분리한다.
+
+1-1. target_average 미달을 공개 자료 수집만으로 억지 통과 처리하는 것
+   - 루브릭이 회사별 baseline, 재무 수치, 경쟁자별 win/loss, 실험 표본/MDE 같은 private/company-specific data를 요구하면 공개 corpus 보강 후에도 `pass=false`로 보고한다. 필요한 데이터 체크리스트를 산출하고, 실제/익명화 baseline data 또는 명시 승인된 가상 baseline scenario 없이는 90점 통과를 주장하지 않는다.
+
+1-2. raw fetch 성공을 본문 품질 성공으로 간주하는 것
+   - 200 응답이나 파일 저장은 충분하지 않다. 404 page, SPA shell, CSS/JS dump, generic landing page가 저장될 수 있다. 부모 에이전트가 샘플 read-back, error 문자열 검색, claim 존재 확인으로 `invalid_content`를 분리한 뒤 compiled page에 반영한다.
 
 2. 같은 질문으로 반복 평가하는 것
    - 종료조건 검증은 항상 새 질문 세트로 한다.

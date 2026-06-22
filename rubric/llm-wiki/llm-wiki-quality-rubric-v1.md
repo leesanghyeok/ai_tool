@@ -1,253 +1,256 @@
-# LLM Wiki Quality Rubric v1
+# LLM Wiki 품질 루브릭 v1
 
-## 1. Evaluation Purpose
+## 1. 평가 목적
 
-This rubric evaluates whether an `llm-wiki` knowledge base is safe to rely on as a maintained, source-grounded, navigable, reusable knowledge system.
+이 루브릭은 `llm-wiki` 지식 베이스가 유지보수 가능하고, 출처에 근거하며, 탐색 가능하고, 재사용 가능한 지식 시스템으로 신뢰해도 되는지를 평가한다.
 
-It is designed to prevent ad-hoc wiki health checks by defining:
+이 루브릭은 ad-hoc wiki health check를 막기 위해 다음을 고정한다.
 
-- a fixed 100-point scoring model,
-- hard gate requirements,
-- deterministic checks where possible,
-- judge-only checks where qualitative judgment is required,
-- a stable JSON scorecard shape.
+- 고정 100점 채점 모델
+- hard gate 요구사항
+- 가능한 경우 deterministic check
+- 정성 판단이 필요한 경우 judge-only check
+- 안정적인 JSON scorecard 형식
 
-## 2. Evaluation Target
+## 2. 평가 대상
 
-A single `llm-wiki` root directory containing, at minimum:
+단일 `llm-wiki` root directory. 최소한 다음을 포함한다.
 
 - `SCHEMA.md`
 - `index.md`
 - `log.md`
-- compiled wiki pages under `entities/`, `concepts/`, `comparisons/`, `queries/`
-- immutable source material under `raw/`
-- optional reproducibility artifacts under `_meta/`
-- human-facing titles and headings in the wiki language; in Korean-language wikis, descriptive concept/comparison/query titles should be Korean-first while stable slugs, YAML keys, enum values, file paths, tags, and proper nouns may remain English
+- `entities/`, `concepts/`, `comparisons/`, `queries/` 아래 compiled wiki page
+- `raw/` 아래 immutable source material
+- 선택적으로 `_meta/` 아래 reproducibility artifact
+- wiki 언어에 맞는 human-facing title, heading, compiled page filename/slug. 한국어 wiki에서는 설명형 concept/comparison/query의 `title`, H1, 파일명 slug가 한국어 우선이어야 하며, YAML key, enum 값, raw file path, tag, proper noun entity filename은 영어로 남겨도 된다.
 
-## 3. Passing Standard
+## 3. 통과 기준
 
-Baseline passing score: **95 / 100**.
+Baseline passing score(기본 통과 점수): **95 / 100**.
 
-A wiki only passes if both conditions are true:
+wiki는 다음 두 조건을 모두 만족할 때만 통과한다.
 
 1. `total_score >= 95`
-2. all hard-gated dimensions score full points:
+2. 모든 hard-gated dimension이 만점이어야 한다.
    - D1 Wiki Structure & Navigation: 15 / 15
    - D2 Page-Level Schema Compliance: 15 / 15
    - D3 Link Graph & Knowledge Connectivity: 15 / 15
    - D4 Source Integrity & Provenance: 20 / 20
 
-If any of D1–D4 loses points, the wiki must **not** pass, even if the numeric total would otherwise be 90+.
+D1-D4 중 하나라도 감점되면, numeric total이 90점 이상이어도 wiki는 **통과하면 안 된다**.
 
-Hard-gate cap rule:
+Hard-gate cap rule(하드 게이트 상한 규칙):
 
-- If any D1–D4 dimension is below full score, `pass = false` and `certification_score_cap = 89`.
-- The reported `raw_total_score` may still be shown for diagnostics, but the certification result fails.
+- D1-D4 중 하나라도 만점 미만이면 `pass = false`이고 `certification_score_cap = 89`다.
+- 진단을 위해 `raw_total_score`는 표시할 수 있지만, certification 결과는 실패다.
 
-## 4. Dimension Summary
+## 4. Dimension 요약
 
-| ID | Dimension | Points | Gate Type | Evaluation Focus |
+| ID | 차원 | 점수 | Gate Type | 평가 초점 |
 |---|---:|---:|---|---|
-| D1 | Wiki Structure & Navigation | 15 | Hard gate | Required structure, index consistency, log presence |
-| D2 | Page-Level Schema Compliance | 15 | Hard gate | Frontmatter, type enum, tags, source references |
-| D3 | Link Graph & Knowledge Connectivity | 15 | Hard gate | Broken links, orphan pages, meaningful connectivity |
-| D4 | Source Integrity & Provenance | 20 | Hard gate | Raw frontmatter, sha256 integrity, provenance traceability |
-| D5 | Corpus Coverage & Domain Fit | 15 | Quality | Domain coverage, entity/concept balance, cluster coverage |
-| D6 | Synthesis Quality & Non-Generic Knowledge | 10 | Quality | Reusable judgment, tradeoffs, source synthesis |
-| D7 | Maintenance, Auditability & Evolution | 10 | Quality | Logs, manifests, validation artifacts, reviewability |
+| D1 | Wiki Structure & Navigation | 15 | Hard gate | 필수 구조, index 일관성, log 존재 |
+| D2 | Page-Level Schema Compliance | 15 | Hard gate | Frontmatter, type enum, 한국어 title/filename, tag, source reference |
+| D3 | Link Graph & Knowledge Connectivity | 15 | Hard gate | Broken link, orphan page, 의미 있는 연결성 |
+| D4 | Source Integrity & Provenance | 20 | Hard gate | Raw frontmatter, sha256 무결성, provenance 추적성 |
+| D5 | Corpus Coverage & Domain Fit | 15 | Quality | Domain coverage, entity/concept 균형, cluster coverage |
+| D6 | Synthesis Quality & Non-Generic Knowledge | 10 | Quality | 재사용 가능한 판단, tradeoff, source synthesis |
+| D7 | Maintenance, Auditability & Evolution | 10 | Quality | Log, manifest, validation artifact, reviewability |
 | **Total** |  | **100** |  |  |
 
-## 5. Detailed Scoring Criteria
+## 5. 세부 채점 기준
 
 ### D1. Wiki Structure & Navigation — 15 points — Hard Gate
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Required root files exist | 3 | `SCHEMA.md`, `index.md`, and `log.md` exist at wiki root | Yes |
-| Required directories exist | 2 | `entities/`, `concepts/`, `comparisons/`, `queries/`, and `raw/` exist | Yes |
-| Index count matches compiled page count | 3 | `index.md` declared page count equals actual count under compiled page dirs | Yes |
-| Every compiled page appears in index | 3 | Every page stem under compiled dirs has a matching `[[wikilink]]` in `index.md` | Yes |
-| No stale/extra index links | 2 | Every compiled-page wikilink in `index.md` resolves to an actual compiled page | Yes |
-| Log is present and populated | 2 | `log.md` contains at least one `## [YYYY-MM-DD]` entry | Yes |
+| 필수 root file 존재 | 3 | wiki root에 `SCHEMA.md`, `index.md`, `log.md`가 존재한다 | Yes |
+| 필수 directory 존재 | 2 | `entities/`, `concepts/`, `comparisons/`, `queries/`, `raw/`가 존재한다 | Yes |
+| Index count와 compiled page count 일치 | 3 | `index.md`에 선언된 page count가 compiled page directory 아래 실제 count와 같다 | Yes |
+| 모든 compiled page가 index에 등재됨 | 3 | compiled directory 아래 모든 page stem에 대응하는 `[[wikilink]]`가 `index.md`에 있다 | Yes |
+| Stale/extra index link 없음 | 2 | `index.md`의 모든 compiled-page wikilink가 실제 compiled page로 resolve된다 | Yes |
+| Log 존재 및 내용 있음 | 2 | `log.md`에 최소 하나의 `## [YYYY-MM-DD]` entry가 있다 | Yes |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If `SCHEMA.md` or `index.md` is missing, D1 is capped at 6.
-- If `log.md` is missing or has no dated entries, D1 is capped at 12.
-- Any D1 score below 15 fails the hard gate.
+- `SCHEMA.md` 또는 `index.md`가 없으면 D1은 최대 6점이다.
+- `log.md`가 없거나 dated entry가 없으면 D1은 최대 12점이다.
+- D1 점수가 15점 미만이면 hard gate 실패다.
 
 ### D2. Page-Level Schema Compliance — 15 points — Hard Gate
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Valid YAML-like frontmatter block | 3 | Every compiled page starts with `---`, has a closing `---`, and contains key-value frontmatter | Yes |
-| Required fields present | 3 | Every compiled page has `title`, `created`, `updated`, `type`, `tags`, `sources` | Yes |
-| Valid `type` enum | 1 | `type` is one of `entity`, `concept`, `comparison`, `query`, `summary` | Yes |
-| Human-readable title language | 2 | In a Korean wiki, non-proper-noun page titles in frontmatter and H1 are Korean-first; proper nouns may remain English | Mostly yes |
-| Tags are in taxonomy | 3 | Every tag in compiled pages appears in `SCHEMA.md` taxonomy | Mostly yes |
-| Source paths are structurally valid | 2 | `sources` is a list-like field; non-empty source entries point to `raw/` or a documented non-raw source path | Mostly yes |
-| Date fields are valid ISO dates | 1 | `created` and `updated` use `YYYY-MM-DD` | Yes |
+| 유효한 YAML-like frontmatter block | 3 | 모든 compiled page가 `---`로 시작하고 닫는 `---`를 가지며 key-value frontmatter를 포함한다 | Yes |
+| 필수 field 존재 | 3 | 모든 compiled page에 `title`, `created`, `updated`, `type`, `tags`, `sources`가 있다 | Yes |
+| 유효한 `type` enum | 1 | `type`이 `entity`, `concept`, `comparison`, `query`, `summary` 중 하나다 | Yes |
+| Human-readable title language | 1 | 한국어 wiki에서 non-proper-noun page title의 frontmatter와 H1은 한국어 우선이며, proper noun은 영어로 남겨도 된다 | Mostly yes |
+| Korean-first compiled page filename/slug | 1 | 한국어 wiki에서 설명형 `concepts/`, `comparisons/`, `queries/` page filename/slug는 한국어를 포함한다. Google/Meta/Airbnb 같은 proper noun `entities/` filename은 영어 허용 | Mostly yes |
+| Tag가 taxonomy 안에 있음 | 3 | compiled page의 모든 tag가 `SCHEMA.md` taxonomy에 등장한다 | Mostly yes |
+| Source path가 구조적으로 유효함 | 2 | `sources`는 list-like field이며, 비어 있지 않은 source entry가 `raw/` 또는 문서화된 non-raw source path를 가리킨다 | Mostly yes |
+| Date field가 유효한 ISO date | 1 | `created`와 `updated`가 `YYYY-MM-DD` 형식을 사용한다 | Yes |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If any compiled page lacks frontmatter, D2 is capped at 10.
-- If required fields are missing from any compiled page, D2 is capped at 11.
-- If taxonomy violations exist, D2 is capped at 12.
-- If more than 10% of non-proper-noun compiled pages have English-only human-facing titles in a Korean wiki, D2 is capped at 12.
-- Any D2 score below 15 fails the hard gate.
+- frontmatter가 없는 compiled page가 하나라도 있으면 D2는 최대 10점이다.
+- 필수 field가 누락된 compiled page가 하나라도 있으면 D2는 최대 11점이다.
+- taxonomy violation이 있으면 D2는 최대 12점이다.
+- 한국어 wiki에서 non-proper-noun compiled page의 10% 초과가 English-only human-facing title이면 D2는 최대 12점이다.
+- 한국어 wiki에서 설명형 compiled page filename/slug의 10% 초과가 English-only이면 D2는 최대 12점이다.
+- D2 점수가 15점 미만이면 hard gate 실패다.
 
 ### D3. Link Graph & Knowledge Connectivity — 15 points — Hard Gate
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| No broken compiled-page wikilinks | 4 | Wikilinks in compiled pages resolve to compiled page stems or accepted root docs | Yes |
-| Minimum outbound links | 3 | Every compiled page has at least 2 outbound wikilinks, except explicitly exempted pages | Yes |
-| No unexplained orphan compiled pages | 3 | Every compiled page has inbound links, or is explicitly exempted as a top-level query/index artifact | Yes + policy |
-| Query/comparison pages connect back to concepts/entities | 2 | Query/comparison pages link to relevant concept/entity/comparison pages | Yes |
-| Cross-links are semantically relevant | 2 | Links represent meaningful relationships, not random padding | Judge |
-| No link noise from raw files included in graph | 1 | Link graph excludes `raw/` source artifacts to avoid false positives | Yes |
+| Broken compiled-page wikilink 없음 | 4 | compiled page 안의 wikilink가 compiled page stem 또는 허용된 root doc으로 resolve된다 | Yes |
+| 최소 outbound link | 3 | 명시적으로 exempt된 page를 제외하고 모든 compiled page가 최소 2개 outbound wikilink를 가진다 | Yes |
+| 설명 없는 orphan compiled page 없음 | 3 | 모든 compiled page가 inbound link를 갖거나 top-level query/index artifact로 명시적으로 exempt된다 | Yes + policy |
+| Query/comparison page가 concept/entity로 다시 연결됨 | 2 | Query/comparison page가 관련 concept/entity/comparison page에 link한다 | Yes |
+| Cross-link가 의미적으로 관련 있음 | 2 | link가 random padding이 아니라 의미 있는 관계를 나타낸다 | Judge |
+| Raw file link noise가 graph에 포함되지 않음 | 1 | false positive를 피하기 위해 link graph가 `raw/` source artifact를 제외한다 | Yes |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If any compiled-page broken link exists, D3 is capped at 11.
-- If more than 10% of compiled pages are orphan pages without explicit exemption, D3 is capped at 10.
-- If outbound link requirement is broadly violated, D3 is capped at 10.
-- Any D3 score below 15 fails the hard gate.
+- compiled-page broken link가 하나라도 있으면 D3은 최대 11점이다.
+- 명시 exemption 없는 compiled page 중 orphan page가 10% 초과면 D3은 최대 10점이다.
+- outbound link 요구사항이 광범위하게 위반되면 D3은 최대 10점이다.
+- D3 점수가 15점 미만이면 hard gate 실패다.
 
 ### D4. Source Integrity & Provenance — 20 points — Hard Gate
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Raw frontmatter exists | 4 | Every raw `.md` file has a frontmatter block | Yes |
-| Required raw fields exist | 4 | Every raw source has `source_url`, `ingested`, and `sha256` unless documented as a local/manual source | Yes |
-| Raw sha256 matches body | 4 | Stored `sha256` matches the body after frontmatter using the project-defined normalization | Yes |
-| Compiled pages cite sources | 3 | Every compiled page has non-empty `sources` | Yes |
-| Source references resolve | 2 | Source paths in compiled page frontmatter resolve or are explicitly documented external references | Mostly yes |
-| Clickable raw provenance/source links | 2 | Pages synthesizing 3+ sources and any supplemental source sections such as `## 출처 보강` use clickable links to raw files; plain/backticked `raw/...md` paths do not receive credit | Judge + partial regex |
-| Fetch failures/exclusions recorded | 1 | Failed or excluded sources are documented in `log.md`, `_meta`, or fetch reports | Yes + judge |
+| Raw frontmatter 존재 | 4 | 모든 raw `.md` file에 frontmatter block이 있다 | Yes |
+| 필수 raw field 존재 | 4 | local/manual source로 문서화된 경우를 제외하고 모든 raw source에 `source_url`, `ingested`, `sha256`가 있다 | Yes |
+| Raw sha256이 body와 일치 | 4 | 저장된 `sha256`이 project-defined normalization을 적용한 frontmatter 이후 body와 일치한다 | Yes |
+| Compiled page가 source를 인용함 | 3 | 모든 compiled page의 `sources`가 비어 있지 않다 | Yes |
+| Source reference resolve | 2 | compiled page frontmatter의 source path가 resolve되거나 명시적으로 문서화된 external reference다 | Mostly yes |
+| Clickable raw provenance/source link | 2 | 3개 이상 source를 종합한 page와 `## 출처 보강` 같은 supplemental source section은 raw file로 클릭 가능한 link를 사용한다. plain/backticked `raw/...md` path는 점수를 주지 않는다 | Judge + partial regex |
+| Fetch failure/exclusion 기록 | 1 | 실패하거나 제외된 source가 `log.md`, `_meta`, fetch report 중 하나에 기록되어 있다 | Yes + judge |
 
 Hash normalization rule:
 
-- The default deterministic checker hashes the text after the closing raw frontmatter delimiter, with leading blank newlines stripped (`body.lstrip("\n")`).
-- If a wiki uses another normalization rule, it must document that rule in `SCHEMA.md` or `_meta/` and the checker must be configured accordingly.
+- 기본 deterministic checker는 raw frontmatter 닫는 delimiter 뒤의 text에서 leading blank newline을 제거한 값(`body.lstrip("\n")`)을 hash한다.
+- wiki가 다른 normalization rule을 사용하면 그 rule을 `SCHEMA.md` 또는 `_meta/`에 문서화하고 checker도 그에 맞게 설정해야 한다.
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If any raw source lacks `sha256`, D4 is capped at 14.
-- If any raw source has unexplained sha256 drift, D4 is capped at 16.
-- If compiled pages have empty or missing `sources`, D4 is capped at 15.
-- If raw provenance is mostly absent, D4 is capped at 12.
-- If any compiled-page body contains plain or backticked `raw/...md` source paths that are not clickable Markdown/Obsidian links, D4 is capped at 18.
-- Any D4 score below 20 fails the hard gate.
+- `sha256`이 없는 raw source가 하나라도 있으면 D4는 최대 14점이다.
+- 설명 없는 raw source sha256 drift가 하나라도 있으면 D4는 최대 16점이다.
+- compiled page의 `sources`가 비어 있거나 누락되면 D4는 최대 15점이다.
+- raw provenance가 대부분 없으면 D4는 최대 12점이다.
+- compiled-page body에 clickable Markdown/Obsidian link가 아닌 plain 또는 backticked `raw/...md` source path가 있으면 D4는 최대 18점이다.
+- D4 점수가 20점 미만이면 hard gate 실패다.
 
 ### D5. Corpus Coverage & Domain Fit — 15 points — Quality Dimension
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Domain alignment | 2 | Sources and compiled pages match the domain in `SCHEMA.md` | Judge |
-| Raw clusters reflected in compiled pages | 3 | Major raw clusters have corresponding concept/entity/comparison/query coverage | Partial |
-| Repeated entities/concepts are promoted | 3 | High-frequency, decision-relevant entities/concepts are compiled into pages or explicitly deferred | Judge + partial |
-| Page type mix is justified | 2 | Entities/concepts/comparisons/queries ratio matches wiki purpose and is explained if unusual | Judge |
-| Key use cases have evidence coverage | 3 | Main questions/use cases can be answered from compiled pages and sources | Judge |
-| Known corpus gaps are documented | 2 | Missing data, private-data requirements, and coverage gaps are recorded | Judge + search |
+| Domain alignment | 2 | Source와 compiled page가 `SCHEMA.md`의 domain과 일치한다 | Judge |
+| Raw cluster가 compiled page에 반영됨 | 3 | 주요 raw cluster에 대응하는 concept/entity/comparison/query coverage가 있다 | Partial |
+| 반복 등장 entity/concept가 승격됨 | 3 | 고빈도이면서 decision-relevant한 entity/concept가 page로 compiled되었거나 명시적으로 deferred되었다 | Judge + partial |
+| Page type mix가 정당화됨 | 2 | entities/concepts/comparisons/queries 비율이 wiki 목적과 맞고, unusual하면 설명되어 있다 | Judge |
+| 핵심 use case에 evidence coverage가 있음 | 3 | 주요 question/use case를 compiled page와 source로 답할 수 있다 | Judge |
+| 알려진 corpus gap이 문서화됨 | 2 | missing data, private-data requirement, coverage gap이 기록되어 있다 | Judge + search |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If raw corpus is large but compiled coverage is sparse and unexplained, D5 is capped at 10.
-- If `entities/` is empty while the schema requires entity pages and repeated entities exist, D5 is capped at 12 unless a concept-first policy is documented.
-- If one vendor/source family dominates without caveat, D5 is capped at 12.
+- raw corpus가 큰데 compiled coverage가 sparse하고 설명이 없으면 D5는 최대 10점이다.
+- schema가 entity page를 요구하고 반복 entity가 존재하는데 `entities/`가 비어 있으면, concept-first policy가 문서화된 경우를 제외하고 D5는 최대 12점이다.
+- 한 vendor/source family가 caveat 없이 지배적이면 D5는 최대 12점이다.
 
 ### D6. Synthesis Quality & Non-Generic Knowledge — 10 points — Quality Dimension
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Pages separate definition, claims, implications, and limits | 2 | Page structure supports reuse and review | Judge |
-| Multi-source synthesis | 3 | Pages compare or synthesize sources rather than copying summaries | Judge |
-| Decision-relevant knowledge | 2 | Pages contain conditions, tradeoffs, metrics, or decision rules | Judge |
-| Uncertainty and contradictions handled | 2 | Limitations, contested points, or confidence are explicit where relevant | Judge |
-| Long-form answers remain navigable | 1 | Long query pages are split or structured well enough to review | Judge + line count |
+| Page가 definition, claim, implication, limit을 분리함 | 2 | page structure가 재사용과 review를 지원한다 | Judge |
+| Multi-source synthesis | 3 | page가 source summary를 복사하는 대신 source를 비교하거나 종합한다 | Judge |
+| Decision-relevant knowledge | 2 | page에 condition, tradeoff, metric, decision rule이 포함되어 있다 | Judge |
+| Uncertainty와 contradiction 처리 | 2 | 관련 있는 경우 limitation, contested point, confidence가 명시되어 있다 | Judge |
+| Long-form answer가 탐색 가능함 | 1 | 긴 query page가 분할되어 있거나 review하기 충분히 잘 구조화되어 있다 | Judge + line count |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If pages are mostly copied source summaries, D6 is capped at 6.
-- If unsupported recommendations are common, D6 is capped at 7.
-- If generic advice dominates, D6 is capped at 7.
+- page가 대부분 copied source summary라면 D6은 최대 6점이다.
+- unsupported recommendation이 흔하면 D6은 최대 7점이다.
+- generic advice가 지배적이면 D6은 최대 7점이다.
 
 ### D7. Maintenance, Auditability & Evolution — 10 points — Quality Dimension
 
-| Criterion | Points | Recognition Standard | Deterministic? |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
-| Operations are logged | 2 | Ingest/update/query/lint work appears in `log.md` | Yes + judge |
-| Log rotation healthy | 1 | `log.md` is below rotation threshold or has documented yearly rotation | Yes |
-| Reproducibility artifacts exist | 2 | `_meta` contains manifests, fetch reports, validation reports, or equivalent artifacts | Yes |
-| Low-confidence/contested/stale review surfaces exist | 2 | The wiki can identify weak or disputed pages | Partial |
-| Large ingest has validation reports | 2 | Bulk source collection or answer generation has reports/checks | Yes + judge |
-| Recommendations are path-specific | 1 | Audit output names paths, evidence, and fixes | Judge |
+| Operation이 log에 기록됨 | 2 | ingest/update/query/lint 작업이 `log.md`에 나타난다 | Yes + judge |
+| Log rotation이 건강함 | 1 | `log.md`가 rotation threshold 미만이거나 yearly rotation이 문서화되어 있다 | Yes |
+| Reproducibility artifact 존재 | 2 | `_meta`가 manifest, fetch report, validation report 또는 동등한 artifact를 포함한다 | Yes |
+| Low-confidence/contested/stale review surface 존재 | 2 | wiki가 약하거나 disputed된 page를 식별할 수 있다 | Partial |
+| Large ingest에 validation report가 있음 | 2 | bulk source collection 또는 answer generation에 report/check가 있다 | Yes + judge |
+| Recommendation이 path-specific임 | 1 | audit output이 path, evidence, fix를 명시한다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- If recent bulk changes have no log or manifest, D7 is capped at 6.
-- If no validation or reproducibility artifacts exist, D7 is capped at 7.
+- 최근 bulk change에 log 또는 manifest가 없으면 D7은 최대 6점이다.
+- validation 또는 reproducibility artifact가 전혀 없으면 D7은 최대 7점이다.
 
 ## 6. Global Caps and Certification Rules
 
-Apply checklist scoring first, then local caps, then global caps, then certification rules.
+먼저 checklist scoring을 적용하고, 그다음 local cap, global cap, certification rule 순서로 적용한다.
 
-Global caps:
+Global cap(전체 상한):
 
-- If the target is not an llm-wiki root, total score is capped at 40.
-- If both `SCHEMA.md` and `index.md` are missing, total score is capped at 40.
-- If most compiled pages lack frontmatter, total score is capped at 60.
-- If raw source provenance is mostly absent, total score is capped at 65.
-- If a Korean-language wiki uses English-only non-proper-noun titles for more than 10% of compiled pages, total score is capped at 85.
-- If source-trace or supplemental raw paths are not clickable links, total score is capped at 90.
-- If compiled-page broken links or index mismatches are widespread, total score is capped at 70.
-- If major claims are repeatedly unsupported by source references, total score is capped at 70.
-- If raw source drift exists without explanation, total score is capped at 75.
-- If the actual corpus does not match the schema domain, total score is capped at 75.
+- 대상이 llm-wiki root가 아니면 total score는 최대 40점이다.
+- `SCHEMA.md`와 `index.md`가 모두 없으면 total score는 최대 40점이다.
+- 대부분의 compiled page에 frontmatter가 없으면 total score는 최대 60점이다.
+- raw source provenance가 대부분 없으면 total score는 최대 65점이다.
+- 한국어 wiki에서 non-proper-noun title이 English-only인 compiled page가 10% 초과면 total score는 최대 85점이다.
+- 한국어 wiki에서 설명형 compiled page filename/slug가 English-only인 compiled page가 10% 초과면 total score는 최대 85점이다.
+- source-trace 또는 supplemental raw path가 clickable link가 아니면 total score는 최대 90점이다.
+- compiled-page broken link 또는 index mismatch가 광범위하면 total score는 최대 70점이다.
+- 주요 claim이 source reference 없이 반복되면 total score는 최대 70점이다.
+- 설명 없는 raw source drift가 있으면 total score는 최대 75점이다.
+- 실제 corpus가 schema domain과 맞지 않으면 total score는 최대 75점이다.
 
-Certification rule:
+Certification rule(인증 규칙):
 
 - `pass = total_score >= 95 AND D1 = 15 AND D2 = 15 AND D3 = 15 AND D4 = 20`.
-- If any hard-gated dimension fails, `pass = false`, even when `raw_total_score >= 95`.
-- Report both `raw_total_score` and `certification_score` when caps are applied.
+- hard-gated dimension 중 하나라도 실패하면 `raw_total_score >= 95`여도 `pass = false`다.
+- cap이 적용되면 `raw_total_score`와 `certification_score`를 모두 보고한다.
 
-## 7. Score Interpretation
+## 7. 점수 해석
 
-| Score | Interpretation |
+| 점수 | 해석 |
 |---:|---|
-| 95–100 and all hard gates pass | Production-quality llm-wiki; safe for repeated wiki-only use with normal caveats |
-| 90–94 | Strong but not passing baseline; improve quality dimensions or hard-gate gaps |
-| 80–89 | Healthy structure but meaningful gaps remain; not certified |
-| 70–79 | Partially usable; important coverage, source, or navigation issues remain |
-| 60–69 | Weak wiki; likely a source dump or incomplete compilation |
-| 0–59 | Not reliable as llm-wiki; rebuild structure/provenance first |
+| 95–100 and all hard gates pass | Production-quality llm-wiki. 일반 caveat 하에 반복적인 wiki-only 사용에 안전함 |
+| 90–94 | 강하지만 passing baseline은 아님. quality dimension 또는 hard-gate gap 개선 필요 |
+| 80–89 | 구조는 건강하지만 의미 있는 gap이 남아 있음. 인증되지 않음 |
+| 70–79 | 부분적으로 사용 가능. 중요한 coverage, source, navigation issue가 남아 있음 |
+| 60–69 | 약한 wiki. source dump 또는 incomplete compilation일 가능성이 큼 |
+| 0–59 | llm-wiki로 신뢰하기 어려움. structure/provenance를 먼저 재구축해야 함 |
 
-## 8. Scoring Procedure
+## 8. 채점 절차
 
-1. Confirm target path and read-only mode.
-2. Read `SCHEMA.md`, `index.md`, and recent `log.md`.
-3. Run deterministic checks for D1–D4 and deterministic parts of D5–D7.
-4. Score checklist items independently.
-5. Apply local caps.
-6. Apply global caps.
-7. Apply hard-gate certification rule.
-8. Produce a JSON scorecard and a short human summary.
-9. Do not update `log.md` during read-only audit.
+1. target path와 read-only mode를 확인한다.
+2. `SCHEMA.md`, `index.md`, 최근 `log.md`를 읽는다.
+3. D1-D4와 D5-D7의 deterministic part에 대해 deterministic check를 실행한다.
+4. checklist item을 독립적으로 채점한다.
+5. local cap을 적용한다.
+6. global cap을 적용한다.
+7. hard-gate certification rule을 적용한다.
+8. JSON scorecard와 짧은 human summary를 생성한다.
+9. read-only audit 중에는 `log.md`를 업데이트하지 않는다.
 
-## 9. Judge Instructions
+## 9. Judge 지침
 
-Use these instructions when an LLM or human reviewer evaluates non-deterministic criteria:
+LLM 또는 human reviewer가 non-deterministic criteria를 평가할 때 다음 지침을 사용한다.
 
-1. Use only evidence from the wiki files and deterministic checker output.
-2. Do not infer quality from file count alone.
-3. Do not reward long pages unless they are navigable and source-grounded.
-4. Do not give credit for taxonomy intent unless it appears in `SCHEMA.md` or compiled pages.
-5. Treat raw sources as evidence only if provenance and supplemental source references are traceable through clickable Markdown/Obsidian links, not merely plain-text raw paths.
-6. Score checklist items before deciding the total.
-7. Apply D1–D4 hard gates strictly.
-8. If a criterion cannot be verified, mark it as `unverified` and give only partial or zero credit as appropriate.
-9. Report concrete paths and evidence for every issue.
+1. wiki file과 deterministic checker output의 evidence만 사용한다.
+2. file count만으로 quality를 추론하지 않는다.
+3. page가 탐색 가능하고 source-grounded한 경우가 아니라면 긴 page에 보상하지 않는다.
+4. taxonomy intent가 `SCHEMA.md` 또는 compiled page에 나타나지 않으면 점수를 주지 않는다.
+5. raw source는 provenance와 supplemental source reference가 plain-text raw path가 아니라 clickable Markdown/Obsidian link로 추적 가능할 때만 evidence로 취급한다.
+6. total을 결정하기 전에 checklist item을 먼저 채점한다.
+7. D1-D4 hard gate를 엄격하게 적용한다.
+8. criterion을 검증할 수 없으면 `unverified`로 표시하고 적절하게 partial 또는 zero credit만 준다.
+9. 모든 issue에 대해 구체적인 path와 evidence를 보고한다.
 
 ## 10. JSON Scorecard Schema
 

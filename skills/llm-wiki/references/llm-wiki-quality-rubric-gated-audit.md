@@ -73,7 +73,7 @@ wiki 상태점검은 자유 형식 narrative가 되어서는 안 된다. 먼저 
    - large ingest에 validation report가 있음.
    - audit output이 path-specific recommendation을 제공함.
 
-## deterministic checker 패턴
+## Deterministic checker 패턴
 
 최소한 다음 field를 갖는 stable JSON scorecard를 출력하는 checker를 만들거나 재사용한다.
 
@@ -99,11 +99,12 @@ wiki 상태점검은 자유 형식 narrative가 되어서는 안 된다. 먼저 
 
 checker는 기본적으로 read-only여야 한다. 사용자가 통과할 때까지 고치라고 요청한 경우에만 wiki를 수정하고, checker를 재실행하며, 최종 scorecard를 `_meta/` 아래에 저장한다.
 
-## gate 통과를 위한 흔한 수정
+## Gate 통과를 위한 흔한 수정
 
 - D1 index mismatch: compiled page 추가/삭제 후 `index.md` entry와 page count를 갱신한다.
 - D2 taxonomy failure: 반복적으로 필요하고 정당한 tag라면 `SCHEMA.md` taxonomy에 추가하고, 그렇지 않으면 기존 taxonomy tag로 교체한다.
-- D2 English-only title: 한국어 wiki의 설명형 page title/H1은 한국어 우선으로 바꾼다. filename/slug는 그대로 둔다.
+- D2 English-only title: 한국어 wiki의 설명형 page title/H1은 한국어 우선으로 바꾼다. filename/slug는 별도 기준으로 함께 점검한다.
+- D2 English-only descriptive filename: 한국어 wiki의 설명형 `concepts/`, `comparisons/`, `queries/` filename/slug는 한국어를 포함하도록 rename하고, 모든 `[[wikilink]]`와 `index.md`를 함께 갱신한다. Proper noun entity filename은 영어 허용이다.
 - D3 orphan page: concept/comparison/query page에서 의미 있는 inbound link를 추가한다. checker만 만족시키기 위한 random link는 금지한다.
 - D3 large raw corpus인데 `entities/`가 비어 있음: 반복 등장 company/platform/source를 위한 core entity page를 소수 생성하거나 deliberate concept-first policy를 문서화한다.
 - D4 raw hash drift: 먼저 normalization을 확인한다. body가 그대로인데 stored hash metadata만 stale이면 raw frontmatter hash를 업데이트한다. 명시 요청 없이 raw body content를 수정하지 않는다.
