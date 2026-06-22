@@ -54,7 +54,8 @@ $WIKI/raw/feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md
 
 각 구성요소의 의미는 다음과 같다.
 
-- `$WIKI`는 사용자가 다른 wiki 경로를 지정하지 않는 한 `${WIKI_PATH:-$HOME/wiki}`다.
+- `$WIKI`는 사용자가 다른 feedback wiki 경로를 명시하지 않는 한 `${FEEDBACK_WIKI_PATH:-${WIKI_PATH:-$HOME/wiki}}`다.
+- `WIKI_PATHS`/`WIKI_DEFAULT`가 다른 도메인 wiki(예: marketing)를 가리켜도 feedback 로그 기본 위치로 사용하지 않는다. Feedback raw log의 기본 목적지는 `$HOME/wiki/raw/feedback`이다.
 - `YYYY-MM-DD`는 로그 생성 시점의 local date다.
 - `session_id`는 현재 conversation/session/thread를 식별할 수 있는 최선의 값이다.
 - `HHMMSS`는 local 24-hour time이다.
@@ -362,7 +363,7 @@ plugin on_session_finalize
 
 자세한 구현 패턴은 `references/hermes-session-finalize-autolog.md`를 참고한다.
 
-1. **Wiki path 식별.** 사용자가 경로를 지정하지 않으면 `${WIKI_PATH:-$HOME/wiki}`를 사용한다.
+1. **Wiki path 식별.** 사용자가 경로를 지정하지 않으면 `${FEEDBACK_WIKI_PATH:-${WIKI_PATH:-$HOME/wiki}}`를 사용한다. `WIKI_PATHS`/`WIKI_DEFAULT`는 프로젝트/도메인 wiki routing용일 수 있으므로 feedback 로그 기본 위치 결정에는 사용하지 않는다. 명시 경로가 없을 때의 기본 목적지는 `$HOME/wiki/raw/feedback`이다.
 2. **Identifier 발견.** `session_id`를 정한다. `session_id`는 `unknown-session`으로 fallback하기 전에 runtime-agnostic Session Identifier Discovery 절차를 실행한다.
 3. **현재 세션 수확.** 현재 세션에서 사용자 수정, 불만족, 재작업, 검증 누락, 포맷/언어 불일치, scope mismatch, evidence gap 후보를 수집한다.
 4. **후보 필터링.** Session Harvest Criteria를 적용해 정상 요구사항 변경, 단순 확인, evidence 부족 후보를 제외한다.
@@ -462,6 +463,8 @@ Reason:
 
 상세 구현 패턴은 `references/session-finalize-hook-automation.md`를 참고한다.
 
+Feedback 기본 위치가 도메인 wiki로 잘못 라우팅되는 문제와 복구 절차는 `references/feedback-default-wiki-routing.md`를 참고한다.
+
 ## 자동 실행/세션 종료 Hook 설계 (Automation Hook Design)
 
 이 스킬을 세션 종료 시 자동으로 실행하려면, hook handler가 `raw/feedback/` Markdown을 직접 생성하지 않는 것을 우선한다. 직접 파일 쓰기는 사건 판별, 멱등성, frontmatter, body hash, taxonomy, session id discovery를 Python hook 코드에 중복 구현하게 만들어 스킬 규칙과 쉽게 drift된다.
@@ -494,7 +497,8 @@ Hermes session 종료 시 자동으로 이 스킬을 실행해야 하는 경우,
 
 ## 흔한 실수 (Common Pitfalls)
 
-1. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
+1. **도메인 wiki routing을 feedback 기본 위치로 착각하기.** `WIKI_PATHS`/`WIKI_DEFAULT`가 `marketing`, `work` 같은 프로젝트 wiki를 가리킬 수 있다. 사용자가 명시한 feedback wiki가 없으면 기본 목적지는 `$HOME/wiki/raw/feedback`이며, 도메인 wiki로 들어간 feedback 파일은 발견 즉시 `$HOME/wiki/raw/feedback`으로 옮기고 원 위치를 비운다.
+2. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.
 2. **Gateway `session:end`만 보고 CLI 자동화를 설계하기.** CLI와 gateway를 모두 다루려면 plugin `on_session_finalize`를 우선 검토한다.
 3. **재귀 guard 없이 child Hermes를 띄우기.** 자동 수확용 child process도 종료 hook을 발생시킬 수 있으므로 `HERMES_FEEDBACK_AUTOLOG_CHILD=1` 같은 guard가 필요하다.
 4. **Raw incident를 `concepts/`에 넣기.** 개별 불만족 사건은 `raw/feedback/` 아래에 둔다. 반복 패턴만 나중에 concept page나 rubric이 될 수 있다.

@@ -1,35 +1,35 @@
-# Korean Wiki Generation
+# 한국어 Wiki 생성
 
-Use this reference when updating or verifying the `llm-wiki` skill's Korean localization behavior.
+`llm-wiki` skill의 한국어 localization 동작을 업데이트하거나 검증할 때 이 참고 문서를 사용한다.
 
-## Goal
+## 목표
 
-When the conversation is Korean, or the user explicitly asks for Korean output, newly initialized wiki files should be human-readable in Korean by default:
+대화가 한국어이거나 사용자가 한국어 출력을 명시적으로 요청한 경우, 새로 초기화되는 wiki 파일은 기본적으로 사람이 읽는 부분을 한국어로 작성한다.
 
-- `SCHEMA.md`: headings, explanatory prose, comments, examples that are not machine identifiers
-- `index.md`: title, guidance block, section headings, comments
-- `log.md`: title, guidance block, initial log subject/body
-- Future wiki pages under `entities/`, `concepts/`, `comparisons/`, `queries/`: body prose, section headings, index summaries, log descriptions
+- `SCHEMA.md`: heading, 설명 prose, comment, machine identifier가 아닌 예시
+- `index.md`: title, guidance block, section heading, comment
+- `log.md`: title, guidance block, 초기 log subject/body
+- 이후 `entities/`, `concepts/`, `comparisons/`, `queries/` 아래 생성되는 wiki page: 본문 prose, section heading, index summary, log description
 
-## Preserve for compatibility
+## 호환성을 위해 유지할 것
 
-Do not translate machine-readable or integration-sensitive surfaces unless the user explicitly asks:
+사용자가 명시적으로 요구하지 않는 한 machine-readable 또는 integration-sensitive surface는 번역하지 않는다.
 
-- Environment variables: `WIKI_PATHS`, `WIKI_DEFAULT`, `WIKI_PATH`
-- File and directory names: `SCHEMA.md`, `index.md`, `log.md`, `raw/`, `entities/`, `concepts/`, `comparisons/`, `queries/`
-- YAML/frontmatter keys: `title`, `created`, `updated`, `type`, `tags`, `sources`, `confidence`, `source_url`, `sha256`
-- Enum/action values: `entity`, `concept`, `comparison`, `query`, `summary`, `high`, `medium`, `low`, `ingest`, `update`, `query`, `lint`, `create`, `archive`, `delete`
-- Code blocks, commands, paths, URLs, placeholders, and tag values used by the taxonomy
+- 환경변수: `WIKI_PATHS`, `WIKI_DEFAULT`, `WIKI_PATH`
+- 파일/디렉터리명: `SCHEMA.md`, `index.md`, `log.md`, `raw/`, `entities/`, `concepts/`, `comparisons/`, `queries/`
+- YAML/frontmatter key: `title`, `created`, `updated`, `type`, `tags`, `sources`, `confidence`, `source_url`, `sha256`
+- enum/action 값: `entity`, `concept`, `comparison`, `query`, `summary`, `high`, `medium`, `low`, `ingest`, `update`, `query`, `lint`, `create`, `archive`, `delete`
+- code block, command, path, URL, placeholder, taxonomy에서 사용하는 tag 값
 
-`title:` is a human-facing field and may be Korean. Structural fields such as `type`, `tags`, and `sources` must follow the schema.
+`title:`은 human-facing field이므로 한국어로 쓸 수 있다. `type`, `tags`, `sources` 같은 구조 field는 schema를 따른다.
 
-## Verification checklist
+## 검증 체크리스트
 
-After localization changes:
+localization 변경 후 다음을 확인한다.
 
-1. Run `git diff --check`.
-2. Count Markdown fences and ensure the count is even.
-3. Search for leftover English template phrases that should not appear in generated Korean templates:
+1. `git diff --check`를 실행한다.
+2. Markdown code fence 개수를 세고 짝수인지 확인한다.
+3. 생성된 한국어 template에 남아 있으면 안 되는 영어 template phrase를 검색한다.
    - `# Wiki Schema`
    - `# Wiki Index`
    - `# Wiki Log`
@@ -43,7 +43,7 @@ After localization changes:
    - `Optional quality signals`
    - `Page Thresholds`
    - `Update Policy`
-4. Search for required compatibility terms and confirm they remain:
+4. 필수 호환성 term이 남아 있는지 확인한다.
    - `WIKI_PATHS`
    - `WIKI_DEFAULT`
    - `WIKI_PATH`
@@ -52,4 +52,4 @@ After localization changes:
    - `source_url`
    - `sha256`
    - `ingest, update, query, lint, create, archive, delete`
-5. Check frontmatter still has required skill metadata keys.
+5. frontmatter에 필요한 skill metadata key가 유지되는지 확인한다.

@@ -534,6 +534,9 @@ sudo loginctl enable-linger $USER
 - `references/wiki-rubric-corpus-workflow.md` — wiki-only 답변을 위해 공개 자료를 raw에 수집·ingest하고, 평가 루브릭/종료조건이 회사별 데이터를 요구할 때 정직하게 한계를 표시하는 대량 corpus 구축 패턴.
 - `references/wiki-non-article-source-workflow.md` — 웹 아티클 외(보고서/PDF/학술/연차보고서) 소스 후보 발굴·분류·저장 실패 복구까지 포함한 수집 워크플로우.
 - `references/marketing-rubric-source-diversification-workflow.md` — 루브릭 Q07/Q10/Q13/Q16/Q19 같은 hard-cap 문항에서 `articles/reports/papers` 분산 전략, 실패 복구, 질문별 커버리지 점검 패턴을 담은 실전 체크리스트.
+- `references/wiki-learing-rubric-workflow.md` — 루브릭 목표 평균점수에 미달한 wiki를 새 질문/별도 답변/별도 채점 subagent 루프와 raw-only source 수집으로 전문화하는 범용 워크플로우.
+- `references/llm-wiki-quality-gates.md` — llm-wiki 품질 루브릭/인증 작업에서 D1–D4 hard gate, 95점 baseline, clickable raw provenance, 한국어 human-facing title 규칙을 적용하는 체크리스트.
+- `references/llm-wiki-quality-rubric-gated-audit.md` — llm-wiki 상태점검을 95점 baseline + D1-D4 hard gate + deterministic checker/JSON scorecard로 고정하는 품질 인증 워크플로우.
 
 ## 주의사항
 
