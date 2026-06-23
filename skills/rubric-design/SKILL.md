@@ -1,6 +1,6 @@
 ---
 name: rubric-design
-description: AI 출력, 연구 요약, 문서, 모델 응답 또는 에이전트 작업을 평가하기 위한 채점 루브릭을 설계, 정교화, 보정할 때 사용합니다.
+description: Use when designing, refining, or calibrating scoring rubrics for evaluating AI outputs, research summaries, documents, model responses, or agent work.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -10,384 +10,433 @@ metadata:
     related_skills: [test-driven-development, writing-plans]
 ---
 
-# 루브릭 설계
+# Rubric Design
 
-## 개요
+## Overview
 
-이 스킬은 재사용 가능한 작업 특화 채점 루브릭을 설계하는 데 사용합니다. 목표는 단순히 가중치를 부여하는 것이 아니라 실제로 사람이나 LLM 판정자가 사용할 수 있는 루브릭을 만드는 것입니다. 즉, 목적 지향적이고, 가중치가 반영되며, 체크리스트 기반이고, 상한 규칙/감점 규칙을 갖추고, 안정적인 출력 템플릿과 함께 제공되는 루브릭입니다.
+Use this skill to design reusable, task-specific scoring rubrics. The goal is not merely to assign weights, but to produce a rubric that is actually usable by humans or LLM judges: purpose-driven, weighted, checklist-based, equipped with cap/penalty rules, and paired with a stable output template.
 
-좋은 루브릭은 네 가지를 분리합니다.
+A good rubric separates four things:
 
-1. **평가 목적** — 평가자(판정자)가 무엇을 보상하려 하는지.
-2. **가중치** — 사용자가 가장 중요하게 여기는 항목.
-3. **관찰 가능한 체크리스트 기준** — 확인 가능한 구체적 근거.
-4. **상한 규칙/감점 규칙** — 최종 점수를 제한해야 하는 치명적 실패 조건.
+1. **Evaluation purpose** — what the evaluator is trying to reward.
+2. **Weights** — the user's value judgment about what matters most.
+3. **Observable checklist criteria** — concrete evidence that can be checked.
+4. **Caps and penalties** — rules for critical failures that should limit the final score.
 
-"13–15 = 우수"와 같은 넓은 범위 기준에만 의존하지 마세요. 범위 기준은 설명용으로는 유용하지만 점수 변동이 큽니다. 각 항목이 작고 명시적인 점수값을 갖는 체크리스트형 채점 방식을 선호하세요.
+Avoid relying only on broad range anchors such as “13–15 = excellent.” Range anchors are useful as explanatory aids, but they create large scoring variance. Prefer checklist-style scoring where each item has a small, explicit point value.
 
-## 사용 시점
+## When to Use
 
-사용자가 다음을 요청할 때 이 스킬을 사용하세요.
+Use this skill when the user asks to:
 
-- 새 루브릭 설계.
-- 기존 루브릭 개선 또는 보정.
-- 모호한 평가 기준을 100점 루브릭으로 전환.
-- LLM-as-a-Judge 평가용 루브릭 작성.
-- AI 출력, 연구 요약, 문서, 코드 리뷰, 모델 응답 또는 에이전트 작업 평가.
-- 체크리스트 항목, 상한/감점, JSON 출력을 포함한 채점 기준 정의.
-- 반복 작업을 위한 재사용 가능한 평가 템플릿 생성.
+- Design a new rubric.
+- Improve or calibrate an existing rubric.
+- Convert a vague evaluation standard into a 100-point scoring rubric.
+- Build a rubric for LLM-as-a-Judge evaluation.
+- Evaluate AI outputs, research summaries, documents, code reviews, model responses, or agent work.
+- Define scoring criteria with checklist items, caps, penalties, and JSON output.
+- Create a reusable evaluation template for repeated work.
 
-다음 경우에는 이 스킬을 사용하지 마세요.
+Do not use this skill when:
 
-- 사용자가 단순 의견을 원하고 점수 구조가 필요하지 않을 때.
-- 평가 판단이 필요 없는 단순 사실 조회 작업일 때.
-- 사용자가 완성된 루브릭을 이미 제공했고 직접 점수 산출만 요청할 때. 이 경우 루브릭이 모호하지 않으면 제공된 루브릭을 적용하세요.
+- The user only wants a casual opinion and no scoring structure is needed.
+- The task is pure factual lookup with no evaluative judgment.
+- The user has already provided a complete rubric and only asks for direct scoring; in that case, apply the provided rubric unless it is ambiguous.
 
-## 핵심 원칙
+## Core Principles
 
-### 1. 가중치는 가치 판단입니다
+### 1. Weights Are Value Judgments
 
-가중치는 이 평가에서 사용자가 중요하게 여기는 것을 반영해야 합니다.
+Weights should reflect what the user considers important for this evaluation.
 
-예시:
+Examples:
 
-- 문헌 품질이 가장 중요함 → 커버리지, 근거, 인용 품질, 연구 흐름의 가중치 증가.
-- 실용적 시스템 설계가 가장 중요함 → 방법론 비교, 적용 가능성, 보정, 운영 리스크의 가중치 증가.
-- 초보자 대상 설명이 가장 중요함 → 개념 정확도, 구조, 명확성, 예시의 가중치 증가.
-- 에이전트 작업 평가가 가장 중요함 → 요구사항 충족, 검증 근거, 실패 처리, 사용자 의도 정합성의 가중치 증가.
+- Literature quality matters most → increase coverage, evidence, citation quality, and research flow.
+- Practical system design matters most → increase methodology comparison, applicability, calibration, and operational risk.
+- Beginner-facing explanation matters most → increase conceptual accuracy, structure, clarity, and examples.
+- Agent task evaluation matters most → increase requirement satisfaction, verification evidence, failure handling, and user intent alignment.
 
-루브릭을 수정할 때는 다음을 물어보세요: "이 루브릭에서 이전 버전보다 더 보상해야 할 것은 무엇인가?"
+When modifying a rubric, ask: “What should this rubric reward more than the previous version?”
 
-### 2. 체크리스트는 관찰 가능한 근거입니다
+### 2. Checklists Are Observable Evidence
 
-"편향 및 신뢰성 논의 — 20점" 같은 상위 범주만 두지 마세요.
-
-```text
-편향 및 신뢰성 논의 — 20점
-```
-
-카테고리를 관찰 가능한 체크리스트 항목으로 분해하세요.
+Do not stop at high-level categories like:
 
 ```text
-주문/배치 편향 설명 — 3점
-분량 편향 설명 — 3점
-자기 선호/모델 패밀리 편향 설명 — 3점
-보정 문제 설명 — 3점
-인간 합의 문제 설명 — 3점
-편향 완화 전략 제안 — 5점
+Bias and reliability discussion — 20 points
 ```
 
-평가자는 각 점수에 대해 구체적 근거를 제시할 수 있어야 합니다.
-
-### 3. 범위 기준에만 의존하지 마세요
-
-`13–15점 = 우수`와 같은 범위 기준은 일관된 채점을 위해 너무 거칩니다. 각 카테고리가 2–3점의 내부 범위를 가질 경우, 평가자 간 총점이 10점 이상 달라질 수 있습니다.
-
-다음 방식이 더 좋습니다.
+Break the category into observable checklist items:
 
 ```text
-카테고리 합계: 15점
-- 기준 A: 2점
-- 기준 B: 2점
-- 기준 C: 3점
-- 기준 D: 3점
-- 기준 E: 5점
+Position/order bias explained — 3 points
+Verbosity bias explained — 3 points
+Self-preference/model-family bias explained — 3 points
+Calibration problem explained — 3 points
+Human agreement problem explained — 3 points
+Mitigation strategies proposed — 5 points
 ```
 
-범위 기준은 주 점수 체계가 아닌 보조 해석으로만 포함하세요.
+The evaluator should be able to point to concrete evidence for each score.
 
-### 4. 치명적 실패에는 상한을 사용하세요
+### 3. Do Not Rely Only on Range Anchors
 
-중요한 차원에는 더 높은 가중치를 배정해야 합니다. 치명적 조건에는 상한 또는 감점 규칙을 적용하세요.
+Range anchors such as `13–15 points = excellent` are too coarse for consistent scoring. If every category has a 2–3 point internal range, total scores can differ by 10+ points across evaluators.
 
-예시:
+Prefer:
 
 ```text
-답변이 작업과 관련 없으면 총점은 40점으로 제한됩니다.
-핵심 요구사항이 완전히 누락되면 총점은 60점으로 제한됩니다.
-조작된 인용이 존재하면 총점은 60점으로 제한됩니다.
-치명적인 개념 오류가 여러 개 있으면 총점은 70점으로 제한됩니다.
-안전, 법률, 보안 제약이 위반되면 총점은 50점으로 제한됩니다.
+Category total: 15 points
+- Criterion A: 2 points
+- Criterion B: 2 points
+- Criterion C: 3 points
+- Criterion D: 3 points
+- Criterion E: 5 points
 ```
 
-구분:
+Range anchors may be included only as secondary interpretation, not as the primary scoring mechanism.
 
-- **중요** → 더 많은 점수 부여.
-- **누락/오류 시 치명적** → 상한 또는 감점 규칙 정의.
+### 4. Use Caps for Critical Failures
 
-### 5. 루브릭은 목적 특화되어야 함
+Important dimensions should receive higher weight. Critical conditions should receive caps or penalties.
 
-모든 작업에 하나의 고정 루브릭을 강요하지 마세요. 루브릭은 작업 목적에 맞게 설계 또는 조정해야 합니다.
-
-범주 템플릿은 시작점으로만 사용하세요. 최종 루브릭은 다음을 반영해야 합니다.
-
-- 작업 목표.
-- 점수의 사용 용도.
-- 사용자의 우선순위.
-- 치명적 실패 조건.
-- 원하는 출력 형식.
-
-### 6. 판정자 출력은 구조화되어야 함
-
-LLM 판정자가 루브릭을 사용할 때는 구조화된 출력을 요구합니다. 최소한 다음을 요구하세요.
-
-- 카테고리 점수.
-- 체크리스트 수준 점수.
-- 각 점수의 근거.
-- 적용된 상한/감점.
-- 누락된 점수.
-- 강점.
-- 권장 수정 사항.
-- 신뢰도와 인간 검토 필요성.
-
-## 루브릭 설계 워크플로
-
-### 1단계: 평가 목적 정의
-
-평가 대상과 채점 이유를 명확히 합니다.
-
-다음 질문에 답하세요.
+Examples:
 
 ```text
-무엇을 평가하고 있습니까?
-누가 점수를 사용합니까?
-점수는 어떤 판단을 지원합니까?
-우수한 출력은 어떤 모습입니까?
-어떤 실패가 신뢰를 크게 떨어뜨려야 합니까?
+If the answer is unrelated to the task, total score is capped at 40.
+If a core requirement is completely missing, total score is capped at 60.
+If fabricated citations are present, total score is capped at 60.
+If there are multiple critical conceptual errors, total score is capped at 70.
+If safety, legal, or security constraints are violated, total score is capped at 50.
 ```
 
-### 2단계: 평가 대상 정의
+Distinguish:
 
-예시:
+- **Important** → assign more points.
+- **Fatal if missing/wrong** → define cap or penalty.
 
-- LLM 응답.
-- 문헌 조사.
-- 연구 브리핑.
-- 코드 구현.
-- PR 리뷰.
-- 기획 문서.
-- 에이전트 작업 결과.
-- 모델 평가 리포트.
+### 5. Rubrics Should Be Purpose-Specific
 
-최종 루브릭에 대상이 명시되었는지 확인하세요.
+Do not force all tasks into a single fixed rubric. A rubric should be designed or adapted for the task purpose.
 
-### 3단계: 평가 차원 선택
+Use category templates only as starting points. The final rubric should reflect:
 
-5~8개 차원을 선택하세요. 차원이 너무 적으면 루브릭이 모호해지고, 너무 많으면 적용이 어려워집니다.
+- The task goal.
+- The intended use of the score.
+- The user's priorities.
+- The critical failure conditions.
+- The desired output format.
 
-일반적인 차원 후보:
+### 6. Judge Output Should Be Structured
 
-- 요구사항 충족.
-- 사실/개념 정확성.
-- 커버리지.
-- 방법론 비교.
-- 분석 깊이.
-- 근거 및 인용 품질.
-- 실용적 적용성.
-- 구조 및 가독성.
-- 검증 근거.
-- 위험, 한계, 편향 인식.
-- 사용자 의도 정합성.
+When the rubric will be used by an LLM judge, require structured output. At minimum, require:
 
-### 4단계: 가중치 배정
+- Category score.
+- Checklist-level scores.
+- Evidence for each score.
+- Caps or penalties applied.
+- Missing points.
+- Strengths.
+- Recommended revisions.
+- Confidence and need for human review.
 
-요청이 없으면 100점을 사용합니다.
+### 7. Judge Runs Should Be Context-Isolated
 
-권장 배분:
+When a rubric is intended for LLM judging, design the judging workflow so the evaluator runs in a clean context rather than continuing the current conversation. The judge should receive a self-contained evaluation packet and must not use prior chat history, agent memory, implementation notes, or unstated assumptions as evidence.
+
+Default pattern:
+
+1. Build a self-contained evaluation packet containing only the evaluation target, evaluated output, rubric, allowed source/evidence bundle, cap rules, and JSON schema.
+2. Spawn a new clean subagent/session to apply the rubric whenever practical.
+3. Instruct the judge to use only the supplied packet and to treat missing packet evidence as missing evidence.
+4. For multi-dimension or high-stakes rubrics, split scoring by dimension/checklist group across parallel clean subagents.
+5. Have the parent agent validate shard JSON, check missing/duplicate criteria, reconcile contradictions, sum scores, and apply global caps centrally.
+
+Use same-context judging only for low-stakes quick checks or when a clean subagent is unavailable; label the exception explicitly in the scorecard.
+
+## Rubric Design Workflow
+
+### Step 1: Define Evaluation Purpose
+
+Clarify the evaluation target and why it is being scored.
+
+Answer these questions:
 
 ```text
-핵심 차원: 2–4개, 총 60–75점
-지원 차원: 2–4개, 총 25–40점
+What is being evaluated?
+Who will use the score?
+What decision will the score support?
+What does an excellent output look like?
+What failures should sharply reduce trust?
 ```
 
-사용자가 명시적으로 동등 가중치를 원하지 않는 한, 모든 차원을 동일하게 두지 마세요. 동등 가중치는 실제 평가 우선순위를 가리기 쉽습니다.
+### Step 2: Define the Evaluation Target
 
-### 5단계: 가중치를 체크리스트로 변환
+Examples:
 
-각 차원에서 점수를 보통 1~5점씩의 작은 체크리스트 항목으로 나눕니다.
+- LLM response.
+- Literature survey.
+- Research briefing.
+- Code implementation.
+- PR review.
+- Planning document.
+- Agent task result.
+- Model evaluation report.
 
-체크리스트 항목은 다음을 만족해야 합니다.
+State the target explicitly in the final rubric.
 
-- 관찰 가능.
-- 구체적.
-- 개별 채점 가능.
-- 작업 목적과 연결.
-- 다른 항목과 중복되지 않음.
+### Step 3: Select Evaluation Dimensions
 
-나쁜 예:
+Choose 5–8 dimensions. Too few dimensions make the rubric vague; too many make it hard to apply.
+
+Common dimension candidates:
+
+- Requirement satisfaction.
+- Factual/conceptual accuracy.
+- Coverage.
+- Methodology comparison.
+- Analytical depth.
+- Evidence and citation quality.
+- Practical applicability.
+- Structure and readability.
+- Verification evidence.
+- Risk, limitation, and bias awareness.
+- User intent alignment.
+
+### Step 4: Assign Weights
+
+Use 100 points unless the user requests another scale.
+
+Recommended distribution:
 
 ```text
-좋은 분석 — 20점
+Core dimensions: 2–4 dimensions, 60–75 total points
+Supporting dimensions: 2–4 dimensions, 25–40 total points
 ```
 
-좋은 예:
+Avoid making every dimension equal unless the user explicitly wants equal weighting. Equal weighting often hides the actual evaluation priority.
+
+### Step 5: Convert Weights into Checklists
+
+For each dimension, break the score into small checklist items, usually 1–5 points each.
+
+Checklist items should be:
+
+- Observable.
+- Specific.
+- Separately scorable.
+- Tied to the task purpose.
+- Not redundant with other checklist items.
+
+Bad:
 
 ```text
-분석 깊이 — 20점
-- 주요 트레이드오프 식별 — 5
-- 인과 관계 또는 메커니즘 설명 — 5
-- 목록화만 하지 않고 대안 비교 — 5
-- 한계와 불확실성 진술 — 3
-- 의사결정에 유의미한 시사점 제시 — 2
+Good analysis — 20 points
 ```
 
-### 6단계: 상한 및 감점 규칙 추가
-
-상한/감점은 명시적이어야 하며 체크리스트 채점 후 적용합니다.
-
-전체 평가에 영향을 주는 실패에는 전역 상한을 사용하세요.
+Good:
 
 ```text
-출력이 주제에서 벗어나면 총점은 40점으로 제한됩니다.
-출력이 주요 사용자 요청을 무시하면 총점은 60점으로 제한됩니다.
-허위 출처가 존재하면 총점은 60점으로 제한됩니다.
-치명적인 안전 제약이 위반되면 총점은 50점으로 제한됩니다.
+Analysis depth — 20 points
+- Identifies the main tradeoffs — 5
+- Explains causal relationships or mechanisms — 5
+- Compares alternatives rather than listing them — 5
+- States limitations and uncertainty — 3
+- Provides decision-relevant implications — 2
 ```
 
-특정 차원 내부의 실패에는 지역 상한을 사용하세요.
+### Step 6: Add Caps and Penalty Rules
+
+Caps and penalties should be explicit and applied after checklist scoring.
+
+Use global caps for failures that affect the entire evaluation:
 
 ```text
-출처가 제공되지 않으면 근거 품질은 4/10으로 제한됩니다.
-방법이 나열만 되고 비교되지 않으면 방법론 비교는 8/20으로 제한됩니다.
-테스트가 실행되지 않으면 검증 근거는 5/15으로 제한됩니다.
+If the output is off-topic, total score is capped at 40.
+If the output ignores the main user request, total score is capped at 60.
+If fabricated sources are present, total score is capped at 60.
+If a critical safety constraint is violated, total score is capped at 50.
 ```
 
-복수의 전역 상한이 적용되는 경우 가장 낮은 상한을 사용합니다.
-
-### 7단계: 판정자 지침 정의
-
-LLM이 루브릭을 적용할 때는 엄격한 지침을 포함하세요.
+Use local caps for failures inside a dimension:
 
 ```text
-1. 총 점수를 먼저 결정하지 마세요.
-2. 체크리스트 항목을 먼저 채점하세요.
-3. 평가 대상 출력에 실제로 존재하는 근거만 사용하세요.
-4. 암시되거나 가정한 내용에 점수를 부여하지 마세요.
-5. 각 점수에 대해 근거를 인용하거나 요약하세요.
-6. 체크리스트 채점 후 상한 규칙을 적용하세요.
-7. 긴 출력이 자동으로 더 좋지 않습니다.
-8. 기술 용어가 많다고 자동으로 더 좋지 않습니다.
-9. 근거가 없다면 해당 기준에 낮거나 0점만 부여하세요.
-10. 요청된 구조화된 출력만 반환하세요.
+If no sources are provided, Evidence Quality is capped at 4/10.
+If methods are only listed but not compared, Methodology Comparison is capped at 8/20.
+If tests were not run, Verification Evidence is capped at 5/15.
 ```
 
-### 8단계: 출력 템플릿 정의
+If multiple global caps apply, use the lowest cap.
 
-최종 루브릭에는 다음이 포함되어야 합니다.
+### Step 7: Define Judge Execution Mode
 
-1. 사람이 읽기 쉬운 루브릭 문서.
-2. 판정자 결과를 위한 기계 판독 JSON 출력 스키마.
+Before writing the judge prompt, define how the judging run will be isolated from the current conversation.
 
-아래 템플릿을 사용하세요.
+Default execution mode:
 
-### 9단계: 루브릭 보정
+1. Use a clean new subagent/session for judging rather than continuing in the current context.
+2. Pass a self-contained evaluation packet only: evaluation target, evaluated output, rubric, allowed evidence/source bundle, cap and penalty rules, and JSON schema.
+3. Exclude current conversation history, hidden memory, prior implementation notes, and user preferences unless they are explicitly part of the evaluation target or evidence packet.
+4. For multi-dimension, long, or high-stakes evaluations, shard the rubric by dimension/checklist group and run parallel clean subagents.
+5. Require each shard judge to return only its assigned dimension/checklist JSON.
+6. Aggregate centrally in the parent agent: validate JSON, detect missing or duplicate criteria, reconcile contradictions, sum scores, apply local caps, and apply global caps after merging.
 
-대규모로 루브릭을 사용하기 전에 샘플로 테스트하세요.
+If same-context judging is used, the scorecard must label it as an exception and explain why context contamination risk is acceptable.
 
-권장 보정 루프:
+### Step 8: Define Judge Instructions
 
-1. 샘플 출력 3~5개를 채점.
-2. 순위가 인간 판단과 일치하는지 확인.
-3. 모호하거나 충족이 너무 쉬운 체크리스트 항목 식별.
-4. 가중치와 상한 조정.
-5. 샘플을 다시 채점.
-6. 결과가 안정되면 루브릭 버전을 고정.
+When an LLM will apply the rubric, include strict instructions:
 
-동일 출력에서 판정자 간 점수 차이가 5~8점 이상이면 체크리스트 기준을 더 엄격히 만드세요.
+```text
+1. Run this evaluation in a clean context. Ignore prior conversation, memory, or assumptions not included in the evaluation packet.
+2. Use only the supplied rubric, evaluated output, and explicitly supplied evidence bundle.
+3. Do not decide the total score first.
+4. Score checklist items first.
+5. Do not give credit for implied or assumed content.
+6. Quote or summarize evidence for each score.
+7. If the packet lacks evidence needed for a criterion, assign low or zero credit instead of inferring from outside context.
+8. Apply local caps and penalties after checklist scoring.
+9. Apply global caps after local caps; if multiple global caps apply, use the lowest cap.
+10. Long outputs are not automatically better.
+11. Technical vocabulary is not automatically better.
+12. If evaluating a dimension shard, return only that shard result and do not compute the final total unless instructed.
+13. Return only the requested structured output.
+```
 
-## 재사용 가능한 출력 템플릿: 사람이 읽는 루브릭
+### Step 9: Define Output Template
 
-사용자에게 최종 루브릭을 제공할 때 이 템플릿을 사용하세요.
+The final rubric should include both:
+
+1. A human-readable rubric document.
+2. A machine-readable JSON output schema for judge results.
+
+Use the templates below.
+
+### Step 10: Calibrate the Rubric
+
+Before using the rubric at scale, test it on examples.
+
+Recommended calibration loop:
+
+1. Score 3–5 sample outputs.
+2. Check whether the ranking matches human judgment.
+3. Identify checklist items that are too vague or too easy to satisfy.
+4. Adjust weights and caps.
+5. Re-score the samples.
+6. Freeze the rubric version once results are stable.
+
+If scores vary more than 5–8 points between judges on the same output, tighten checklist criteria.
+
+## Reusable Output Template: Human-Readable Rubric
+
+Use this template when producing the final rubric for a user.
 
 ```markdown
-# {task_name} 평가 루브릭
+# {task_name} Evaluation Rubric
 
-## 1. 평가 목적
+## 1. Evaluation Purpose
 
 {evaluation_purpose}
 
-## 2. 평가 대상
+## 2. Evaluation Target
 
 {evaluation_target}
 
-## 3. 총점
+## 3. Total Score
 
-100점
+100 points
 
-## 4. 차원 요약
+## 4. Dimension Summary
 
-| 차원 | 점수 | 평가 초점 |
+| Dimension | Points | Evaluation Focus |
 |---|---:|---|
 | {dimension_1} | {points} | {focus} |
 | {dimension_2} | {points} | {focus} |
 | ... | ... | ... |
-| **총합** | **100** | |
+| **Total** | **100** | |
 
-## 5. 상세 채점 기준
+## 5. Detailed Scoring Criteria
 
-### 5.1 {dimension_1} — {points}점
+### 5.1 {dimension_1} — {points} points
 
-| 체크리스트 기준 | 점수 | 판별 기준 |
+| Checklist Criterion | Points | Recognition Standard |
 |---|---:|---|
 | {criterion_1} | {points} | {observable_evidence} |
 | {criterion_2} | {points} | {observable_evidence} |
 
-지역 상한/감점:
+Local caps/penalties:
 - {local_cap_rule}
 - {local_penalty_rule}
 
-### 5.2 {dimension_2} — {points}점
+### 5.2 {dimension_2} — {points} points
 
-| 체크리스트 기준 | 점수 | 판별 기준 |
+| Checklist Criterion | Points | Recognition Standard |
 |---|---:|---|
 | {criterion_1} | {points} | {observable_evidence} |
 | {criterion_2} | {points} | {observable_evidence} |
 
-## 6. 전역 상한 및 감점
+## 6. Global Caps and Penalties
 
 - {global_cap_rule_1}
 - {global_cap_rule_2}
 
-## 7. 점수 해석
+## 7. Score Interpretation
 
-| 총점 | 해석 |
+| Total Score | Interpretation |
 |---:|---|
-| 90–100 | 우수; 거의 수정 없이 사용 가능 |
-| 80–89 | 양호; 소규모 수정으로 사용 가능 |
-| 70–79 | 보통; 핵심 요구사항은 충족되지만 눈에 띄는 공백 존재 |
-| 60–69 | 약함; 상당한 수정 필요 |
-| 0–59 | 허용 불가; 주요 요구사항 누락 또는 신뢰성 부족 |
+| 90–100 | Excellent; ready to use with little or no revision |
+| 80–89 | Good; usable with minor revision |
+| 70–79 | Adequate; core requirements met but notable gaps remain |
+| 60–69 | Weak; substantial revision needed |
+| 0–59 | Not acceptable; major requirements missing or unreliable |
 
-## 8. 채점 절차
+## 8. Scoring Procedure
 
-1. 평가 대상 출력이 범위 내인지 확인.
-2. 전역 상한 적용 대상이 있는지 확인.
-3. 각 체크리스트 항목을 개별적으로 채점.
-4. 차원 점수를 합산.
-5. 지역 상한/감점 적용.
-6. 전역 상한 적용.
-7. 근거, 누락 점수, 권장 수정 사항을 보고.
+1. Confirm that the evaluated output is in scope.
+2. Check whether any global cap applies.
+3. Score each checklist item independently.
+4. Sum dimension scores.
+5. Apply local caps and penalties.
+6. Apply global caps.
+7. Report evidence, missing points, and recommended revisions.
 
-## 9. 판정자 프롬프트
+## 9. Judge Prompt
 
 ```text
 {judge_prompt}
 ```
 
-## 10. JSON 출력 스키마
+## 10. JSON Output Schema
 
 ```json
 {json_schema}
 ```
 ```
 
-## 재사용 가능한 출력 템플릿: LLM 판정자 JSON
+## Parallel Clean-Subagent Judging Workflow
 
-기본 기계 판독 결과 형식으로 사용하세요.
+Use this workflow when the rubric has multiple dimensions, a long evaluated output, high-stakes consequences, or a user explicitly requests parallel inspection.
+
+1. Parent agent prepares a bounded evaluation packet: rubric, evaluated output, allowed evidence, score schema, and cap rules.
+2. Parent splits the rubric into dimension or checklist shards with non-overlapping score ownership.
+3. Parent spawns clean subagents in parallel; each subagent receives only the packet plus its assigned shard.
+4. Each shard judge returns strict JSON for its assigned criteria, including evidence and any local cap/penalty suggestions.
+5. Parent validates every shard result for JSON parseability, score bounds, missing criteria, duplicate criteria, and evidence grounding.
+6. Parent reconciles contradictions between shards before final scoring.
+7. Parent applies local caps, then applies global caps centrally after all shard scores are merged.
+8. Parent emits the final human-readable scorecard and machine-readable JSON result.
+
+Do not let shard judges independently decide the final total unless the rubric is intentionally single-shard. Shard judges may flag possible global caps, but the parent agent applies the final global cap.
+
+## Reusable Output Template: LLM Judge JSON
+
+Use this as the default machine-readable result format.
 
 ```json
 {
   "evaluation_target": "string",
+  "judging_context": "clean_subagent | parallel_clean_subagents | same_context_exception",
+  "context_contamination_notes": "string",
   "total_score": 0,
   "max_score": 100,
   "grade": "string",
@@ -440,218 +489,286 @@ LLM이 루브릭을 적용할 때는 엄격한 지침을 포함하세요.
 }
 ```
 
-## 재사용 가능한 출력 템플릿: 판정자 프롬프트
+## Reusable Output Template: Judge Prompt
 
-LLM에게 루브릭 적용을 요청할 때 이 프롬프트를 사용하세요.
+Use this prompt when asking an LLM to apply a rubric.
 
 ```text
-제공된 루브릭을 적용하는 엄격한 평가자입니다.
+You are a strict evaluator applying the provided rubric.
 
-평가 원칙:
-1. 평가 대상 출력에 명시적으로 존재하는 내용만 사용합니다.
-2. 누락된 내용을 추론하거나 암시된 가정에 대해 점수를 주지 않습니다.
-3. 총점을 먼저 정하지 마세요.
-4. 총점을 계산하기 전에 각 체크리스트 항목을 채점합니다.
-5. 모든 체크리스트 점수에 대해 근거를 제시합니다.
-6. 체크리스트 채점 후 지역 상한/감점을 적용합니다.
-7. 지역 상한/감점 후 전역 상한을 적용합니다. 다중 전역 상한이 적용되면 가장 낮은 상한을 사용합니다.
-8. 길이만으로 가산점을 주지 않습니다.
-9. 전문 용어만으로 가산점을 주지 않습니다.
-10. 근거가 없는 주장이 있으면 해당 근거 항목 점수를 낮춥니다.
-11. 지정된 JSON 형식으로만 반환합니다.
+Evaluation principles:
+1. Run this evaluation in a clean context; ignore prior conversation, memory, and assumptions not included in the evaluation packet.
+2. Use only the supplied rubric, evaluated output, and explicitly supplied evidence bundle.
+3. Do not infer missing content or give credit for unstated assumptions.
+4. Do not decide the total score first.
+5. Score each checklist item before calculating the total.
+6. Provide evidence for every checklist score.
+7. If the packet lacks evidence needed for a criterion, assign low or zero credit instead of inferring from outside context.
+8. Apply local caps and penalties after checklist scoring.
+9. Apply global caps after local caps; if multiple global caps apply, use the lowest cap.
+10. Do not reward length by itself.
+11. Do not reward technical vocabulary by itself.
+12. If a claim is unsupported, score the relevant evidence criterion lower.
+13. If evaluating one dimension shard in a parallel judging workflow, return only that shard result and do not compute the final total unless instructed.
+14. Return only the specified JSON format.
 
-평가 대상:
+Evaluation target:
 {evaluation_target}
 
-루브릭:
+Rubric:
 {rubric}
 
-JSON 출력 스키마:
+JSON output schema:
 {json_schema}
 ```
 
-## 공통 차원 세트
+## Common Dimension Sets
 
-이는 시작점에 불과합니다. 작업 목적에 맞게 조정하세요.
+These are starting points only. Adapt them to the task purpose.
 
-참고 노트:
+Reference notes:
 
-- `references/ai-quality-feedback-loops.md` — evals, 실패 로그, 루브릭, golden set, pairwise 비교, Reflexion, DSPy, RAGAS 및 사용자 피드백을 활용해 AI/LLM 품질 피드백 루프를 구축하는 데 도움되는 요약 연구 노트 및 템플릿.
+- `references/llm-wiki-quality-rubric-workflow.md` — pattern for converting ad-hoc llm-wiki health checks into a 95-point-baseline rubric with D1–D4 hard gates, deterministic checker boundaries, raw sha256 normalization, and stable JSON scorecards.
+- `references/ai-quality-feedback-loops.md` — condensed research notes and templates for helping users build AI/LLM quality feedback loops using evals, failure logs, rubrics, golden sets, pairwise comparison, Reflexion, DSPy, RAGAS, and user feedback.
+- `references/real-response-calibration-pattern.md` — workflow for calibrating rubrics against actual isolated/new-session outputs, including artifact layout, high-score gates, and pitfalls from marketing-rubric calibration.
+- `references/strictness-loop-calibration.md` — pattern for iterative rubric tightening to a hard target average/version ceiling, using parallel subagent diagnosis, gates/caps, and stop-condition logging.
+- `references/holdout-validation-for-strict-rubrics.md` — pattern for checking whether a tightened rubric is overfit: create fresh questions, collect blind/new-session answers, score in parallel with the fixed rubric, aggregate centrally, and document caveats.
+- `references/persona-system-prompt-evaluation-scorecard.md` — pattern for evaluating user-persona system prompts: separate reusable rubric from task-specific scorecard, run scenario responses, judge with independent reviewers, include a parseable JSON score block, and verify files/read-back before reporting completion.
+- `references/clean-parallel-judge-execution.md` — workflow for running rubric judges in clean new subagents, sharding multi-dimension scoring across parallel judges, aggregating centrally, and enforcing Korean-first human-facing rubric prose.
+- `references/skill-quality-rubric-planning-pattern.md` — pattern for designing rubrics that evaluate reusable agent skills/workflow playbooks, including trigger/procedure/boundary/verification dimensions, Korean-first and generic-agent hard rules, structure/ambiguity checks, clean/parallel-subagent judging, parallelization-for-speed criteria, deterministic-vs-nondeterministic automation separation, reusable-script requirements, cap rules, artifact split, and calibration scaffold.
 
-### 문헌 조사 / 연구 리뷰
 
-권장 차원:
+### Literature Survey / Research Review
 
-- 연구 커버리지.
-- 개념 정확성.
-- 방법론 비교.
-- 한계/편향/신뢰성 논의.
-- 연구 흐름 및 종합.
-- 근거 및 인용 품질.
-- 실질적 함의.
-- 구조 및 가독성.
+Recommended dimensions:
 
-### LLM-as-a-Judge / 평가 시스템 설계
+- Research coverage.
+- Conceptual accuracy.
+- Methodology comparison.
+- Limitations, bias, and reliability discussion.
+- Research flow and synthesis.
+- Evidence and citation quality.
+- Practical implications.
+- Structure and readability.
 
-권장 차원:
+### LLM-as-a-Judge / Evaluation System Design
 
-- 평가 방법론 비교.
-- 편향, 신뢰성, 보정 인식.
-- 실용적 평가 파이프라인 설계.
-- 개념 정확성.
-- 관련 연구/벤치마크 범위.
-- 근거 품질.
-- 출력 구조.
+Recommended dimensions:
 
-### 에이전트 작업 결과 평가
+- Evaluation methodology comparison.
+- Bias, reliability, and calibration awareness.
+- Practical evaluation pipeline design.
+- Conceptual accuracy.
+- Coverage of relevant studies or benchmarks.
+- Evidence quality.
+- Output structure.
 
-권장 차원:
+### Persona/System-Prompt Evaluation Rubrics
 
-- 요구사항 충족.
-- 실행 및 검증 근거.
-- 정확성 및 완전성.
-- 실패와 불확실성 처리.
-- 사용자 의도 정합성.
-- 안전성 및 되돌릴 수 있음.
-- 의사소통 명확성.
+When the evaluated artifact is a persona-derived system prompt, the rubric should include both static prompt coverage and scenario response scoring:
 
-### 코드 구현 평가
+- Static dimensions should cover: core judgment model, approval/execution boundaries, verification/completion standards, communication style, security/privacy, code/design preferences, large-analysis/tooling reproducibility, and conflict/excluded-domain handling.
+- Scenario scoring should run the prompt against validation scenarios and score each response `0 / 0.5 / 1` before weighted aggregation.
+- Use caps for dangerous failures: emulating legal/financial/medical judgment, encouraging unapproved destructive/production/credential/external actions, preferring stale memory over live evidence, allowing unverified completion, or leaking secrets into the prompt.
+- Require a scorecard artifact in addition to the rubric: dimension table, scenario group table, global-cap check, final formula, strengths, weaknesses, recommended prompt patches, and a machine-readable JSON result.
+- If the user asked for “quality evaluation,” do not stop at scenarios/templates; actually generate prompt-applied responses, run independent judge scoring, add static coverage review, and compute the final score.
+- For Hermes default-profile persona work, validate against the active identity source (`~/.hermes/SOUL.md`) directly. Keep canonical prompt source/read-back parity (e.g., hash/size match) and avoid relying only on `config.yaml` for persistent persona identity.
+- If the user wants real score certainty, run scenario evaluation in fresh sessions (`hermes chat -Q -q` style calls) and write both `.md` and `.json` result artifacts.
 
-권장 차원:
+Supporting playbook: `references/hermes-persona-live-evaluation-playbook.md`
 
-- 요구사항 충족.
-- 정확성.
-- 테스트 범위 및 검증.
-- 유지보수성.
-- 기존 아키텍처와의 통합.
-- 오류 처리 및 엣지 케이스.
-- 회귀 위험.
+### Agent Task Result Evaluation
 
-### PR 리뷰 품질 평가
+Recommended dimensions:
 
-권장 차원:
+- Requirement satisfaction.
+- Evidence of execution and verification.
+- Correctness and completeness.
+- Handling of failures and uncertainty.
+- User intent alignment.
+- Safety and reversibility.
+- Communication clarity.
 
-- 버그/리스크 탐지.
-- 기술적 정확성.
-- 실행 가능한 코멘트.
-- Diff나 테스트에서 근거 제시.
-- 심각도 기반 우선순위화.
-- 잡음/사소한 지적 회피.
-- 존중적이고 간결한 커뮤니케이션.
+### Code Implementation Evaluation
 
-## 공통 상한 규칙 라이브러리
+Recommended dimensions:
 
-루브릭을 설계할 때 이 규칙들을 사용하거나 조정하세요.
+- Requirement satisfaction.
+- Correctness.
+- Test coverage and verification.
+- Maintainability.
+- Integration with existing architecture.
+- Error handling and edge cases.
+- Regression risk.
 
-### 전역 상한
+### PR Review Quality Evaluation
 
-- 출력이 과제와 무관하면 총점은 40으로 제한.
-- 핵심 사용자 요청이 무시되면 총점은 60으로 제한.
-- 핵심 산출물이 누락되면 총점은 65로 제한.
-- 허위 인용/출처/도구 결과가 존재하면 총점은 60으로 제한.
-- 여러 가지 치명적 사실·개념 오류가 있으면 총점은 70으로 제한.
-- 안전·법률·개인정보·보안 제약이 위반되면 총점은 50으로 제한.
-- 출력에 실질적 내용이 없어 평가할 수 없으면 총점은 50으로 제한.
+Recommended dimensions:
 
-### 지역 상한
+- Bug/risk detection.
+- Technical correctness.
+- Actionability of comments.
+- Evidence from diff or tests.
+- Prioritization by severity.
+- Avoidance of noise or nitpicks.
+- Respectful and concise communication.
 
-- 출처가 제공되지 않으면 근거/인용 품질은 해당 차원의 40%로 제한.
-- 방법이 열거만 되고 비교되지 않으면 방법론 비교는 해당 차원의 50%로 제한.
-- 테스트나 검증이 없으면 검증 근거는 해당 차원의 50%로 제한.
-- 출력 형식을 준수하지 않으면 구조/형식은 해당 차원의 50%로 제한.
-- 응답이 지나치게 일반적이면 분석 깊이는 해당 차원의 60%로 제한.
+## Common Cap Rules Library
 
-### 감점 규칙
+Use or adapt these rules when designing a rubric.
 
-- 근거가 없는 주장 → 근거 관련 체크리스트 점수 감점.
-- 모호한 표현 → 구조/명확성 점수 감점.
-- 요청한 형식 미준수 → 구조/형식 점수 감점.
-- 중복 내용 과다 → 간결성/가독성 점수 감점.
-- 불확실성 처리 없이 과도한 확신 표현 → 신뢰성 점수 감점.
+### Global Caps
 
-## 예시: LLM-as-a-Judge 문헌 조사 루브릭
+- If the output is unrelated to the task, total score is capped at 40.
+- If the main user request is ignored, total score is capped at 60.
+- If a core deliverable is missing, total score is capped at 65.
+- If fabricated citations, sources, or tool results are present, total score is capped at 60.
+- If multiple critical factual or conceptual errors are present, total score is capped at 70.
+- If safety, legal, privacy, or security constraints are violated, total score is capped at 50.
+- If the output cannot be evaluated because it lacks substance, total score is capped at 50.
+- If a requested reusable rubric document is not written primarily in Korean for human-facing prose, total score is capped at 80.
+- If a Korean-first rubric requirement is explicit but the human-facing rubric prose is mostly English, total score is capped at 70.
 
-이 예시는 선호하는 체크리스트 기반 접근을 보여줍니다.
+Machine identifiers such as JSON keys, file paths, commands, API names, enum values, schema fields, and proper nouns may remain in their original language and should not trigger Korean-first language caps.
 
-### 차원 요약
+### Local Caps
 
-| 차원 | 점수 |
+- If no sources are provided, Evidence/Citation Quality is capped at 40% of that dimension.
+- If methods are listed but not compared, Methodology Comparison is capped at 50% of that dimension.
+- If tests or verification are absent, Verification Evidence is capped at 50% of that dimension.
+- If the output format is not followed, Structure/Format is capped at 50% of that dimension.
+- If the response is overly generic, Analysis Depth is capped at 60% of that dimension.
+
+### Penalty Rules
+
+- Unsupported claims should reduce evidence-related checklist scores.
+- Ambiguous wording should reduce structure or clarity scores.
+- Missing requested format should reduce structure/format scores.
+- Redundant content should reduce concision/readability scores.
+- Overconfident claims without uncertainty handling should reduce reliability scores.
+
+## Example: LLM-as-a-Judge Literature Survey Rubric
+
+This example illustrates the preferred checklist-based approach.
+
+### Dimension Summary
+
+| Dimension | Points |
 |---|---:|
-| 연구 범위 및 범위 | 15 |
-| 개념 정확성 | 15 |
-| 평가 방법론 비교 | 15 |
-| 한계, 편향, 신뢰성 | 15 |
-| 연구 흐름 및 종합 | 10 |
-| 실용적 적용성 | 10 |
-| 근거 및 인용 품질 | 10 |
-| 구조 및 가독성 | 10 |
-| **총합** | **100** |
+| Research coverage and scope | 15 |
+| Conceptual accuracy | 15 |
+| Evaluation methodology comparison | 15 |
+| Limitations, bias, and reliability | 15 |
+| Research flow and synthesis | 10 |
+| Practical applicability | 10 |
+| Evidence and citation quality | 10 |
+| Structure and readability | 10 |
+| **Total** | **100** |
 
-### 한계, 편향, 신뢰성 — 15점
+### Limitations, Bias, and Reliability — 15 points
 
-| 체크리스트 기준 | 점수 | 판별 기준 |
+| Checklist Criterion | Points | Recognition Standard |
 |---|---:|---|
-| 주문/배치 편향 설명 | 2 | 답변 순서가 판정자 선호도에 미치는 영향을 설명 |
-| 분량 편향 설명 | 2 | 더 긴 답변이 부당하게 유리해질 수 있는 이유를 설명 |
-| 자기 선호/모델 패밀리 편향 설명 | 2 | 판정자 모델과 유사한 출력에 대한 선호를 논의 |
-| 보정 문제 설명 | 2 | 점수 스케일의 신뢰성 또는 일관성 논의 |
-| 인간 합의 문제 설명 | 2 | 인간 평가자와의 합의·불합의를 논의 |
-| 재현성 문제 설명 | 2 | 프롬프트, 모델, 실행 횟수, 벤치마크 간 변동성 논의 |
-| 편향 완화 방법 제안 | 2 | 셔플링, pairwise 평가, 다중 판정자, 보정 세트 등 구체적 완화 방안 제시 |
-| 평가 결과에 미치는 영향 설명 | 1 | 이런 편향이 최종 판단에 왜 중요한지 설명 |
+| Position/order bias explained | 2 | Explains how answer order can affect judge preference |
+| Verbosity bias explained | 2 | Explains why longer answers may be favored unfairly |
+| Self-preference/model-family bias explained | 2 | Discusses preference toward outputs similar to the judge model |
+| Calibration problem explained | 2 | Discusses score scale reliability or consistency |
+| Human agreement problem explained | 2 | Discusses agreement or disagreement with human evaluators |
+| Reproducibility problem explained | 2 | Discusses variance across prompts, models, runs, or benchmarks |
+| Bias mitigation methods proposed | 2 | Gives concrete mitigation such as shuffling, pairwise evaluation, multi-judge, or calibration sets |
+| Impact on evaluation outcomes explained | 1 | Explains why these biases matter for final decisions |
 
-지역 상한:
+Local caps:
 
-- 답이 "LLM 판정자에는 편향이 있다"라고 특정 편향을 이름 붙이거나 설명 없이만 언급하면 이 차원은 6/15로 제한됩니다.
-- 완화 방법이 제공되지 않으면 이 차원은 12/15로 제한됩니다.
+- If the answer only says “LLM judges have bias” without naming or explaining specific biases, this dimension is capped at 6/15.
+- If no mitigation method is provided, this dimension is capped at 12/15.
 
-## 보정 가이드
+## Calibration Guidance
 
-루브릭 초안 작성 후 샘플 출력으로 테스트하세요.
+After drafting a rubric, test it with sample outputs.
 
-최소한 다음을 사용하세요.
+Use at least:
 
-1. 강한 출력.
-2. 평범한 출력.
-3. 약한 출력.
-4. 유창하지만 잘못되었거나 근거 없는 함정 출력.
+1. A strong output.
+2. A mediocre output.
+3. A weak output.
+4. A tricky output that is fluent but wrong or unsupported.
 
-다음 항목을 확인하세요.
+Check:
 
-- 강한 출력이 올바른 이유로 높은 점수를 받나요?
-- 유창하지만 틀린 출력은 감점되었나요?
-- 누락된 요구사항이 상한을 유발했나요?
-- 두 명의 평가자 간 차이가 5~8점을 넘나요?
-- 체크리스트 항목 중 너무 주관적인 항목이 있나요?
+- Does the strong output score high for the right reasons?
+- Does the fluent-but-wrong output get penalized?
+- Do missing requirements trigger caps?
+- Do two evaluators differ by more than 5–8 points?
+- Are any checklist items too subjective?
 
-분산이 크면 모호한 기준을 관찰 가능한 근거 기준으로 바꾸세요.
+If variance is high, replace vague criteria with observable evidence.
 
-## 흔한 함정
+### Reusable rubric vs calibration-results separation
 
-1. **카테고리 가중치만 지정하기.** 가중치만 있는 루브릭은 충분하지 않습니다. 체크리스트 기준을 추가하세요.
-2. **범위 기준을 주 점수 방식으로 사용하기.** 점수 변동이 큽니다.
-3. **모든 카테고리를 동일 가중치로 만들기.** 사용자의 우선순위를 가립니다.
-4. **중요함과 치명성을 혼동하기.** 중요 항목은 점수로 보상하고, 치명적 실패는 상한으로 처리하세요.
-5. **비관찰 기준 사용하기.** "좋음", "명확함", "충분함"은 근거 기반 기준으로 바꾸세요.
-6. **판정자가 먼저 총점을 정하게 하기.** 항상 체크리스트 항목을 먼저 채점하세요.
-7. **근거 요구를 생략하기.** 모든 점수는 평가 출력에 근거해야 합니다.
-8. **보정을 무시하기.** 반복 사용 전 샘플에서 테스트하세요.
-9. **단일 예제에 과적합하기.** 루브릭은 유사 작업 전반에 일반화되어야 합니다.
-10. **길이 또는 전문 용어를 보상으로 삼기.** 길이와 전문 용어는 자체 품질이 아닙니다.
+When a rubric is intended for ongoing reuse, keep the stable standard separate from calibration artifacts:
 
-## 검증 체크리스트
+- **Rubric document:** evaluation purpose, target, definition of excellence, weighted checklist criteria, local/global caps, scoring procedure, judge prompt, JSON schema, and score interpretation.
+- **Calibration/results document:** sample prompts, sample answers, expected scores, score tables, cap applications, and notes about how the rubric was tuned.
 
-루브릭 최종 확정 전 다음을 확인하세요.
+Do not mix sample scores into the canonical rubric unless the user explicitly wants a single all-in-one artifact. Sample scores are result content and will drift as the rubric is revised; keeping them separate prevents future judges from treating old calibration examples as part of the standard.
 
-- [ ] 평가 목적이 명시적이다.
-- [ ] 평가 대상이 명시적이다.
-- [ ] 총점이 요청 없을 경우 100점으로 정규화된다.
-- [ ] 가장 높은 가중치의 차원이 사용자의 우선순위와 일치한다.
-- [ ] 각 차원이 체크리스트 기준으로 나뉘어 있다.
-- [ ] 체크리스트 기준은 관찰 가능하고 개별 채점이 가능하다.
-- [ ] 루브릭이 범위 기준에만 의존하지 않는다.
-- [ ] 치명적 실패 조건이 상한 또는 감점 규칙을 가진다.
-- [ ] 채점 절차에 체크리스트 먼저, 총점 나중의 순서가 명시된다.
-- [ ] 판정자 프롬프트에 각 점수의 근거 요구가 있다.
-- [ ] LLM 판정이 예상되면 JSON 출력 스키마가 포함되어 있다.
-- [ ] 반복 사용을 위한 보정 루프가 정의되어 있다.
+When storage location is not decided, stage rubric artifacts outside project repositories or skill-managed directories to avoid accidental commits. Use a neutral non-repo artifact directory and report the path. Only write into a repo/wiki/skill directory after the user explicitly chooses that destination.
+
+- Generic advice with no user context.
+- Framework-name listing with no application.
+- Tactic/channel list with no diagnosis or strategy.
+- Fluent but unsupported strategy.
+- Subdomain-biased answer that is strong in one area but lacks integrated judgment.
+- Competent practitioner answer.
+- Strong but incomplete expert answer.
+- True expert answer with diagnosis, tradeoffs, measurement, and risks.
+
+Check:
+
+- Does the strong output score high for the right reasons?
+- Does the fluent-but-wrong output get penalized?
+- Do missing requirements trigger caps?
+- Do generic or framework-only answers stay under the intended ceiling?
+- Do two evaluators differ by more than 5–8 points?
+- Are any checklist items too subjective?
+
+If variance is high, replace vague criteria with observable evidence. If weak examples score too high, strengthen caps before changing weights; caps are the right tool for fatal omissions.
+
+## Common Pitfalls
+
+1. **Only assigning category weights.** A rubric with only weights is not enough. Add checklist criteria.
+2. **Using broad range anchors as the main scoring method.** They create scoring variance.
+3. **Making every category equally weighted.** This hides the user's priorities.
+4. **Confusing importance with fatality.** Important items need points; fatal failures need caps.
+5. **Using non-observable criteria.** Replace “good,” “clear,” or “sufficient” with evidence-based criteria.
+6. **Letting the judge choose the total score first.** Always score checklist items first.
+7. **Not requiring evidence.** Every score should have a reason grounded in the evaluated output.
+8. **Ignoring calibration.** Test on examples before using the rubric repeatedly.
+9. **Overfitting to one example.** The rubric should generalize across similar tasks.
+10. **Rewarding length or jargon.** Length and technical vocabulary are not quality by themselves.
+
+## Verification Checklist
+
+Before finalizing a rubric, verify:
+
+- [ ] The evaluation purpose is explicit.
+- [ ] The evaluation target is explicit.
+- [ ] The total score is normalized to 100 unless otherwise requested.
+- [ ] The highest-weighted dimensions match the user's priorities.
+- [ ] Each dimension is broken into checklist criteria.
+- [ ] Checklist criteria are observable and separately scorable.
+- [ ] The rubric does not rely only on range anchors.
+- [ ] Critical failure conditions have cap or penalty rules.
+- [ ] The scoring procedure says to score checklist items before total score.
+- [ ] The judge prompt requires evidence for each score.
+- [ ] The JSON output schema is included when LLM judging is expected.
+- [ ] The final scorecard is generated from fresh or explicitly bounded scenario responses (no hand-written placeholders).
+- [ ] Judge execution mode is defined: clean subagent, parallel clean subagents, or explicitly labeled same-context exception.
+- [ ] Evaluation packet boundaries are defined, including included inputs and excluded context.
+- [ ] For multi-dimension or high-stakes rubrics, parallel judging and parent aggregation are specified.
+- [ ] Parent aggregation validates shard JSON and applies global caps centrally.
+- [ ] Human-facing rubric prose is Korean-first when the request or domain requires Korean-first output.
+- [ ] For persona/system-prompt evaluation in Hermes default profile, read-back-check the applied identity source (`~/.hermes/SOUL.md`) against the canonical prompt (hash/size).
+- [ ] The canonical persona source is separated from one-off score artifacts (do not overwrite rubric with a specific run result).
+- [ ] A calibration loop is defined for repeated use.

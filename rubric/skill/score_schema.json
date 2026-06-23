@@ -7,6 +7,8 @@
   "required": [
     "skill_path",
     "skill_name",
+    "judging_context",
+    "context_contamination_notes",
     "total_score",
     "max_score",
     "grade",
@@ -26,6 +28,18 @@
     "skill_name": {
       "type": "string"
     },
+    "judging_context": {
+      "type": "string",
+      "enum": [
+        "clean_subagent",
+        "parallel_clean_subagents",
+        "same_context_exception"
+      ]
+    },
+    "context_contamination_notes": {
+      "type": "string",
+      "description": "Clean/parallel context 사용 여부, packet 외 정보 배제 여부, same-context 예외 사유 또는 shard 간 reconciliation notes."
+    },
     "total_score": {
       "type": "number",
       "minimum": 0,
@@ -37,7 +51,13 @@
     },
     "grade": {
       "type": "string",
-      "enum": ["excellent", "good", "adequate", "weak", "poor"]
+      "enum": [
+        "excellent",
+        "good",
+        "adequate",
+        "weak",
+        "poor"
+      ]
     },
     "summary": {
       "type": "string"
@@ -47,7 +67,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["rule", "cap", "reason"],
+        "required": [
+          "rule",
+          "cap",
+          "reason"
+        ],
         "properties": {
           "rule": {
             "type": "string"
@@ -88,8 +112,8 @@
               "D. Verification & Evidence Discipline",
               "E. Failure Handling & Recovery",
               "F. Reusability & Portability",
-              "G. Structure, Concision, and Cognitive Load",
-              "H. Integration with Agent Tooling / Environment"
+              "G. Structure, Consistency, and Cognitive Load",
+              "H. Parallelization, Context Management & Deterministic Automation"
             ]
           },
           "score": {
@@ -138,7 +162,11 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["rule", "effect", "reason"],
+              "required": [
+                "rule",
+                "effect",
+                "reason"
+              ],
               "properties": {
                 "rule": {
                   "type": "string"
@@ -181,7 +209,11 @@
     },
     "confidence": {
       "type": "string",
-      "enum": ["low", "medium", "high"]
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
     }
   }
 }
