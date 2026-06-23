@@ -536,6 +536,8 @@ JSON 출력 스키마:
 - `references/persona-system-prompt-evaluation-scorecard.md` — user-persona system prompt 평가 패턴. 재사용 루브릭과 task-specific scorecard 분리, scenario responses, independent reviewers, parseable JSON score block, read-back verification 포함.
 - `references/clean-parallel-judge-execution.md` — clean new subagents에서 rubric judge를 실행하고, multi-dimension scoring을 병렬 shard로 나누며, 중앙 집계하고, 한국어 우선 human-facing 루브릭 prose 및 `references/` supporting docs를 강제하는 workflow.
 - `references/skill-quality-rubric-planning-pattern.md` — 재사용 agent skills/workflow playbooks 평가 루브릭 설계 패턴. trigger/procedure/boundary/verification, Korean-first, generic-agent hard rules, clean/parallel-subagent judging, deterministic-vs-nondeterministic automation separation, reusable-script requirements, caps, artifact split, calibration scaffold 포함.
+- `references/korean-first-rubric-language-check.md` — 한국어 우선 평가를 한글 포함 여부가 아니라 사람-facing prose의 기본 언어, 번역 가능한 영어 label 반복, 영어 prose 비율로 검증하는 보정 패턴.
+- `references/skill-rubric-remediation-loop.md` — 기존 skill을 루브릭 목표 점수까지 끌어올릴 때의 remediation workflow. hard-gate blocker 우선, class-level SKILL.md vs references/ 배치, JSON/schema/checker 보강, clean shard 재채점, final verification/reporting 패턴 포함.
 
 ### 문헌 조사 / 연구 리뷰
 
@@ -759,7 +761,10 @@ Local caps:
 - [ ] multi-dimension 또는 high-stakes rubric은 parallel judging과 parent aggregation을 지정한다.
 - [ ] parent aggregation이 shard JSON을 검증하고 global caps를 중앙 적용한다.
 - [ ] 요청이나 domain이 Korean-first output을 요구하면 human-facing rubric prose, `references/` supporting docs, canonical rubric files, judge prompt files, scorecard/report prose가 한국어 우선이다.
-- [ ] Korean-first 검증은 주요 headings와 사람-facing 문장의 영어 비중을 실제로 측정하거나 spot-check한다. JSON key, enum, file path, command, API name, schema field는 번역 예외로 분류한다.
+- [ ] Korean-first는 한글 문자가 존재한다는 뜻이 아니라, 사람이 읽는 heading, label, 절차 문장, 판단 기준, 보고 template label의 기본 언어가 한국어라는 뜻으로 판정한다.
+- [ ] Korean-first 검증은 주요 headings와 사람-facing 문장의 영어 비중을 실제로 측정하거나 spot-check한다. JSON key, enum, file path, command, API name, schema field, proper noun은 번역 예외로 분류한다.
+- [ ] 번역 가능한 영어 prose가 heading/label/procedure에 반복되면 감점 또는 cap을 둔다. 예: `workflow`, `output`, `validation`, `source`, `briefing`, `delivery`, `status`, `pattern`, `item`, `parent`, `thread`.
+- [ ] 엄격한 skill/rubric 평가에서는 code fence, inline code, URL, path, JSON/YAML key, enum, proper noun allowlist를 제외한 영어 prose token 비율, 영어-only heading 수, 영어 label 반복 수를 deterministic checker 결과로 scorecard에 포함한다.
 - [ ] Persona/system-prompt evaluation에서 Hermes default profile을 평가할 때 active identity source인 `~/.hermes/SOUL.md`를 canonical prompt와 read-back check(hash/size)한다.
 - [ ] canonical persona source가 one-off score artifacts와 분리되어 있다. 특정 run result로 rubric을 덮어쓰지 않는다.
 - [ ] 반복 사용을 위한 calibration loop가 정의되어 있다.

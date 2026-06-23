@@ -25,7 +25,7 @@
 - skill이 사용하는 command, API, file path, schema, tool type 설명
 - skill의 trigger, scope, non-scope, approval boundary, verification rule
 
-한국어 사용자용 skill에서는 human-facing prose가 한국어 우선이어야 한다. JSON key, enum 값, file path, command, API name, schema field, proper noun은 원문을 유지해도 된다.
+한국어 사용자용 skill에서는 human-facing prose가 한국어를 기본 문장 언어로 삼아야 한다. 한글 문자가 존재한다는 사실만으로는 충분하지 않다. JSON key, enum 값, file path, command, API name, schema field, proper noun은 원문을 유지해도 되지만, heading, label, 설명문, 절차 동사는 번역 가능한 영어 prose에 의존하면 감점한다.
 
 ## 3. 통과 기준
 
@@ -39,7 +39,7 @@ skill은 다음 두 조건을 모두 만족할 때만 통과한다.
    - D2 Operational Workflow Explicitness: 17 / 20 이상
    - D3 Safety, Approval & Boundary Alignment: 13 / 15 이상
    - D4 Verification & Evidence Discipline: 13 / 15 이상
-   - D5 Reusability, Generality & Language Fit: 8 / 10 이상
+   - D5 Reusability, Generality & Language Fit: 9 / 10 이상
 
 D1-D5 중 하나라도 hard-gate threshold 미만이면, numeric total이 90점 이상이어도 skill은 **통과하면 안 된다**.
 
@@ -56,7 +56,7 @@ D1-D5 중 하나라도 hard-gate threshold 미만이면, numeric total이 90점 
 | D2 | 운영 workflow 명시성 | 20 | Hard gate | 암시적이지 않은 실행 절차와 작업 시퀀스 |
 | D3 | 안전, 승인, 경계 정합성 | 15 | Hard gate | 위험 행동 승인 경계와 사용자 운영 취향 |
 | D4 | 검증과 근거 규율 | 15 | Hard gate | 완료 주장 전 실제 출력 검증 |
-| D5 | 재사용성, 범용성, 언어 적합성 | 10 | Hard gate | 한국어 우선, 범용성, 제품명 과종속 방지 |
+| D5 | 재사용성, 범용성, 언어 적합성 | 10 | Hard gate | 한국어 우선 강도, 범용성, 제품명 과종속 방지 |
 | D6 | 실패 처리와 복구 | 10 | Quality | 실패 보고, 원인, 영향, 복구 경로 |
 | D7 | 구조, 일관성, 인지 부담 | 8 | Quality | 모순/모호함 없는 직관적 구조 |
 | D8 | 병렬화, 컨텍스트 관리, 결정론적 자동화 | 7 | Quality | 병렬 처리, 컨텍스트 관리, 결정론적 자동화 분리 |
@@ -141,7 +141,7 @@ Local cap(차원 내 상한):
 | 기준 | 점수 | 인정 기준 | Deterministic? |
 |---|---:|---|---|
 | stable procedure와 one-off artifact가 분리됨 | 2 | 특정 사건 로그와 반복 사용 절차가 분리되어 있다 | Judge |
-| 한국어 우선 human-facing prose | 2 | 한국어 사용자용 skill의 설명/절차/보고 형식이 한국어 중심이다 | Mostly yes |
+| 한국어 우선 human-facing prose | 2 | 한국어 사용자용 skill의 heading, 설명, 절차, 보고 형식, 판단 기준이 한국어를 기본 문장 언어로 사용한다. 영어는 machine identifier, 고유명사, command/path/API/schema/enum 또는 처음 정의한 technical term 보조 표기에 한정된다 | Mostly yes |
 | machine identifier는 원문 유지 | 1 | JSON key, path, command, API, enum, proper noun을 불필요하게 번역하지 않는다 | Mostly yes |
 | 특정 제품명/에이전트명 과종속 없음 | 2 | 범용 agent skill로 재사용 가능하며, platform-specific 절차는 분리되어 있다 | Judge |
 | 환경 의존성이 명시됨 | 2 | OS, CLI, package, credential, repo layout 등 전제 조건을 명시한다 | Mostly yes |
@@ -150,9 +150,19 @@ Local cap(차원 내 상한):
 Local cap(차원 내 상한):
 
 - human-facing prose가 한국어-first가 아니면 D5는 최대 7점이다.
+- 한국어 문장이 존재하지만 heading, label, 절차 문장, 판단 기준에 자연어 영어 표현이 반복되어 독자가 영어 prose를 계속 해석해야 하면 D5는 최대 8점이다.
+- machine identifier 예외를 제외한 영어 prose token 비율이 10%를 넘으면 D5는 최대 8점, 20%를 넘으면 D5는 최대 7점, 35%를 넘으면 D5는 최대 5점이다.
+- 주요 heading의 20% 이상이 영어-only이거나, section label이 `Workflow`, `Output`, `Validation`, `Notes`처럼 번역 가능한 영어 label 위주이면 D5는 최대 8점이다.
 - 특정 제품명/에이전트명에 불필요하게 종속되면 D5는 최대 6점이다.
 - 특정 사건/PR/날짜에 과적합되어 있으면 D5는 최대 5점이다.
-- D5 점수가 8점 미만이면 hard gate 실패다.
+- D5 점수가 9점 미만이면 hard gate 실패다.
+
+한국어 우선 강도 규칙:
+
+- `한국어 우선`은 한글 문자가 포함되어 있다는 뜻이 아니다. 사람이 읽는 prose의 기본 문장, heading, checklist label, 보고 template label, action verb가 한국어여야 한다.
+- 허용되는 영어: JSON/YAML key, enum, command, file path, API name, package/tool/model/product proper noun, quoted source title, code identifier, CLI flag, URL, schema field, 이미 한국어로 설명한 technical term의 괄호 병기.
+- 감점해야 하는 영어: `workflow`, `output`, `validation`, `source`, `briefing`, `delivery`, `status`, `pattern`, `item`, `parent`, `thread`처럼 자연스러운 한국어 대체어가 있는데 heading/label/절차 문장에 반복되는 단어.
+- Deterministic checker는 code fence, inline code, URL, path, JSON/YAML key, enum, proper noun allowlist를 제외한 뒤 human-facing prose의 영어 token 비율, 영어-only heading 수, 영어 label 반복 수를 계산해야 한다. Checker 결과는 D5와 global cap 판단의 근거로 scorecard에 포함한다.
 
 ### D6. 실패 처리와 복구 — 10점 — 품질 차원
 
@@ -215,6 +225,9 @@ Local cap(차원 내 상한):
 - verification discipline이 전혀 없으면 total score는 최대 70점이다.
 - fabricated output, tool 실행한 척하기, evidence 없는 완료 보고를 허용하면 total score는 최대 50점이다.
 - 한국어 사용자용 skill인데 human-facing prose가 대부분 한국어가 아니면 total score는 최대 65점이다.
+- 한국어 문장이 일부 있어도 사람-facing heading/label/절차 문장에 번역 가능한 영어 prose가 반복되어 영어 해석 부담이 크면 total score는 최대 85점이다.
+- machine identifier 예외를 제외한 영어 prose token 비율이 20%를 넘으면 total score는 최대 80점, 35%를 넘으면 total score는 최대 65점이다.
+- 주요 heading 또는 보고 template label의 20% 이상이 영어-only이면 total score는 최대 85점이다.
 - 특정 제품명/에이전트명에 불필요하게 종속되어 범용 재사용이 어렵다면 total score는 최대 75점이다.
 - trigger가 너무 넓어 거의 모든 작업에 로드될 수준이면 total score는 최대 75점이다.
 - 본문이 특정 1회성 사건 로그에 가까우면 total score는 최대 70점이다.
@@ -226,7 +239,7 @@ Local cap(차원 내 상한):
 
 인증 규칙(`certification rule`):
 
-- `pass = certification_score >= 90 AND D1 >= 13 AND D2 >= 17 AND D3 >= 13 AND D4 >= 13 AND D5 >= 8`.
+- `pass = certification_score >= 90 AND D1 >= 13 AND D2 >= 17 AND D3 >= 13 AND D4 >= 13 AND D5 >= 9`.
 - hard-gated dimension 중 하나라도 threshold 미만이면 `raw_total_score >= 90`이어도 `pass = false`다.
 - cap이 적용되면 `raw_total_score`와 `certification_score`를 모두 보고한다.
 
