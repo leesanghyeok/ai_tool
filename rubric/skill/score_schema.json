@@ -1,32 +1,65 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jarvis.local/rubric/skill/score_schema.json",
-  "title": "Skill Quality Rubric Score Schema",
+  "title": "Agent Skill Quality Rubric Scorecard Schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "skill_path",
-    "skill_name",
-    "total_score",
+    "evaluated_at",
+    "read_only",
+    "rubric_version",
+    "judging_context",
+    "context_contamination_notes",
+    "baseline_passing_score",
+    "raw_total_score",
+    "certification_score",
     "max_score",
+    "pass",
     "grade",
-    "summary",
+    "hard_gates",
     "global_caps_applied",
     "dimension_scores",
-    "top_strengths",
-    "critical_weaknesses",
-    "recommended_patches",
-    "needs_human_review",
-    "confidence"
+    "counts",
+    "issues",
+    "unverified",
+    "next_actions"
   ],
   "properties": {
     "skill_path": {
       "type": "string"
     },
-    "skill_name": {
+    "evaluated_at": {
       "type": "string"
     },
-    "total_score": {
+    "read_only": {
+      "type": "boolean"
+    },
+    "rubric_version": {
+      "type": "string",
+      "const": "agent-skill-quality-v1"
+    },
+    "judging_context": {
+      "type": "string",
+      "enum": [
+        "clean_subagent",
+        "parallel_clean_subagents",
+        "same_context_exception"
+      ]
+    },
+    "context_contamination_notes": {
+      "type": "string"
+    },
+    "baseline_passing_score": {
+      "type": "number",
+      "const": 90
+    },
+    "raw_total_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "certification_score": {
       "type": "number",
       "minimum": 0,
       "maximum": 100
@@ -35,30 +68,79 @@
       "type": "number",
       "const": 100
     },
+    "pass": {
+      "type": "boolean"
+    },
     "grade": {
       "type": "string",
-      "enum": ["excellent", "good", "adequate", "weak", "poor"]
+      "enum": [
+        "excellent",
+        "strong_not_passing",
+        "adequate",
+        "weak",
+        "unacceptable"
+      ]
     },
-    "summary": {
-      "type": "string"
+    "hard_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension_id",
+          "required_score",
+          "actual_score",
+          "passed",
+          "blocking_issues"
+        ],
+        "properties": {
+          "dimension_id": {
+            "type": "string"
+          },
+          "required_score": {
+            "type": "number"
+          },
+          "actual_score": {
+            "type": "number"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "blocking_issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
     },
     "global_caps_applied": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["rule", "cap", "reason"],
+        "required": [
+          "rule_id",
+          "cap",
+          "reason",
+          "evidence"
+        ],
         "properties": {
-          "rule": {
+          "rule_id": {
             "type": "string"
           },
           "cap": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 100
+            "type": "number"
           },
           "reason": {
             "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
@@ -71,26 +153,32 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "dimension_id",
           "dimension",
           "score",
           "max_score",
+          "gate_type",
           "checklist",
-          "local_caps_or_penalties",
-          "summary"
+          "local_caps_applied",
+          "summary",
+          "recommended_fixes"
         ],
         "properties": {
-          "dimension": {
+          "dimension_id": {
             "type": "string",
             "enum": [
-              "A. Trigger & Scope Precision",
-              "B. Operational Procedure Quality",
-              "C. User Preference / Boundary Alignment",
-              "D. Verification & Evidence Discipline",
-              "E. Failure Handling & Recovery",
-              "F. Reusability & Portability",
-              "G. Structure, Concision, and Cognitive Load",
-              "H. Integration with Agent Tooling / Environment"
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7",
+              "D8"
             ]
+          },
+          "dimension": {
+            "type": "string"
           },
           "score": {
             "type": "number",
@@ -100,20 +188,29 @@
             "type": "number",
             "minimum": 1
           },
+          "gate_type": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "quality"
+            ]
+          },
           "checklist": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "criterion",
+                "criterion_id",
                 "score",
                 "max_score",
+                "deterministic",
                 "evidence",
-                "missing_or_issue"
+                "paths",
+                "comment"
               ],
               "properties": {
-                "criterion": {
+                "criterion_id": {
                   "type": "string"
                 },
                 "score": {
@@ -122,66 +219,207 @@
                 },
                 "max_score": {
                   "type": "number",
-                  "minimum": 1
+                  "minimum": 0
+                },
+                "deterministic": {
+                  "type": "boolean"
                 },
                 "evidence": {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
-                "missing_or_issue": {
+                "paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "comment": {
                   "type": "string"
                 }
               }
             }
           },
-          "local_caps_or_penalties": {
+          "local_caps_applied": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          },
+          "recommended_fixes": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["rule", "effect", "reason"],
+              "required": [
+                "priority",
+                "path",
+                "action"
+              ],
               "properties": {
-                "rule": {
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "path": {
                   "type": "string"
                 },
-                "effect": {
-                  "type": "string"
-                },
-                "reason": {
+                "action": {
                   "type": "string"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "included_files",
+        "reference_files",
+        "template_files",
+        "script_files",
+        "checklist_items",
+        "deterministic_items",
+        "judge_only_items"
+      ],
+      "properties": {
+        "included_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reference_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "template_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "script_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checklist_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deterministic_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "judge_only_items": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "dimension_id",
+          "rule",
+          "path",
+          "evidence",
+          "recommendation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
           },
-          "summary": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "dimension_id": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "recommendation": {
             "type": "string"
           }
         }
       }
     },
-    "top_strengths": {
+    "unverified": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "area",
+          "reason"
+        ],
+        "properties": {
+          "area": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
       }
     },
-    "critical_weaknesses": {
+    "next_actions": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "priority",
+          "action",
+          "paths"
+        ],
+        "properties": {
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       }
-    },
-    "recommended_patches": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "needs_human_review": {
-      "type": "boolean"
-    },
-    "confidence": {
-      "type": "string",
-      "enum": ["low", "medium", "high"]
     }
   }
 }

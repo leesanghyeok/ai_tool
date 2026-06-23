@@ -1,251 +1,414 @@
-# Skill Quality Rubric v1
+# 에이전트 스킬 품질 루브릭 v1
 
-## 1. Evaluation Purpose
+## 1. 평가 목적
 
-이 루브릭은 agent skill의 품질을 평가하기 위한 100점 기준이다. 목표는 skill이 단순히 잘 쓰인 문서인지가 아니라, agent가 반복 작업에서 더 정확하고 안전하고 검증 가능한 행동을 하도록 만드는지를 평가하는 것이다.
+이 루브릭은 agent skill이 반복 작업에서 실제 행동 품질을 개선하는 재사용 가능한 절차 기억으로 신뢰해도 되는지를 평가한다.
 
-이 루브릭은 특히 다음 유형의 skill에 적용한다.
+이 루브릭은 ad-hoc skill review를 막기 위해 다음을 고정한다.
 
-- Hermes skill
-- gstack/superpower/mattpocock 류 agent workflow skill
-- coding-agent, research-agent, devops-agent playbook
-- command/API/tool 기반 operational procedure
-- 사용자 선호, 승인 경계, 검증 기준을 agent 행동으로 변환하는 문서
+- 고정 100점 채점 모델
+- hard gate 요구사항
+- 가능한 경우 deterministic check
+- 정성 판단이 필요한 경우 judge-only check
+- clean/parallel judging 실행 방식
+- 안정적인 JSON scorecard 형식
 
-## 2. Evaluation Target
+특정 skill repository, source family, local collection은 최고의 기준이 아니다. 이들은 calibration sample일 뿐이며, 점수는 이름값이 아니라 workflow의 명시성, 실행성, 검증 가능성, 재사용성으로만 부여한다.
 
-평가 대상은 하나의 skill 문서 또는 skill package이다. package형 skill의 경우 `SKILL.md`와 참조 파일, 스크립트, 템플릿까지 함께 평가할 수 있다.
+## 2. 평가 대상
 
-## 3. Total Score
+단일 agent skill 또는 skill package. 최소한 다음 중 평가 가능한 artifact를 포함한다.
 
-100 points.
+- main skill document
+- 선택적으로 reference/template/script 파일
+- skill이 요구하는 input/output artifact 설명
+- skill이 사용하는 command, API, file path, schema, tool type 설명
+- skill의 trigger, scope, non-scope, approval boundary, verification rule
 
-## 4. Dimension Summary
+한국어 사용자용 skill에서는 human-facing prose가 한국어 우선이어야 한다. JSON key, enum 값, file path, command, API name, schema field, proper noun은 원문을 유지해도 된다.
 
-| Dimension | Points | Evaluation Focus |
-|---|---:|---|
-| A. Trigger & Scope Precision | 15 | 언제 로드하고 어디까지 적용할지 |
-| B. Operational Procedure Quality | 20 | 실제 실행 가능한 절차 품질 |
-| C. User Preference / Boundary Alignment | 15 | 사용자 승인 경계와 작업 취향 반영 |
-| D. Verification & Evidence Discipline | 15 | 완료 주장 전 실제 검증 유도 |
-| E. Failure Handling & Recovery | 10 | 실패 보고, 원인, 복구 경로 |
-| F. Reusability & Portability | 10 | 반복 사용성과 환경 이식성 |
-| G. Structure, Concision, and Cognitive Load | 8 | agent가 빠르게 읽고 따를 수 있는 구조 |
-| H. Integration with Agent Tooling / Environment | 7 | Hermes/Codex/tooling과의 결합도 |
-| **Total** | **100** | |
+## 3. 통과 기준
 
-## 5. Detailed Scoring Criteria
+기본 통과 점수(`baseline_passing_score`): **90 / 100**.
 
-### A. Trigger & Scope Precision — 15 points
+skill은 다음 두 조건을 모두 만족할 때만 통과한다.
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| 사용 조건이 task/action 중심으로 구체적임 | 4 | skill을 언제 로드해야 하는지 동사, 작업 유형, 상황 기준으로 명확히 설명한다. |
-| 비사용 조건 또는 경계가 있음 | 3 | skill을 쓰지 말아야 할 경우나 다른 skill로 넘겨야 할 경우를 설명한다. |
-| 입력/출력/대상 artifact가 명확함 | 3 | 필요한 입력, 생성/수정할 artifact, 기대 출력이 구체적이다. |
-| scope creep를 막는 지침이 있음 | 3 | 승인된 범위 밖으로 확장하지 않도록 제한 규칙이 있다. |
-| 유사 skill과의 관계가 설명됨 | 2 | 관련 skill, 대체 skill, 선행 skill과의 관계를 설명한다. |
+1. `certification_score >= 90`
+2. 모든 hard-gated dimension이 통과 기준 이상이어야 한다.
+   - D1 Trigger & Scope Precision: 13 / 15 이상
+   - D2 Operational Workflow Explicitness: 17 / 20 이상
+   - D3 Safety, Approval & Boundary Alignment: 13 / 15 이상
+   - D4 Verification & Evidence Discipline: 13 / 15 이상
+   - D5 Reusability, Generality & Language Fit: 8 / 10 이상
 
-Local caps:
+D1-D5 중 하나라도 hard-gate threshold 미만이면, numeric total이 90점 이상이어도 skill은 **통과하면 안 된다**.
 
-- 사용 조건이 한 문장 이하로 모호하면 A는 최대 8/15.
-- 거의 모든 작업에 적용될 만큼 trigger가 넓으면 A는 최대 10/15이며 global cap도 검토한다.
+하드 게이트 상한 규칙(`hard-gate cap rule`):
 
-### B. Operational Procedure Quality — 20 points
+- D1-D5 중 하나라도 threshold 미만이면 `pass = false`이고 `certification_score_cap = 89`다.
+- 진단을 위해 `raw_total_score`는 표시할 수 있지만, certification 결과는 실패다.
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| 단계가 실행 순서대로 정리됨 | 4 | discovery, plan, execution, verification 등 단계 순서가 명확하다. |
-| 명령/API/file path/output 예시가 구체적임 | 4 | 실제 command, API, file path, schema, output 예시가 있다. |
-| prerequisite discovery가 포함됨 | 3 | 실행 전 확인해야 할 repo 상태, config, credentials, environment, existing convention 등을 확인한다. |
-| plan/execution/verification 단계가 분리됨 | 3 | 계획, 실행, 검증, 보고가 혼동되지 않는다. |
-| 반복 가능한 workflow로 구성됨 | 3 | 다른 세션과 유사 작업에서도 다시 쓸 수 있는 절차다. |
-| actionable instruction이 많음 | 3 | 일반론보다 agent가 바로 수행할 수 있는 구체 지시가 많다. |
+## 4. 차원 요약
 
-Local caps:
+| ID | 차원 | 점수 | Gate Type | 평가 초점 |
+|---|---:|---:|---|---|
+| D1 | 사용 조건과 범위 정밀도 | 15 | Hard gate | 언제 로드하고 어디까지 적용할지 |
+| D2 | 운영 workflow 명시성 | 20 | Hard gate | 암시적이지 않은 실행 절차와 작업 시퀀스 |
+| D3 | 안전, 승인, 경계 정합성 | 15 | Hard gate | 위험 행동 승인 경계와 사용자 운영 취향 |
+| D4 | 검증과 근거 규율 | 15 | Hard gate | 완료 주장 전 실제 출력 검증 |
+| D5 | 재사용성, 범용성, 언어 적합성 | 10 | Hard gate | 한국어 우선, 범용성, 제품명 과종속 방지 |
+| D6 | 실패 처리와 복구 | 10 | Quality | 실패 보고, 원인, 영향, 복구 경로 |
+| D7 | 구조, 일관성, 인지 부담 | 8 | Quality | 모순/모호함 없는 직관적 구조 |
+| D8 | 병렬화, 컨텍스트 관리, 결정론적 자동화 | 7 | Quality | 병렬 처리, 컨텍스트 관리, 결정론적 자동화 분리 |
+| **합계** |  | **100** |  |  |
 
-- 실행 가능한 step이 없으면 B는 최대 8/20.
-- command/path/tool 예시가 전혀 없으면 B는 최대 12/20.
-- 순서가 뒤섞여 agent가 실행 계획을 재구성해야 하면 B는 최대 15/20.
+## 5. 세부 채점 기준
 
-### C. User Preference / Boundary Alignment — 15 points
+### D1. 사용 조건과 범위 정밀도 — 15점 — 하드 게이트
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| approval gate가 명확함 | 4 | destructive, external post, credential, production, persistent config/memory/skill/cron 변경 전에 explicit approval을 요구한다. |
-| low-risk action은 불필요하게 묻지 않음 | 3 | read-only discovery, file inspection, log/status check, parsing, low-risk verification은 바로 수행하도록 구분한다. |
-| evidence-first 보고 형식 반영 | 3 | 변경 사항, 검증 결과, 파일 경로, 남은 문제, 승인 필요 사항을 간결하게 보고하도록 한다. |
-| scope를 좁고 명시적으로 유지 | 2 | 사용자가 승인한 범위만 수행하고 broad scope expansion을 피한다. |
-| project/user convention 반영 가능 | 2 | Korean-first, machine identifier 보존, repo convention 등 사용자별 기준을 적용할 수 있다. |
-| uncertainty handling 있음 | 1 | 확인됨/추정/미확인 또는 assumption labeling을 요구한다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| Trigger가 task/action 중심으로 구체적임 | 4 | skill을 언제 로드해야 하는지 작업 유형, 입력 신호, 상황 기준으로 명확히 설명한다 | Judge |
+| Non-scope 또는 사용 금지 조건이 있음 | 3 | skill을 쓰지 말아야 할 경우, 다른 skill로 넘겨야 할 경우, 적용 제외 범위가 있다 | Judge |
+| 평가/작업 대상 artifact가 명확함 | 3 | input, output, 생성/수정 대상, 기대 산출물이 구체적이다 | Mostly yes |
+| Scope creep 방지 규칙이 있음 | 3 | 승인된 범위 밖 확장, 부수 작업, 위험한 follow-up을 제한한다 | Judge |
+| 관련 skill 또는 선행/후행 workflow 관계가 있음 | 2 | 관련 skill, 대체 skill, 선행 discovery, 후속 verification 관계를 설명한다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- approval gate가 필요한 도메인인데 언급이 없으면 C는 최대 7/15.
-- 사용자 선호와 정면 충돌하는 지시가 있으면 C는 최대 8/15이며 global cap도 검토한다.
+- trigger가 한 문장 이하로 모호하면 D1은 최대 8점이다.
+- 거의 모든 작업에 적용될 만큼 trigger가 넓으면 D1은 최대 10점이다.
+- non-scope가 전혀 없고 workflow가 위험 행동을 포함하면 D1은 최대 11점이다.
+- D1 점수가 13점 미만이면 hard gate 실패다.
 
-### D. Verification & Evidence Discipline — 15 points
+### D2. 운영 workflow 명시성 — 20점 — 하드 게이트
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| 완료 조건이 명확함 | 3 | 어떤 output 또는 state가 있으면 완료인지 정의한다. |
-| 실제 검증 방법 명시 | 4 | file read-back, parse/lint/test, API response, UI confirmation, git diff/status, health check 등 검증 방법이 있다. |
-| subagent/tool 결과 재검증 | 2 | subagent self-report를 그대로 믿지 않고 parent가 artifact나 output을 확인하게 한다. |
-| machine-checkable artifact 사용 | 2 | JSON schema, fixed field, deterministic checker, parseable scorecard 등을 사용한다. |
-| verification 실패 보고 | 2 | 검증이 막힌 경우 blocked/unverified 상태와 이유를 보고한다. |
-| fabricated output 금지 | 2 | tool을 실행한 척하거나 evidence 없는 완료 보고를 하지 않도록 명시한다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| 작업 시퀀스가 순서대로 명시됨 | 4 | discovery, plan, execution, verification, report 순서가 혼동 없이 제시된다 | Judge |
+| 실행 가능한 command/API/path/schema 예시가 있음 | 4 | 실제 command, API, file path, JSON schema, output shape가 제공된다 | Mostly yes |
+| prerequisite discovery가 있음 | 3 | repo 상태, config, credential 필요성, 기존 convention, 입력 파일을 먼저 확인한다 | Judge |
+| 단계 간 의존성과 병렬 가능성이 구분됨 | 3 | 순차 의존 단계와 동시 처리 가능한 독립 작업을 구분한다 | Judge |
+| workflow가 암시적이지 않음 | 3 | evaluator가 절차를 추론하지 않아도 agent가 그대로 따를 수 있다 | Judge |
+| output/report 형식이 있음 | 3 | 수행 결과, 검증 결과, 파일 경로, 남은 이슈를 보고하는 형식이 있다 | Mostly yes |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- verification이 전혀 없으면 D는 최대 5/15이며 global cap을 적용한다.
-- 검증이 “확인한다” 수준의 추상 표현뿐이면 D는 최대 8/15.
+- 실행 가능한 step이 없으면 D2는 최대 8점이다.
+- command/path/schema/tool 예시가 전혀 없으면 D2는 최대 12점이다.
+- 핵심 workflow가 암시적이라 evaluator가 절차를 추론해야 하면 D2는 최대 14점이다.
+- 작업 단계가 섞여 agent가 다시 설계해야 하면 D2는 최대 15점이다.
+- D2 점수가 17점 미만이면 hard gate 실패다.
 
-### E. Failure Handling & Recovery — 10 points
+### D3. 안전, 승인, 경계 정합성 — 15점 — 하드 게이트
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| 실패 command/API/tool과 error 보고 | 2 | 실패한 실행 단위와 핵심 error를 숨기지 않는다. |
-| likely cause / impact / recovery 구분 | 2 | 원인 추정, 영향, 다음 복구 행동을 분리해 보고한다. |
-| retry 또는 alternative path 기준 | 2 | 재시도할 조건과 다른 접근으로 전환할 조건이 있다. |
-| partial/blocked/unverified 상태 구분 | 2 | 일부 완료, 차단, 미검증 상태를 명확히 구분한다. |
-| skill patch/update 기준 | 2 | skill 자체가 틀렸거나 누락된 경우 패치해야 하는 기준이 있다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| 위험 행동 승인 게이트가 명확함 | 4 | destructive, external delivery, credential, production, persistent state 변경 전 explicit approval을 요구한다 | Judge |
+| 저위험 작업은 불필요하게 묻지 않음 | 3 | read-only discovery, file inspection, log/status check, parsing, low-risk verification은 바로 수행하도록 구분한다 | Judge |
+| 사용자/프로젝트 convention 반영 | 3 | 언어, 보고 형식, evidence-first, scope 유지 등 운영 취향을 반영할 수 있다 | Judge |
+| scope와 execution approval을 분리함 | 2 | plan feedback, partial agreement, execution approval을 혼동하지 않는다 | Judge |
+| security/privacy boundary가 있음 | 2 | secret, private URL, credential, raw evidence 저장 위험을 다룬다 | Judge |
+| 불확실성 라벨이 있음 | 1 | 확인됨/추정/미확인 또는 equivalent labeling을 요구한다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- 실패를 일반적인 “문제가 있었다” 수준으로만 다루면 E는 최대 5/10.
-- 실패를 숨기거나 성공처럼 보고하게 만드는 지침이 있으면 global cap을 적용한다.
+- 위험 행동을 다루는데 approval gate가 없으면 D3은 최대 7점이다.
+- credential/secret handling이 필요한데 언급이 없으면 D3은 최대 10점이다.
+- 사용자 선호와 정면 충돌하는 지시가 있으면 D3은 최대 8점이다.
+- D3 점수가 13점 미만이면 hard gate 실패다.
 
-### F. Reusability & Portability — 10 points
+### D4. 검증과 근거 규율 — 15점 — 하드 게이트
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| stable procedure와 task artifact 분리 | 2 | 재사용할 절차와 특정 실행 결과/로그를 구분한다. |
-| 환경 의존성 명시 | 2 | OS, CLI, credential, API, repo structure 등 전제 조건을 명시한다. |
-| project-specific 경로와 일반 원칙 구분 | 2 | 고정 경로가 필요한 경우와 이식 가능한 절차를 구분한다. |
-| versioning/update 기준 | 2 | skill 변경, stale instruction, calibration update 기준이 있다. |
-| calibration/example이 rule을 오염시키지 않음 | 2 | 예시는 참고용이며 canonical rule과 분리된다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| 완료 조건이 명확함 | 3 | 어떤 output, state, response, file diff, test result가 완료인지 정의한다 | Judge |
+| 실제 검증 방법이 있음 | 4 | read-back, parse, lint, test, API response, UI confirmation, git diff/status, health check 중 적절한 검증을 명시한다 | Mostly yes |
+| deterministic check를 우선함 | 2 | 계산, parsing, schema validation, count, hash, bounds check는 script/checker로 검증한다 | Mostly yes |
+| subagent/tool self-report를 재검증함 | 2 | subagent self-report를 그대로 믿지 않고 parent가 artifact/output을 확인한다 | Judge |
+| 기계 검증 가능한 artifact가 있음 | 2 | JSON schema, fixed field, scorecard, deterministic report 등 parseable artifact를 사용한다 | Mostly yes |
+| verification 실패 보고가 있음 | 2 | blocked/unverified 상태, 실패 command/API/tool, 영향, recovery를 보고한다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- 특정 사건/PR/날짜에 과적합되어 있으면 F는 최대 5/10.
-- 현재 환경에서만 암묵적으로 작동하고 의존성을 설명하지 않으면 F는 최대 7/10.
+- verification이 전혀 없으면 D4는 최대 5점이다.
+- 검증이 “확인한다” 같은 추상 표현뿐이면 D4는 최대 8점이다.
+- tool을 실행한 척하거나 evidence 없는 완료 보고를 허용하면 D4는 최대 6점이며 global cap도 적용한다.
+- D4 점수가 13점 미만이면 hard gate 실패다.
 
-### G. Structure, Concision, and Cognitive Load — 8 points
+### D5. 재사용성, 범용성, 언어 적합성 — 10점 — 하드 게이트
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| headings가 명확하고 탐색 가능함 | 2 | agent가 필요한 섹션을 빠르게 찾을 수 있다. |
-| 핵심 절차가 bullet/numbered steps로 압축됨 | 2 | 긴 산문보다 실행 순서가 눈에 띈다. |
-| 결정 규칙 중심 | 2 | 배경 설명보다 조건, 판단 기준, 금지/허용 규칙이 중심이다. |
-| 중복/모호한 표현이 적음 | 1 | 같은 내용이 반복되지 않고 용어가 일관된다. |
-| final report template이 있음 | 1 | 작업 후 보고 형식이 있다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| stable procedure와 one-off artifact가 분리됨 | 2 | 특정 사건 로그와 반복 사용 절차가 분리되어 있다 | Judge |
+| 한국어 우선 human-facing prose | 2 | 한국어 사용자용 skill의 설명/절차/보고 형식이 한국어 중심이다 | Mostly yes |
+| machine identifier는 원문 유지 | 1 | JSON key, path, command, API, enum, proper noun을 불필요하게 번역하지 않는다 | Mostly yes |
+| 특정 제품명/에이전트명 과종속 없음 | 2 | 범용 agent skill로 재사용 가능하며, platform-specific 절차는 분리되어 있다 | Judge |
+| 환경 의존성이 명시됨 | 2 | OS, CLI, package, credential, repo layout 등 전제 조건을 명시한다 | Mostly yes |
+| version/update 기준이 있음 | 1 | stale instruction, skill patch, calibration update 기준이 있다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- 길지만 구조가 없어 agent가 다시 요약해야 하면 G는 최대 4/8.
-- 과도한 배경 설명이 절차를 가리면 G는 최대 6/8.
+- human-facing prose가 한국어-first가 아니면 D5는 최대 7점이다.
+- 특정 제품명/에이전트명에 불필요하게 종속되면 D5는 최대 6점이다.
+- 특정 사건/PR/날짜에 과적합되어 있으면 D5는 최대 5점이다.
+- D5 점수가 8점 미만이면 hard gate 실패다.
 
-### H. Integration with Agent Tooling / Environment — 7 points
+### D6. 실패 처리와 복구 — 10점 — 품질 차원
 
-| Checklist Criterion | Points | Recognition Standard |
-|---|---:|---|
-| 관련 tool choice가 구체적임 | 2 | terminal, read_file, search_files, browser, delegate_task, cronjob 등 사용할 도구가 구체적이다. |
-| large-context sharding 기준 있음 | 1 | 큰 로그/문서/코드베이스는 subagent 또는 shard workflow를 사용한다. |
-| persistent state 변경 경계가 있음 | 1 | memory, skill, cron, config, scheduler 변경의 approval boundary가 있다. |
-| artifact 저장 규칙 있음 | 1 | path, schema, logs, scorecard 저장 위치나 형식이 있다. |
-| existing convention 확인 절차 있음 | 1 | 기존 repo/project convention을 먼저 확인한다. |
-| skill maintenance workflow 있음 | 1 | skill이 틀리거나 stale할 때 update/patch 기준이 있다. |
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| 실패한 command/API/tool과 error 보고 | 2 | 실패 단위와 핵심 error를 숨기지 않는다 | Judge |
+| likely cause / impact / recovery 구분 | 2 | 원인 추정, 영향, 다음 복구 행동을 분리한다 | Judge |
+| retry/alternative path 기준 있음 | 2 | 재시도 조건과 다른 접근으로 전환할 조건이 있다 | Judge |
+| partial/blocked/unverified 상태 구분 | 2 | 일부 완료, 차단, 미검증 상태를 구분한다 | Judge |
+| skill 자체 patch 기준 있음 | 2 | skill이 틀렸거나 누락된 경우 수정/보강 기준이 있다 | Judge |
 
-Local caps:
+Local cap(차원 내 상한):
 
-- tool 사용이 모두 일반론이면 H는 최대 4/7.
-- 실제 Hermes/Codex 환경과 맞지 않는 명령을 중심으로 하면 H는 최대 5/7.
+- 실패를 일반적인 “문제가 있었다” 수준으로만 다루면 D6은 최대 5점이다.
+- 실패를 숨기거나 성공처럼 보고하게 만드는 지침이 있으면 D6은 최대 4점이며 global cap도 적용한다.
 
-## 6. Global Caps and Penalties
+### D7. 구조, 일관성, 인지 부담 — 8점 — 품질 차원
 
-체크리스트 총점을 먼저 계산한 뒤 아래 cap을 적용한다. 여러 cap이 적용되면 가장 낮은 cap을 사용한다.
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| heading과 섹션 흐름이 탐색 가능함 | 2 | agent가 trigger, 절차, 검증, 보고, 예외를 빠르게 찾을 수 있다 | Mostly yes |
+| 핵심 절차가 numbered/bulleted steps로 압축됨 | 2 | 긴 산문보다 실행 순서가 눈에 띈다 | Mostly yes |
+| 모순되거나 충돌하는 지시가 없음 | 2 | approval, execution, verification, reporting 규칙이 충돌하지 않는다 | Judge |
+| 모호한 표현이 기준 없이 남발되지 않음 | 1 | “적절히”, “필요시” 같은 표현에 판단 기준이 붙어 있다 | Judge |
+| 최종 보고 template이 있음 | 1 | 작업 완료 후 보고 형식이 있다 | Mostly yes |
 
-- 실제 절차가 없고 개념 설명만 있으면 총점 60점 cap.
-- approval boundary가 없는데 destructive/external/credential/production 액션을 다루면 총점 55점 cap.
-- verification이 전혀 없으면 총점 70점 cap.
-- fabricated output, 실행한 척하는 지침, evidence 없는 완료 보고를 허용하면 총점 50점 cap.
-- 사용자 선호나 프로젝트 convention과 정면 충돌하면 총점 65점 cap.
-- trigger가 너무 넓어 거의 모든 작업에 로드될 수준이면 총점 75점 cap.
-- 스킬 본문이 특정 1회성 사건 로그에 가까우면 총점 70점 cap.
-- 보안/프라이버시 위험을 부추기면 총점 50점 cap.
-- skill 본문이 너무 짧아 평가 가능한 substance가 부족하면 총점 50점 cap.
+Local cap(차원 내 상한):
 
-## 7. Score Interpretation
+- 길지만 구조가 없어 agent가 다시 요약해야 하면 D7은 최대 4점이다.
+- 모순되거나 충돌하는 지시가 있으면 D7은 최대 4점이다.
+- 과도한 배경 설명이 절차를 가리면 D7은 최대 6점이다.
 
-| Total Score | Interpretation |
+### D8. 병렬화, 컨텍스트 관리, 결정론적 자동화 — 7점 — 품질 차원
+
+| 기준 | 점수 | 인정 기준 | Deterministic? |
+|---|---:|---|---|
+| 병렬 처리 가능성 판단 기준 있음 | 1 | 독립 작업과 순차 의존 작업을 구분한다 | Judge |
+| 동시 처리 가능한 작업을 병렬화함 | 1 | subagent/parallel review를 사용해 작업 속도를 높이고 결과를 중앙에서 종합한다 | Judge |
+| 큰 컨텍스트 작업의 shard 기준 있음 | 1 | 큰 로그/문서/코드베이스/후보 비교를 shard로 나누어 컨텍스트 오염을 줄인다 | Judge |
+| 결정론적/비결정론적 작업 분리 | 2 | parsing, 집계, 정규화, schema 검증은 script로 처리하고 판단/해석/우선순위화는 agent reasoning에 맡긴다 | Judge |
+| 공통 재사용 스크립트 설계 기준 있음 | 1 | 단계마다 일회성 script를 만들지 않고 여러 단계/샘플에 반복 가능한 script를 만든다 | Judge |
+| 중간 artifact가 parseable함 | 1 | JSON/schema/fixed field/path 기반 artifact로 token 사용과 컨텍스트 오염을 줄인다 | Mostly yes |
+
+Local cap(차원 내 상한):
+
+- 큰 컨텍스트 작업인데 분할/subagent/중간 artifact 전략이 없으면 D8은 최대 3점이다.
+- 동시 처리가 가능한 독립 작업인데 순차 처리만 지시하면 D8은 최대 4점이다.
+- 결정론적 작업을 script화하지 않고 agent reasoning에 맡기면 D8은 최대 4점이다.
+- 단계별 일회성 script만 만들고 공통 script 설계가 없으면 D8은 최대 5점이다.
+
+## 6. 전역 상한 및 인증 규칙
+
+먼저 checklist 채점을 적용하고, 그다음 local cap, global cap, certification rule 순서로 적용한다.
+
+전체 상한(`global cap`):
+
+- 대상이 agent skill 또는 skill package가 아니면 total score는 최대 40점이다.
+- 실제 절차가 없고 개념 설명만 있으면 total score는 최대 60점이다.
+- destructive/external/credential/production/persistent state action을 다루면서 approval boundary가 없으면 total score는 최대 55점이다.
+- verification discipline이 전혀 없으면 total score는 최대 70점이다.
+- fabricated output, tool 실행한 척하기, evidence 없는 완료 보고를 허용하면 total score는 최대 50점이다.
+- 한국어 사용자용 skill인데 human-facing prose가 대부분 한국어가 아니면 total score는 최대 65점이다.
+- 특정 제품명/에이전트명에 불필요하게 종속되어 범용 재사용이 어렵다면 total score는 최대 75점이다.
+- trigger가 너무 넓어 거의 모든 작업에 로드될 수준이면 total score는 최대 75점이다.
+- 본문이 특정 1회성 사건 로그에 가까우면 total score는 최대 70점이다.
+- 핵심 workflow가 암시적이어서 evaluator가 절차를 추론해야 하면 total score는 최대 70점이다.
+- 큰 컨텍스트 작업을 다루면서 subagent/parallel review/intermediate artifact 전략이 전혀 없으면 total score는 최대 80점이다.
+- 결정론적 반복 처리와 비결정론적 추론을 구분하지 않아 모든 작업을 agent reasoning에 맡기면 total score는 최대 75점이다.
+- 단계마다 일회성 script를 남발하고 공통 재사용 가능한 자동화로 정리하지 않으면 total score는 최대 80점이다.
+- security/privacy 위험을 부추기면 total score는 최대 50점이다.
+
+인증 규칙(`certification rule`):
+
+- `pass = certification_score >= 90 AND D1 >= 13 AND D2 >= 17 AND D3 >= 13 AND D4 >= 13 AND D5 >= 8`.
+- hard-gated dimension 중 하나라도 threshold 미만이면 `raw_total_score >= 90`이어도 `pass = false`다.
+- cap이 적용되면 `raw_total_score`와 `certification_score`를 모두 보고한다.
+
+## 7. 점수 해석
+
+| 점수 | 해석 |
 |---:|---|
-| 90–100 | Excellent. 반복 사용 가능한 고품질 skill. 작은 보완만 필요. |
-| 80–89 | Good. 실사용 가능하나 일부 boundary, verification, structure 보완 필요. |
-| 70–79 | Adequate. 핵심은 있으나 운영 안정성이 부족함. |
-| 60–69 | Weak. substantial revision 필요. agent 행동 개선 효과가 제한적임. |
-| 0–59 | Poor. skill로 사용하기 어렵거나 위험함. 재작성 권장. |
+| 90–100 및 모든 hard gate 통과 | Production-quality skill. 반복 작업에 사용할 수 있음 |
+| 80–89 | 강하지만 통과 기준은 아님. hard gate 또는 quality gap 개선 필요 |
+| 70–79 | 부분적으로 사용 가능. 운영 안정성과 검증성이 부족함 |
+| 60–69 | 약한 skill. 상당한 재작성 필요 |
+| 0–59 | skill로 신뢰하기 어려움. 구조와 절차를 먼저 재구축해야 함 |
 
-## 8. Scoring Procedure
+## 8. 채점 절차
 
-1. 평가 대상 skill 파일과 linked reference/template/script를 확인한다.
-2. skill의 intended trigger와 operational scope를 요약한다.
-3. global cap 후보를 먼저 메모하되, 총점은 아직 결정하지 않는다.
-4. 각 dimension의 checklist item을 evidence 기반으로 채점한다.
-5. dimension별 local cap을 적용한다.
-6. dimension 점수를 합산한다.
-7. global cap을 적용한다.
-8. top strengths, critical weaknesses, recommended patches를 작성한다.
-9. JSON schema에 맞춰 결과를 출력한다.
+1. target skill path와 read-only mode를 확인한다.
+2. main skill document와 reference/template/script 파일을 읽는다.
+3. D1-D5 hard-gated dimension을 먼저 채점한다.
+4. deterministic check가 가능한 기준은 script 또는 parseable check로 검증한다.
+5. 비결정론적 기준은 clean judge가 packet evidence만 사용해 채점한다.
+6. checklist item을 독립적으로 채점한다.
+7. local cap을 적용한다.
+8. global cap을 적용한다.
+9. hard-gate certification rule을 적용한다.
+10. JSON scorecard와 짧은 human summary를 생성한다.
 
-## 9. Judge Instructions
+## 9. 판정 실행 모드
 
-- 점수를 먼저 정하지 말고 checklist item을 먼저 채점한다.
-- 평가 대상 skill에 명시된 내용만 근거로 사용한다.
-- implied intent나 evaluator의 선의로 missing content에 점수를 주지 않는다.
-- evidence에는 실제 문구, 섹션명, 파일명, 절차 요약을 넣는다.
-- 길이와 전문 용어 자체를 보상하지 않는다.
-- 실행성, approval boundary, verification discipline을 강하게 본다.
-- cap은 checklist scoring 이후 적용한다.
-- 여러 cap이 적용되면 가장 낮은 cap을 사용한다.
-- 평가 불확실성이 높으면 `needs_human_review=true`로 표시한다.
+기본 판정 모드는 clean context다. judge는 현재 대화, memory, 구현 메모, 작성자 self-report를 evidence로 사용하면 안 된다.
 
-## 10. Expected Final Report Template
+판정 모드:
 
-```text
-결론: {score}/100 — {grade}
+- `clean_subagent`: 기본 모드. self-contained evaluation packet만 받은 단일 judge가 전체 rubric을 평가한다.
+- `parallel_clean_subagents`: multi-dimension, long skill package, high-stakes 평가에서 사용한다. parent가 D1-D8 shard를 나누고 clean subagent가 병렬 평가한다.
+- `same_context_exception`: low-stakes quick check 또는 clean subagent unavailable인 경우만 허용한다. scorecard에 context contamination risk를 기록해야 한다.
 
-강점:
-- ...
+병렬 clean-subagent 판정 workflow:
 
-주요 감점:
-- ...
+1. parent가 evaluation packet을 만든다: target skill, included files, rubric, allowed evidence, cap rules, JSON schema.
+2. parent가 D1-D8 dimension 또는 checklist group을 중복 없이 shard로 나눈다.
+3. shard judge는 배정된 shard만 평가하고 최종 총점, 최종 grade, 최종 global cap을 확정하지 않는다.
+4. parent가 shard JSON을 parse하고 score bounds, missing/duplicate criteria, evidence grounding, contradiction을 검증한다.
+5. parent가 local cap을 병합하고 global cap을 중앙에서 한 번 적용한다.
+6. parent가 최종 scorecard와 사람이 읽는 요약을 생성한다.
 
-적용된 cap/penalty:
-- ...
+## 10. 판정자 지침
 
-권장 수정:
-- ...
+LLM 또는 human reviewer가 비결정론적 기준을 평가할 때 다음 지침을 사용한다.
 
-검증/근거:
-- 평가 대상 파일: ...
-- 참조 파일 포함 여부: ...
-- confidence: ...
+1. clean context에서 평가한다. 현재 대화, memory, 구현 메모, 작성자 self-report를 사용하지 않는다.
+2. evaluation packet에 포함된 skill file, included files, deterministic checker output, rubric만 근거로 사용한다.
+3. 특정 repository/source family/local collection을 최고 기준로 취급하지 않는다.
+4. 총점을 결정하기 전에 checklist item을 먼저 채점한다.
+5. skill에 명시되지 않은 의도, 관행, 선의의 추정을 점수로 보상하지 않는다.
+6. 모든 issue에 대해 구체적인 path와 근거를 보고한다.
+7. 길이 자체, 전문 용어 자체, 멋진 표현 자체를 보상하지 않는다.
+8. workflow가 암시적이면 낮게 채점한다.
+9. 병렬화는 컨텍스트 오염 방지만 아니라 동시 처리 가능한 task의 속도 개선도 본다.
+10. 결정론적 부분을 agent reasoning에 맡기면 감점한다.
+11. 단계별 일회성 script 남발을 감점하고 공통 재사용 script 설계를 보상한다.
+12. criterion을 검증할 수 없으면 `unverified`로 표시하고 partial 또는 zero credit만 준다.
+13. shard judge는 자기 shard만 평가하고 최종 총점을 계산하지 않는다.
+
+## 11. JSON Scorecard 스키마
+
+```json
+{
+  "skill_path": "string",
+  "evaluated_at": "YYYY-MM-DDTHH:mm:ssZ",
+  "read_only": true,
+  "rubric_version": "agent-skill-quality-v1",
+  "judging_context": "clean_subagent | parallel_clean_subagents | same_context_exception",
+  "context_contamination_notes": "string",
+  "baseline_passing_score": 90,
+  "raw_total_score": 0,
+  "certification_score": 0,
+  "max_score": 100,
+  "pass": false,
+  "grade": "excellent | strong_not_passing | adequate | weak | unacceptable",
+  "hard_gates": [
+    {
+      "dimension_id": "D1",
+      "required_score": 13,
+      "actual_score": 0,
+      "passed": false,
+      "blocking_issues": ["string"]
+    }
+  ],
+  "global_caps_applied": [
+    {
+      "rule_id": "string",
+      "cap": 0,
+      "reason": "string",
+      "evidence": ["string"]
+    }
+  ],
+  "dimension_scores": [
+    {
+      "dimension_id": "D1",
+      "dimension": "Trigger & Scope Precision",
+      "score": 0,
+      "max_score": 15,
+      "gate_type": "hard | quality",
+      "checklist": [
+        {
+          "criterion_id": "string",
+          "score": 0,
+          "max_score": 0,
+          "deterministic": true,
+          "evidence": ["string"],
+          "paths": ["string"],
+          "comment": "string"
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "string",
+      "recommended_fixes": [
+        {
+          "priority": "high | medium | low",
+          "path": "string",
+          "action": "string"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "included_files": 0,
+    "reference_files": 0,
+    "template_files": 0,
+    "script_files": 0,
+    "checklist_items": 0,
+    "deterministic_items": 0,
+    "judge_only_items": 0
+  },
+  "issues": [
+    {
+      "id": "string",
+      "severity": "critical | high | medium | low | info",
+      "dimension_id": "string",
+      "rule": "string",
+      "path": "string",
+      "evidence": "string",
+      "recommendation": "string"
+    }
+  ],
+  "unverified": [
+    {
+      "area": "string",
+      "reason": "string"
+    }
+  ],
+  "next_actions": [
+    {
+      "priority": "high | medium | low",
+      "action": "string",
+      "paths": ["string"]
+    }
+  ]
+}
 ```
 
-## 11. Calibration Notes
+## 12. 보정 노트
 
-이 루브릭은 v1 초안이다. 실제 사용 전 다음 샘플로 calibration한다.
+Calibration에서는 source family를 최고 기준로 취급하지 않는다. 다음 sample을 최소 포함한다.
 
-- 매우 좋은 스킬 2개.
-- 평균적인 스킬 2개.
-- 그럴듯하지만 실행성 낮은 스킬 2개.
-- 위험 경계가 빠진 스킬 1개.
-- 너무 장황하거나 추상적인 스킬 1개.
+1. 실제로 agent 행동을 개선한 강한 skill.
+2. 평균적이지만 사용 가능한 skill.
+3. 길고 그럴듯하지만 실행성이 낮은 skill.
+4. approval boundary 또는 verification이 빠진 skill.
+5. trigger가 너무 넓거나 너무 좁은 skill.
+6. 특정 제품명/에이전트명에 과하게 묶인 skill.
+7. 큰 context 작업인데 parallel/subagent/intermediate artifact 전략이 없는 skill.
+8. 결정론적 처리와 비결정론적 추론을 구분하지 못하는 skill.
+9. 단계마다 일회성 script를 만드는 과잉 자동화 skill.
 
-Calibration에서는 다음을 확인한다.
+Calibration 질문:
 
-- 좋은 스킬이 높은 점수를 받는가?
-- 장황하지만 실행성 낮은 스킬이 과점되지 않는가?
-- approval/verification 누락이 cap으로 잡히는가?
-- 사용자 취향과 맞지 않는 스킬이 적절히 감점되는가?
-- judge 간 점수 차이가 5–8점 안에 들어오는가?
+- 강한 skill이 높은 점수를 받는가?
+- 장황하지만 non-operational한 skill이 cap으로 잡히는가?
+- approval/verification 누락이 hard gate에서 잡히는가?
+- source family 이름값이 점수에 영향을 주지 않는가?
+- 동시 처리가 가능한 task를 순차 처리하도록 만든 skill이 감점되는가?
+- 결정론적 처리와 비결정론적 추론의 분리 실패가 감점되는가?
+- 일회성 script 남발 대신 공통 재사용 script를 요구하는가?
+- judge 간 score variance가 5–8점 안에 들어오는가?

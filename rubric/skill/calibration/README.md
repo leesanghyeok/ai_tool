@@ -1,30 +1,31 @@
-# Skill Quality Rubric Calibration
+# Agent Skill 품질 루브릭 Calibration
 
 ## 목적
 
-이 디렉터리는 `/Users/stark/project/jarvis/ai_tool/rubric/skill/skill-quality-rubric-v1.md`의 calibration 결과를 보관하기 위한 공간이다.
+이 디렉터리는 `/Users/stark/project/jarvis/ai_tool/rubric/skill/skill-quality-rubric-v1.md`의 calibration 결과를 보관한다.
 
 canonical rubric과 calibration result를 분리한다.
 
-- Canonical rubric: 평가 기준, 배점, cap, judge instruction.
-- Calibration artifacts: 샘플 skill, judge output, human preference comparison, tuning notes.
+- Canonical rubric: 평가 기준, 배점, hard gate, cap, judge instruction, JSON scorecard schema.
+- Calibration artifacts: sample skill, deterministic checker output, judge output, human preference comparison, tuning notes.
+
+## Source family 원칙
+
+특정 repository/style/local collection은 최고의 기준이 아니라 calibration sample family다. 출처 이름값을 점수로 보상하지 않고, workflow가 명시적이고 재사용 가능하며 검증 가능한지만 본다.
 
 ## 초기 샘플 구성 계획
 
 최소 샘플 세트:
 
-1. 매우 좋은 스킬 2개.
-2. 평균적인 스킬 2개.
-3. 그럴듯하지만 실행성 낮은 스킬 2개.
-4. 위험 경계가 빠진 스킬 1개.
-5. 너무 장황하거나 추상적인 스킬 1개.
-
-레퍼런스 후보:
-
-- gstack 계열 skill: 실행성/operational workflow 기준.
-- superpower 계열 skill: agent behavior-shaping 기준.
-- mattpocock 계열 skill: concise, practical, coding-workflow 기준.
-- 현재 Hermes local skills: 실제 사용성/사용자 취향 적합성 기준.
+1. 실제로 agent 행동을 개선한 강한 skill.
+2. 평균적이지만 사용 가능한 skill.
+3. 길고 그럴듯하지만 실행성이 낮은 skill.
+4. approval boundary 또는 verification이 빠진 skill.
+5. trigger가 너무 넓거나 너무 좁은 skill.
+6. 특정 제품명/에이전트명에 과하게 묶인 skill.
+7. 큰 context 작업인데 parallel/subagent/intermediate artifact 전략이 없는 skill.
+8. 결정론적 처리와 비결정론적 추론을 구분하지 못하는 skill.
+9. 단계마다 일회성 script를 만드는 과잉 자동화 skill.
 
 ## 권장 artifact 구조
 
@@ -34,6 +35,7 @@ calibration/
   samples.jsonl
   runs/
     YYYYMMDD-HHMM/
+      deterministic_checks.jsonl
       scorecards.jsonl
       summary.md
       notes.md
@@ -45,8 +47,8 @@ calibration/
 {
   "sample_id": "string",
   "skill_path": "string",
-  "source_family": "hermes | gstack | superpower | mattpocock | other",
-  "expected_quality_band": "excellent | good | adequate | weak | poor | unknown",
+  "source_family": "local | external_repo | generated | other",
+  "expected_quality_band": "excellent | strong_not_passing | adequate | weak | unacceptable | unknown",
   "selection_reason": "string",
   "notes": "string"
 }
@@ -54,20 +56,32 @@ calibration/
 
 `scorecards.jsonl`은 `/Users/stark/project/jarvis/ai_tool/rubric/skill/score_schema.json`를 따른다.
 
+## Clean/parallel judging 절차
+
+1. parent가 sample별 evaluation packet을 만든다.
+2. deterministic criteria는 가능한 한 script/checker로 먼저 계산한다.
+3. 비결정론적 criteria는 clean judge 또는 parallel clean shard judge가 평가한다.
+4. shard judge는 자기 dimension/checklist만 평가한다.
+5. parent가 JSON parse, score bounds, missing/duplicate criteria, contradiction, local/global cap을 중앙에서 검증한다.
+6. same-context judging을 사용한 경우 `same_context_exception`으로 표시하고 오염 가능성을 기록한다.
+
 ## Calibration 질문
 
-- 좋은 스킬이 높은 점수를 받는가?
-- 장황하지만 실행성 낮은 스킬이 과점되지 않는가?
-- approval/verification 누락이 cap으로 잡히는가?
-- 사용자 취향과 맞지 않는 스킬이 적절히 감점되는가?
-- judge 간 점수 차이가 5–8점 안에 들어오는가?
-- global cap이 너무 자주 또는 너무 드물게 적용되지 않는가?
-- high score skill을 실제 task replay에 사용했을 때 agent 행동이 개선되는가?
+- 강한 skill이 높은 점수를 받는가?
+- verbose하지만 non-operational한 skill이 cap으로 잡히는가?
+- approval/verification 누락이 hard gate에서 잡히는가?
+- source family 이름값이 점수에 영향을 주지 않는가?
+- 동시 처리가 가능한 task를 순차 처리하도록 만든 skill이 감점되는가?
+- 결정론적 처리와 비결정론적 추론의 분리 실패가 감점되는가?
+- 일회성 script 남발 대신 공통 재사용 script를 요구하는가?
+- 한국어-first와 machine identifier 보존이 균형 있게 평가되는가?
+- judge 간 score variance가 5–8점 안에 들어오는가?
 
 ## Tuning 원칙
 
 - weak sample이 과점되면 weight보다 cap을 먼저 조정한다.
-- judge 간 variance가 크면 checklist recognition standard를 더 observable하게 쪼갠다.
-- 좋은 sample이 낮게 나오면 해당 sample의 실제 장점이 rubric 목적과 맞는지 먼저 확인한다.
+- judge variance가 크면 checklist recognition standard를 더 observable하게 쪼갠다.
+- 결정론적 처리에는 script 검증을 요구하고, 비결정론적 판단에는 evidence-backed reasoning을 요구한다.
+- script는 단계별 임시 조각보다 공통 재사용 단위로 설계되었는지 확인한다.
 - calibration example을 canonical rule 본문에 직접 섞지 않는다.
 - v1을 수정하면 rubric version을 올리고 이전 run 결과와 비교한다.
