@@ -40,6 +40,13 @@ Use this reference when a user asks to improve an agent skill so it passes a ski
    - Run syntax/format checks available for the files.
    - Parse JSON code blocks if schemas were added.
    - Re-score against the rubric and report hard-gate status.
+   - If the user asked for a target such as 100/100, do not stop at passing threshold. Re-run focused clean judges on any non-perfect dimension, patch the exact remaining checklist misses, and re-score until the target is reached or an explicit blocker remains.
+
+7. For Korean-first skill-quality remediation, check support files and templates, not only `SKILL.md`.
+   - Treat `references/`, `templates/`, and `scripts/` prose that a future agent reads as part of the skill package.
+   - Remove or translate English-only headings and report/template labels when the rubric rewards Korean-first human-facing prose.
+   - Preserve machine identifiers: paths, commands, JSON/YAML keys, enum values, CLI flags, API names, package names, and proper nouns.
+   - Run a deterministic heading/prose spot check where practical, then use clean judge re-scoring for the qualitative call.
 
 ## Common high-value remediation patterns
 

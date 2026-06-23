@@ -1,52 +1,59 @@
-# Cross-Session Feedback Harvest Notes
+# 과거 세션 피드백 수확 노트
 
-Use this reference when the user asks to review a date range of past sessions for missed feedback incidents, e.g. “6월 19일 이후 세션 전체를 돌려줘.”
+사용자가 “6월 19일 이후 세션 전체를 돌려줘”처럼 날짜 범위나 여러 과거 세션에서 누락된 feedback incident를 찾으라고 요청할 때 이 참고 문서를 사용한다.
 
-## Purpose
+## 목적
 
-A cross-session harvest is broader than the normal current-session harvest. It scans session history for user corrections, rework, verification failures, scope mismatches, and lightweight planning corrections that were not already logged under `raw/feedback/`.
+과거 세션 수확은 일반적인 현재 세션 수확보다 넓다. session history에서 사용자 정정, 재작업, 검증 실패, scope mismatch, 가벼운 planning correction을 찾아 이미 `raw/feedback/` 아래 기록된 사건과 비교한다.
 
-The output is still raw feedback logs: one incident, one Markdown file. Do not create concept pages or promoted rules during this pass.
+산출물은 여전히 raw feedback log다. 사건 하나마다 Markdown 파일 하나를 만들며, 이 단계에서 concept page, promoted rule, rubric page를 만들지 않는다.
 
-## Workflow
+## 절차
 
-1. Determine the time range and target feedback wiki.
-   - Default feedback destination remains `$HOME/wiki/raw/feedback` unless the user explicitly specifies another feedback wiki.
-   - Do not route feedback logs into a domain wiki just because `WIKI_DEFAULT` points there.
-2. Discover the session id/source for each candidate from the session database or runtime metadata.
-3. Build a candidate list from user messages containing correction/rework signals.
-   - Useful Korean signals: `아니`, `그게 아니라`, `잘못`, `빠졌`, `누락`, `틀렸`, `이상한데`, `아씨`, `오타`, `하지마`, `하면 안`, `절대`, `기본값`, `변수`, `직접`, `고쳐`, `수정`, `반영`, `피드백`, `기록`.
-   - Exclude automatic skill invocation prompts and normal approvals such as “응 진행해줘” unless the surrounding context shows prior correction.
-4. Shard the date range for parallel review when the candidate list is large.
-   - Have subagents return structured incident candidates only; the parent writes files after validation.
-   - Each candidate should include session_id, timestamp, slug, task_type, severity, categories, expected behavior, actual behavior, evidence excerpt, candidate rule, and checklist items.
-5. Compare against existing logs before writing.
-   - Search all `$WIKI/raw/feedback/**`, not just the current date directory.
-   - Compare slug, session_id, Situation, Expected Behavior, Evidence, and Candidate Agent Rule. Do not rely on filename alone.
-6. Normalize taxonomy before writing.
-   - `task_type` must be one of the skill taxonomy values. If a subagent proposes a compound value like `rubric-checker/verification`, map it to `review`, `planning`, `automation`, `research`, or `other`.
-   - `categories` must use the controlled taxonomy. Map one-off labels to existing categories instead of inventing new labels.
-7. Write each new incident as immutable Markdown with body-only `sha256`.
-8. Verify every new file: required frontmatter, controlled taxonomy, body hash, one incident per file, correct feedback path.
-9. Report created count, skipped duplicates, excluded candidates, severity/category distribution, and exact paths.
+1. **기간과 feedback wiki 경로를 확정한다.**
+   - 사용자가 다른 feedback wiki를 명시하지 않으면 기본 목적지는 `$HOME/wiki/raw/feedback`이다.
+   - `WIKI_DEFAULT`가 domain wiki를 가리킨다는 이유만으로 feedback log를 domain wiki에 넣지 않는다.
+2. **세션 후보를 수집한다.**
+   - session DB/search, platform link, runtime metadata에서 범위 내 session id와 source reference를 찾는다.
+   - secrets, credentials, unrelated private state는 읽지 않는다.
+3. **수정/불만족 신호가 있는 user message 후보를 추린다.**
+   - 유용한 한국어 신호: `아니`, `그게 아니라`, `잘못`, `빠졌`, `누락`, `틀렸`, `이상한데`, `아씨`, `오타`, `하지마`, `하면 안`, `절대`, `기본값`, `변수`, `직접`, `고쳐`, `수정`, `반영`, `피드백`, `기록`.
+   - 자동 skill invocation prompt나 “응 진행해줘” 같은 정상 승인은 주변 맥락에 prior correction이 있을 때만 후보로 본다.
+4. **후보가 많으면 기간 또는 session shard로 병렬 검토한다.**
+   - subagent는 structured incident candidate JSON만 반환한다.
+   - parent가 최종 taxonomy 정규화, 중복 검사, 파일 작성, 검증을 담당한다.
+   - 각 후보는 `session_id`, `timestamp`, `slug`, `task_type`, `severity`, `categories`, expected behavior, actual behavior, evidence excerpt, candidate rule, checklist items를 포함한다.
+5. **기존 로그와 비교한다.**
+   - 현재 날짜 폴더가 아니라 전체 `$WIKI/raw/feedback/**`를 검색한다.
+   - filename만 보지 말고 Situation, Expected Behavior, Evidence, Candidate Agent Rule의 의미를 비교한다.
+6. **taxonomy를 정규화한다.**
+   - `task_type`은 main skill의 controlled taxonomy 중 하나여야 한다.
+   - `categories`도 controlled taxonomy를 사용한다. subagent가 만든 one-off label은 기존 category로 mapping한다.
+7. **새 사건만 immutable Markdown으로 작성한다.**
+   - body-only `sha256`을 계산한다.
+   - 사건 하나에 파일 하나만 만든다.
+8. **각 파일을 검증한다.**
+   - required frontmatter, controlled taxonomy, body hash, one incident per file, feedback path를 확인한다.
+9. **최종 보고를 만든다.**
+   - 생성 수, 중복 skip 수, evidence 부족/비실패 제외 수, severity/category 분포, 실제 생성 경로를 보고한다.
 
-## Candidate categories that often appear in cross-session harvests
+## 자주 나오는 후보 패턴
 
-These are examples of patterns to classify with the existing taxonomy, not new category labels:
+아래는 새 category label이 아니라 기존 taxonomy로 분류해야 하는 예시다.
 
-- Raw vs derived layer confusion → `context-misread`, `requirement-miss`, `specificity`.
-- Formatting drift from a recurring report template → `format`, `requirement-miss`.
-- Aggressive default for side-effect automation → `decision-criteria`, `specificity`.
-- Mixing future workflow stages into current plan → `context-misread`, `requirement-miss`, `specificity`.
-- Synthetic examples used instead of actual independent outputs → `verification`, `context-misread`, `evidence`.
-- Threshold/gate validation not treated as failure → `verification`, `decision-criteria`.
-- Missing idempotency in batch logging → `requirement-miss`, `specificity`, `actionability`.
-- Checker passing while user-visible requirement was not checked → `verification`, `requirement-miss`, `format`.
+- raw layer와 derived layer 혼동 → `context-misread`, `requirement-miss`, `specificity`.
+- 반복 보고 template에서 format drift 발생 → `format`, `requirement-miss`.
+- side-effect automation 기본값이 공격적임 → `decision-criteria`, `specificity`.
+- 현재 plan에 미래 workflow stage를 섞음 → `context-misread`, `requirement-miss`, `specificity`.
+- 실제 독립 output 대신 synthetic example 사용 → `verification`, `context-misread`, `evidence`.
+- threshold/gate validation 실패를 실패로 처리하지 않음 → `verification`, `decision-criteria`.
+- batch logging에서 idempotency 누락 → `requirement-miss`, `specificity`, `actionability`.
+- checker는 통과했지만 user-visible requirement를 확인하지 않음 → `verification`, `requirement-miss`, `format`.
 
-## Pitfalls
+## 주의사항
 
-- Do not log every user message containing a keyword. A valid incident still needs identifiable expected behavior, actual behavior, concrete mismatch, evidence, and a reusable candidate rule.
-- Do not preserve subagent-invented taxonomy values in frontmatter. Normalize them before writing.
-- Do not treat historical feedback prompts generated by automation as user dissatisfaction; those are usually harvest invocations, not incidents.
-- Do not merge several sessions into one giant feedback file. Keep one incident per file.
-- Do not mark a candidate duplicate solely because it is thematically similar. If expected behavior and candidate rule differ, record it as a separate incident.
+- keyword가 있다는 이유만으로 모든 user message를 기록하지 않는다. 유효한 incident에는 expected behavior, actual behavior, concrete mismatch, evidence, reusable candidate rule이 필요하다.
+- subagent가 만든 taxonomy 값을 frontmatter에 그대로 쓰지 않는다. 작성 전에 controlled taxonomy로 정규화한다.
+- automation이 생성한 historical feedback prompt는 보통 user dissatisfaction이 아니라 harvest invocation이다.
+- 여러 session을 하나의 거대한 feedback 파일로 합치지 않는다.
+- 주제가 비슷하다는 이유만으로 duplicate 처리하지 않는다. expected behavior나 candidate rule이 다르면 별도 사건으로 기록한다.

@@ -590,6 +590,16 @@ JSON 출력 스키마:
 - Safety and reversibility.
 - Communication clarity.
 
+### Agent skill 품질 채점
+
+사용자가 특정 skill을 기존 skill-quality rubric으로 채점하라고 하면, rubric 설계가 아니라 rubric 적용 작업으로 처리한다. 이때 다음 절차를 따른다.
+
+1. 평가 대상은 기본적으로 `SKILL.md` 하나가 아니라 skill package 전체다. 같은 디렉터리의 `references/`, `templates/`, `scripts/`가 있으면 함께 읽고, 사용자가 명시적으로 제외하지 않는 한 점수 근거에 포함한다.
+2. 루브릭이 hard gate, local/global cap, certification score를 정의하면 `raw_total_score`와 cap 적용 후 `certification_score`를 분리해 보고한다.
+3. 한국어-first 또는 language-fit 기준이 있으면 main skill만 보지 말고 supporting docs의 heading/prose도 deterministic spot-check한다. Code fence, inline code, path, command, JSON/YAML key, enum, API name은 예외로 분리한다.
+4. D1-D8처럼 여러 차원이 있으면 가능하면 clean/parallel subagent shard로 나눠 판정하고, parent가 중앙에서 score bounds, 누락/중복 기준, cap 적용, hard-gate pass/fail을 검증한다.
+5. 최종 보고에는 `pass`, `raw_total_score`, `certification_score`, hard gate별 통과 여부, 적용 cap, 주요 evidence path/line, 우선 수정사항을 포함한다.
+
 ### 코드 구현 평가
 
 권장 차원:
