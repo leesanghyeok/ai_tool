@@ -60,3 +60,17 @@
 ## 출력 규칙
 
 반드시 valid JSON만 반환한다. Markdown fence, 설명 문장, 추가 commentary를 출력하지 않는다.
+
+## origin/main 병합 보강: Clean packet / shard 규칙
+
+판정자는 평가 packet에 포함된 다음 근거만 사용한다.
+
+1. 평가 대상 skill 본문.
+2. packet에 포함된 reference/template/script 파일 내용.
+3. deterministic checker output.
+4. canonical rubric: `/Users/stark/project/jarvis/ai_tool/rubric/skill/skill-quality-rubric-v1.md`.
+5. JSON schema: `/Users/stark/project/jarvis/ai_tool/rubric/skill/score_schema.json`.
+
+`parallel_clean_subagents`에서는 shard judge가 최종 `certification_score`, `grade`, `pass`, global cap을 확정하지 않는다. Shard judge는 배정된 D1-D8 checklist fragment와 evidence만 산출하고, parent가 중앙에서 parse, bounds, missing/duplicate criterion, cap, contradiction reconciliation을 수행한다.
+
+출력은 항상 `score_schema.json`에 맞춘다. 불확실하거나 packet에 없는 정보는 추정하지 말고 `unverified`와 `needs_human_review`에 반영한다.

@@ -76,3 +76,14 @@
 - canonical rubric에 D1-D8, hard gate, local cap, global cap, JSON scorecard schema가 있는지 확인.
 - judge prompt가 packet-only clean context를 요구하는지 확인.
 - calibration README가 source-family non-gold-standard와 deterministic/nondeterministic sample을 포함하는지 확인.
+
+## origin/main 병합 보강 계획
+
+`origin/main`에서 병합된 상세 계획은 다음 원칙으로 유지한다.
+
+- Hard/global cap 초안과 local cap 초안은 canonical rubric 본문과 schema에 동기화한다.
+- Calibration sample은 좋은 skill, 평균 skill, 그럴듯하지만 실행성 낮은 skill, 위험 경계 누락 skill, 장황/추상 skill, 특정 제품/에이전트에 과하게 묶인 skill, 병렬화 기회를 놓친 skill, deterministic/nondeterministic 처리를 혼동한 skill을 포함한다.
+- Source family는 정답 스타일이 아니라 분포 확인용 sample family로만 사용한다.
+- Judge 실행은 기본적으로 `clean_subagent`, 필요 시 `parallel_clean_subagents`이며, `same_context_exception`은 표준 결과로 확정하지 않는다.
+- JSON parse, schema validation, score aggregation, variance summary, cap consistency check는 반복 사용 가능한 검증 script로 둔다.
+- Task replay 검증으로 high-score skill이 실제 agent 행동을 개선하는지 확인한다.

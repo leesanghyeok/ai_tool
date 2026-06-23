@@ -412,3 +412,15 @@ Calibration 질문:
 - 결정론적 처리와 비결정론적 추론의 분리 실패가 감점되는가?
 - 일회성 script 남발 대신 공통 재사용 script를 요구하는가?
 - judge 간 score variance가 5–8점 안에 들어오는가?
+
+## origin/main 병합 보강: 실행/보정 원칙
+
+이 루브릭은 `origin/main`의 clean/parallel judging 원칙을 함께 따른다.
+
+- 판정 근거는 packet 내부 자료, canonical rubric, score schema, deterministic checker output으로 제한한다.
+- Local collection, source family, 유명 작성자, 자주 쓰였다는 사실은 점수 보상 근거가 아니다.
+- 플랫폼-specific skill은 플랫폼 고유 절차와 범용 절차를 분리했는지 본다.
+- 병렬화 항목은 context 오염 방지뿐 아니라 독립 작업 병렬화에 따른 wall-clock speed 개선 가능성도 평가한다.
+- Deterministic work(JSON parse, schema validation, aggregation, cap consistency)는 reusable script/checker로 처리되어야 한다.
+- Nondeterministic judgment(evidence 해석, 우선순위 판단, 모순 reconciliation)은 evidence-backed reasoning으로 남긴다.
+- Parallel shard 결과는 parent가 중앙에서 D1-D8 누락/중복, score bounds, hard gate, global cap, contradiction을 reconcile한다.

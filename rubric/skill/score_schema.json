@@ -23,7 +23,14 @@
     "counts",
     "issues",
     "unverified",
-    "next_actions"
+    "next_actions",
+    "skill_name",
+    "summary",
+    "top_strengths",
+    "critical_weaknesses",
+    "recommended_patches",
+    "needs_human_review",
+    "confidence"
   ],
   "properties": {
     "skill_path": {
@@ -48,7 +55,8 @@
       ]
     },
     "context_contamination_notes": {
-      "type": "string"
+      "type": "string",
+      "description": "Clean/parallel context 사용 여부, packet 외 정보 배제 여부, same-context 예외 사유 또는 shard 간 reconciliation notes."
     },
     "baseline_passing_score": {
       "type": "number",
@@ -57,19 +65,22 @@
     "raw_total_score": {
       "type": "number",
       "minimum": 0,
-      "maximum": 100
+      "maximum": 100,
+      "description": "Cap 적용 전 D1-D8 합산 점수."
     },
     "certification_score": {
       "type": "number",
       "minimum": 0,
-      "maximum": 100
+      "maximum": 100,
+      "description": "Hard gate와 global/local cap 적용 후 인증 판단에 사용하는 점수."
     },
     "max_score": {
       "type": "number",
       "const": 100
     },
     "pass": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "baseline_passing_score와 hard gate를 모두 만족하면 true."
     },
     "grade": {
       "type": "string",
@@ -420,6 +431,41 @@
           }
         }
       }
+    },
+    "skill_name": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "top_strengths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "critical_weaknesses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommended_patches": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "needs_human_review": {
+      "type": "boolean"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
     }
   }
 }

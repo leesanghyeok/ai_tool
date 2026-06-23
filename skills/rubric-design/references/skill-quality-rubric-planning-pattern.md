@@ -160,3 +160,13 @@ Check whether strong skills score high for the right reasons and whether verbose
 ## Reporting preference
 
 When the user asks for a plan first, produce a concise plan and wait for approval before writing files. Once approved for non-destructive scoped file creation or rewrite, back up existing artifacts, write the canonical files, and verify with file read-back plus JSON parse validation for schemas.
+
+## origin/main 병합 보강
+
+계획 단계에서 다음 항목을 빠뜨리지 않는다.
+
+- 병렬화 평가는 context hygiene뿐 아니라 독립 shard 병렬 실행으로 wall-clock time을 줄일 수 있는지도 본다.
+- 독립 shard는 병렬, 의존 단계는 순차라는 기준을 명시한다.
+- Deterministic work는 LLM judgment에 맡기지 않고 reusable script/checker로 처리한다.
+- Per-step one-off script 남발은 감점 또는 cap 사유로 둔다.
+- Calibration sample에는 병렬화 기회를 놓친 skill과 deterministic/nondeterministic 처리를 혼동한 skill을 포함한다.

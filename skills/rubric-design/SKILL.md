@@ -763,3 +763,12 @@ Local caps:
 - [ ] Persona/system-prompt evaluation에서 Hermes default profile을 평가할 때 active identity source인 `~/.hermes/SOUL.md`를 canonical prompt와 read-back check(hash/size)한다.
 - [ ] canonical persona source가 one-off score artifacts와 분리되어 있다. 특정 run result로 rubric을 덮어쓰지 않는다.
 - [ ] 반복 사용을 위한 calibration loop가 정의되어 있다.
+
+## origin/main 병합 보강
+
+루브릭 설계 시 다음 운영 원칙을 유지한다.
+
+- Judge run은 가능한 clean context에서 수행하고, 같은 컨텍스트 예외는 명시적으로 표시한다.
+- 큰 평가 대상은 `parallel_clean_subagents`로 shard하고 parent가 중앙에서 schema validation, aggregation, cap 적용, contradiction reconciliation을 수행한다.
+- Calibration artifact와 canonical rubric은 분리한다. Calibration sample family는 gold standard가 아니라 검증 분포다.
+- JSON key, enum, path, command, API name 같은 machine identifier는 번역하지 않는다.

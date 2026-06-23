@@ -85,3 +85,16 @@ calibration/
 - script는 단계별 임시 조각보다 공통 재사용 단위로 설계되었는지 확인한다.
 - calibration example을 canonical rule 본문에 직접 섞지 않는다.
 - v1을 수정하면 rubric version을 올리고 이전 run 결과와 비교한다.
+
+## origin/main 병합 보강
+
+이번 병합에서 `origin/main`의 calibration 운영 원칙을 보존한다.
+
+- Source family는 gold standard가 아니라 calibration sample family다. `local`, `gstack`, `superpower`, `mattpocock`, `other` 같은 분류는 이름값 보상이 아니라 분포 확인용으로만 사용한다.
+- Artifact에는 `shard_scorecards.jsonl`과 `schema_validation.txt`를 포함할 수 있다.
+- Clean judge는 packet, canonical rubric, score schema만 사용한다. 현재 대화, memory, 구현 노트, 작성자 self-report는 근거로 사용하지 않는다.
+- 큰 package, high-stakes sample, judge variance가 큰 sample은 `parallel_clean_subagents`로 나누고 parent가 중앙에서 JSON parse, score bounds, duplicate/missing criterion, cap 적용, contradiction reconciliation을 수행한다.
+- Deterministic checks(JSON parse, schema validation, bounds, cap consistency, aggregation)는 재사용 가능한 script/checker로 처리한다.
+- Nondeterministic checks(evidence 해석, 우선순위 판단, 모순 해석)는 judge reasoning으로 처리하되 evidence-backed여야 한다.
+- 플랫폼-specific skill은 플랫폼 고유 절차와 범용 절차를 분리했는지 평가한다.
+- 병렬화 평가는 context 오염 방지만 보지 않고, 독립 작업을 병렬화해 wall-clock time을 줄일 수 있었는지도 본다.
