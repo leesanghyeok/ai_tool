@@ -21,6 +21,7 @@
 - 최종 file write.
 - credential 사용.
 - production 또는 외부 system mutation.
+- 외부 배포, 자동 설치, registry publish.
 - 최종 완료 판정.
 
 ## 권장 sharding
@@ -39,12 +40,15 @@
 4. **templates draft agent**
    - 출력 템플릿과 skeleton 파일을 작성한다.
 
-5. **validator draft agent**
-   - deterministic validator script 초안을 작성한다.
+5. **validator/script draft agent**
+   - deterministic validator 또는 반복 workflow script 초안을 작성한다.
 
-6. **review agents**
+6. **trigger example draft agent**
+   - `should_trigger` / `should_not_trigger` 예시를 작성한다.
+
+7. **review agents**
    - 구조 review.
-   - 한국어/identifier 보존 review.
+   - 한국어/식별자 보존 review.
    - verification coverage review.
    - portability review.
 
@@ -56,14 +60,15 @@
 입력:
 - INPUT_SKILL_NAME: <name>
 - INPUT_SKILL_GOAL: <goal>
-- INPUT_TARGET_RUNTIME: <runtime>
 - INPUT_CONSTRAINTS: <constraints>
 - INPUT_ASSIGNED_OUTPUT: <assigned artifact>
 
 규칙:
 - 설명 prose는 한국어로 작성한다.
 - INPUT_, OUTPUT_, ENV_ 변수 규칙을 지킨다.
-- SKILL.md는 workflow 중심이어야 하며, 세부사항은 references/templates/scripts로 분리한다.
+- SKILL.md는 workflow 중심이어야 하며, 세부사항은 references/templates/scripts/history로 분리한다.
+- 가능한 deterministic workflow는 scripts/로 분리할 수 있게 설계한다.
+- should_trigger / should_not_trigger 예시는 현실적인 사용자 요청으로 작성한다.
 - machine-readable identifier는 번역하지 않는다.
 - 결과는 Markdown 초안 또는 review finding으로만 반환한다.
 - 파일을 직접 썼다고 주장하지 말고, parent가 검증할 수 있는 내용만 반환한다.
@@ -83,8 +88,9 @@ Parent agent는 subagent 결과를 self-report로 취급한다. 다음을 직접
 - YAML/JSON은 parse한다.
 - Markdown code fence balance를 확인한다.
 - `INPUT_`, `OUTPUT_`, `ENV_`가 실제 본문에 정의되어 있는지 확인한다.
-- `Commit Pitfalls`, `Verification Checklist`가 있는지 확인한다.
+- `Hard Gates`, `Commit Pitfalls`, `Verification Checklist`가 있는지 확인한다.
 - `SKILL.md`가 지나치게 상세해져 references 분리 원칙을 어기지 않는지 확인한다.
+- deterministic 반복 작업이 문서 prose에만 남아 있지 않은지 확인한다.
 - `git diff --check`와 `git status --short`를 확인한다.
 
 ## 병렬 review checklist
@@ -95,7 +101,7 @@ Parent agent는 subagent 결과를 self-report로 취급한다. 다음을 직접
 
 - 필수 섹션이 있는가.
 - workflow가 순서대로 실행 가능한가.
-- fast-fail과 verification이 분리되어 있는가.
+- hard gate, fast-fail, verification이 분리되어 있는가.
 
 ### 언어/identifier review
 
@@ -106,9 +112,10 @@ Parent agent는 subagent 결과를 self-report로 취급한다. 다음을 직접
 
 - 실제 실행 가능한 검증 명령이 있는가.
 - 검증 실패 시 영향과 recovery가 설명되는가.
+- 크기 제한과 trigger example 조건을 확인하는가.
 
 ### portability review
 
-- Hermes/Codex에 과하게 종속되지 않는가.
+- 특정 에이전트 실행 환경, 설치 방식, 외부 배포 방식에 불필요하게 종속되지 않는가.
 - support file 구조가 portable한가.
-- runtime reload 필요 여부를 과장하지 않는가.
+- 현재 세션에서 바로 load 가능하다고 과장하지 않는가.

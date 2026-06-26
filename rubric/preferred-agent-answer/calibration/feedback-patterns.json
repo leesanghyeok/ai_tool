@@ -1,0 +1,843 @@
+{
+  "generated_at": "2026-06-26T21:13:15+09:00",
+  "feedback_root": "/Users/stark/wiki/raw/feedback",
+  "source_file_count": 39,
+  "category_counts": {
+    "context-misread": 21,
+    "format": 5,
+    "tone": 1,
+    "requirement-miss": 27,
+    "specificity": 18,
+    "verification": 16,
+    "evidence": 4,
+    "overconfidence": 1,
+    "actionability": 6,
+    "decision-criteria": 5
+  },
+  "severity_counts": {
+    "low": 8,
+    "medium": 22,
+    "high": 8,
+    "critical": 1
+  },
+  "task_type_counts": {
+    "other": 2,
+    "coding": 2,
+    "automation": 15,
+    "planning": 13,
+    "summarization": 2,
+    "review": 4,
+    "research": 1
+  },
+  "pattern_groups": [
+    {
+      "pattern_id": "P1",
+      "failure_pattern": "명시 요구사항 또는 핵심 deliverable 누락",
+      "source_categories": [
+        "requirement-miss"
+      ],
+      "evidence_count": 27,
+      "positive_preference": "답변은 사용자의 명시 요구사항, 산출물, 제약을 빠짐없이 체크리스트화하고 실제 출력에 반영해야 한다.",
+      "rubric_dimension": "D1 요구사항·의도 정합성"
+    },
+    {
+      "pattern_id": "P2",
+      "failure_pattern": "사용자 의도, 범위, reference/dependency 경계 오독",
+      "source_categories": [
+        "context-misread"
+      ],
+      "evidence_count": 21,
+      "positive_preference": "답변은 현재 요청의 의도와 승인된 scope를 좁게 해석하고, 참고자료를 직접 의존성으로 과잉 변환하지 않아야 한다.",
+      "rubric_dimension": "D1 요구사항·의도 정합성 / D3 승인·scope·안전 경계"
+    },
+    {
+      "pattern_id": "P3",
+      "failure_pattern": "실행·검증 없이 결론 또는 완료 주장",
+      "source_categories": [
+        "verification",
+        "evidence"
+      ],
+      "evidence_count": 20,
+      "positive_preference": "답변은 live evidence, read-back, parse/lint/test, API/UI/log output 같은 실제 검증 근거로 결론을 뒷받침해야 한다.",
+      "rubric_dimension": "D2 근거·검증·완료 주장"
+    },
+    {
+      "pattern_id": "P4",
+      "failure_pattern": "generic하거나 현재 환경에 맞지 않는 조언",
+      "source_categories": [
+        "specificity"
+      ],
+      "evidence_count": 18,
+      "positive_preference": "답변은 현재 파일, repo, OS/runtime, tool, 배포/게시 target, 사용자의 workflow에 맞춘 구체적 행동으로 내려와야 한다.",
+      "rubric_dimension": "D4 구체성·맥락 적용·실행 가능성"
+    },
+    {
+      "pattern_id": "P5",
+      "failure_pattern": "승인 전 실행, 승인 범위 밖 state write, 외부 게시/자동화 기준 누락",
+      "source_categories": [
+        "requirement-miss",
+        "context-misread",
+        "verification"
+      ],
+      "evidence_count": null,
+      "positive_preference": "답변은 plan/approval/execution/verification을 분리하고 위험 행동 전 target·account·body·scope·approval을 확인해야 한다.",
+      "rubric_dimension": "D3 승인·scope·안전 경계"
+    },
+    {
+      "pattern_id": "P6",
+      "failure_pattern": "판단 기준·tradeoff·알림/릴리즈 기준 불명확",
+      "source_categories": [
+        "decision-criteria"
+      ],
+      "evidence_count": 5,
+      "positive_preference": "추천·분류·게시 여부·릴리즈 여부 같은 판단에는 명시적 criteria, threshold, 제외 조건, tradeoff가 있어야 한다.",
+      "rubric_dimension": "D5 판단 품질·decision criteria"
+    },
+    {
+      "pattern_id": "P7",
+      "failure_pattern": "요청한 형식, Korean-first, machine identifier 보존 경계 미준수",
+      "source_categories": [
+        "format",
+        "tone"
+      ],
+      "evidence_count": 6,
+      "positive_preference": "답변은 한국어 우선, 결론 먼저, bullet 중심, terminal-friendly 형식을 유지하되 path/key/command/API/enum은 원문으로 보존해야 한다.",
+      "rubric_dimension": "D6 보고 형식·언어·가독성"
+    },
+    {
+      "pattern_id": "P8",
+      "failure_pattern": "실패 원인·영향·복구 경로 분리 부족",
+      "source_categories": [
+        "actionability",
+        "verification"
+      ],
+      "evidence_count": 6,
+      "positive_preference": "실패 시 command/tool/error, 확인된 원인과 추정, 영향, 복구 행동, 미검증 항목을 분리 보고해야 한다.",
+      "rubric_dimension": "D7 실패 처리·복구 제안"
+    }
+  ],
+  "source_logs": [
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-19/014738-1517208113118318595-overtranslated-structural-headings.md",
+      "title": "피드백 로그: 구조용 제목까지 과하게 번역함",
+      "severity": "low",
+      "categories": [
+        "context-misread",
+        "format",
+        "tone"
+      ],
+      "task_type": "other",
+      "expected_behavior": "기술 문서나 반정형 Markdown 파일을 한국어화할 때는 구조용 제목, 스키마 용어, 태그 분류 라벨, 슬러그, YAML 키, 도구가 읽는 관례는 사용자가 명시적으로 번역하라고 하지 않는 한 보존해야 한다. 대신 사람이 읽는 설명 본문은 한국어로 번역해 사용자가 편하게 읽을 수 있게 해야 한다.",
+      "dissatisfaction": "한국어화 요청을 너무 넓게 해석했다. 사용자는 섹션명과 `Domain` 같은 구조용 라벨은 영어로 남겨도 되고, 사람이 읽는 설명 본문이 한국어면 된다고 정정했다.",
+      "candidate_rule": "",
+      "candidate_checklist_items": [
+        "번역 또는 기록 전에 사람이 읽는 본문과 구조/도구용 라벨을 구분한다.",
+        "YAML 키, 고정 enum 값, 슬러그, 파일 경로, 태그, 표준 섹션명은 기본적으로 보존한다.",
+        "한국어 대화에서 피드백 로그를 작성할 때 본문 설명과 후보 규칙은 한국어로 쓴다.",
+        "사용자가 “읽을 수 있게”라고 말하면 전체 기계 판독 형식 번역이 아니라 사람이 읽는 설명의 한국어화를 우선한다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-21/134153-unknown-session-misplaced-codex-script.md",
+      "title": "Feedback Log: Codex-Specific Script Left in Shared Skill Layout",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "context-misread",
+        "specificity"
+      ],
+      "task_type": "coding",
+      "expected_behavior": "",
+      "dissatisfaction": "",
+      "candidate_rule": "",
+      "candidate_checklist_items": [
+        "플랫폼별 디렉토리에 남기는 파일이 실제로 해당 플랫폼 전용인지 확인한다.",
+        "스킬, 템플릿, 스크립트, 검증 문서 등 재사용 가능한 파일은 공통 상위 디렉토리 후보로 검토한다.",
+        "“호환 어댑터 유지”와 “공통 유틸리티 위치”를 분리해서 설명한다.",
+        "사용자 요청이 “범용 포맷”이면 디렉토리명뿐 아니라 설치/링크/검증 경로까지 범용성 기준으로 점검한다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-21/141259-unknown-session-missing-routing-verification.md",
+      "title": "Feedback Log: Missing Skill Routing Verification",
+      "severity": "high",
+      "categories": [
+        "verification",
+        "requirement-miss",
+        "context-misread"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "",
+      "dissatisfaction": "",
+      "candidate_rule": "",
+      "candidate_checklist_items": [
+        "For duplicate skill names, run `skill_view(<name>)` and confirm the returned `skill_dir`.",
+        "Confirm the active scanner candidates include only the intended skill path.",
+        "Do not treat `hermes skills list` status/source columns as sufficient routing verification.",
+        "If a disable rule is name-based, check whether it unintentionally disables all same-name candidates."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-21/143622-20260621_141850_dedc2a-hard-coded-runtime-session-id.md",
+      "title": "피드백 로그: 세션 ID 수정을 특정 런타임에만 맞춤",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "specificity",
+        "requirement-miss"
+      ],
+      "task_type": "coding",
+      "expected_behavior": "기존의 “best available conversation/session/thread identifier” 원칙은 유지하면서, `unknown-session`으로 fallback하기 전에 플랫폼 id, 런타임 환경변수, 안전한 메타데이터/status 명령을 순서대로 확인하는 범용 탐색 절차를 제안했어야 했다. 특정 런타임 변수는 후보 중 하나로만 다루고, 스킬 자체는 공유 가능한 방식으로 유지해야 했다.",
+      "dissatisfaction": "초기 제안이 특정 런타임에 과하게 종속됐다. 이 저장소의 스킬은 Codex, Claude CLI, Hermes 등 여러 환경에서 사용할 수 있어야 하므로, `session_id` 문제를 특정 환경변수 하나로 해결하려 하기보다 현재 실행 환경에서 세션 식별자를 탐색하는 절차를 추가했어야 했다.",
+      "candidate_rule": "",
+      "candidate_checklist_items": [
+        "스킬이 Hermes/Codex/Claude CLI 등 여러 런타임에서 공유되는지 확인한다.",
+        "특정 환경변수나 CLI 명령은 “후보”로만 다루고 스킬 규칙의 중심으로 고정하지 않는다.",
+        "기존 추상 규칙을 제거하기보다, 그 규칙을 실행하는 탐색 절차를 추가한다.",
+        "`unknown-session` 같은 fallback을 쓰기 전에 플랫폼 id, 런타임 env, 안전한 metadata/status를 확인하도록 문서화한다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-21/152552-20260621_151815_34fc37-unsafe-artifact-storage.md",
+      "title": "Feedback Log: Unsafe Artifact Storage and Mixed Rubric Results",
+      "severity": "high",
+      "categories": [
+        "requirement-miss",
+        "context-misread",
+        "verification"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "",
+      "dissatisfaction": "",
+      "candidate_rule": "",
+      "candidate_checklist_items": [
+        "사용자가 저장 위치를 명시하지 않은 산출물은 repo/skill 관리 공간 밖에 생성했는가?",
+        "파일 생성 후 관련 repo에서 `git status` 또는 파일 검색으로 커밋 대상이 아님을 확인했는가?",
+        "재사용 기준 문서와 샘플/예상 점수/결과표를 별도 파일로 분리했는가?",
+        "사용자가 “계속 사용할 문서”라고 표현한 산출물은 결과 로그나 캘리브레이션 데이터와 섞지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-21/203617-20260621_155317_b5b241-executed-before-plan-approval.md",
+      "title": "Feedback Log: Executed File Edits Before Final Plan Approval",
+      "severity": "critical",
+      "categories": [
+        "requirement-miss",
+        "context-misread"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "사용자가 계획의 누락점을 지적하면, 에이전트는 수정된 최종 plan을 다시 제시하고 “이 계획으로 실행해도 될까요?”처럼 명시적 승인을 받아야 했다. 파일 수정, 검증 명령 실행, README/SKILL.md 변경은 최종 승인 이후에만 해야 했다.",
+      "dissatisfaction": "에이전트가 사용자의 작업 방식 요구사항을 어기고 최종 plan 승인 절차를 건너뛰었다. 사용자의 피드백은 계획 보완 요청이었지 실행 승인으로 볼 수 없었는데, 이를 승인으로 오해해 repo 파일을 변경했다.",
+      "candidate_rule": "사용자가 계획을 요청한 작업에서는 계획 피드백이나 보완 요청을 실행 승인으로 간주하지 말고, 수정된 최종 plan을 다시 제시한 뒤 명시적 최종 승인을 받아야 파일 수정이나 명령 실행을 시작한다.",
+      "candidate_checklist_items": [
+        "사용자의 원래 요청이 “계획”인지 “실행”인지 확인했다.",
+        "계획에 대한 피드백/보완 요청을 실행 승인으로 해석하지 않았다.",
+        "최종 plan을 다시 제시하고 명시적인 실행 승인을 받았다.",
+        "승인 전에는 repo 파일 수정, 검증 명령 실행, 외부 side effect를 만들지 않았다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-22/040446-20260621_083546_066dacf2-insufficient-session-verification.md",
+      "title": "Feedback Log: Insufficient Session Verification Before Warning Analysis",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "evidence",
+        "overconfidence"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "경고 원인 분석 전에 live AgentMemory export와 Hermes session store를 올바르게 매칭해, `Hermes finalized=true`이면서 `AgentMemory active`인 세션 수를 먼저 검증했어야 한다. 검증이 불완전하면 “아직 실제 세션 검토 전”이라고 명시하고 결론을 유보해야 했다.",
+      "dissatisfaction": "초기 분석은 “장기 active 세션이 아직 실제로 그런지”에 대한 핵심 검증이 부족했다. 사용자는 경고가 의미 있는지 판단하려고 했는데, agent가 실제 세션 매칭을 충분히 끝내기 전에 원인과 계획을 제시해 evidence gap이 생겼다.",
+      "candidate_rule": "운영 경고의 의미를 분석할 때는 진단 출력만 보지 말고, 경고가 가리키는 live source of truth를 직접 매칭·검증한 뒤 결론을 말해야 한다.",
+      "candidate_checklist_items": [
+        "경고가 가리키는 원천 상태를 live export/API/file에서 직접 확인했다.",
+        "서로 다른 저장소의 ID 매칭 로직을 검증하고, 매칭 실패가 parsing 오류인지 확인했다.",
+        "검증이 끝나지 않은 항목은 결론 대신 “미검증/보류”로 표시했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-22/040451-20260621_084014_09319e13-unapproved-extra-state-write.md",
+      "title": "Feedback Log: Unapproved Extra State Write Attempt",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "verification"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "승인된 삭제와 read-back 검증까지만 수행하고, 추가 audit/metadata/state write가 필요하면 별도 변경 범위로 사용자 승인을 먼저 받아야 했다. 승인 대기에서 차단된 작업은 최종 보고에도 명확히 포함해야 했다.",
+      "dissatisfaction": "사용자가 승인한 범위는 stale 항목 삭제였는데, 삭제 이후 추가적인 audit state write를 시도했다. 해당 명령은 승인 대기에서 차단되었지만, 승인 범위 밖의 추가 상태 변경을 시도한 점은 scope mismatch에 해당한다.",
+      "candidate_rule": "사용자가 특정 삭제/수정 범위만 승인한 경우, audit/metadata/backfill 같은 추가 state write도 별도 mutation으로 간주해 사전 승인을 받거나 수행하지 않았음을 최종 보고에 명시해야 한다.",
+      "candidate_checklist_items": [
+        "승인된 mutation scope와 추가로 수행하려는 state write가 같은 범위인지 확인했다.",
+        "승인 대기 또는 차단된 명령이 있으면 최종 보고의 `변경 안 함/blocked`에 포함했다.",
+        "삭제 검증은 read-back 결과로 완료하고, 보조 audit write 실패를 성공 처리로 숨기지 않았다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-22/040522-20260621_163037_118ddae2-extra-slot-column-format.md",
+      "title": "Feedback Log: Extra Slot Column In Vending Transfer List",
+      "severity": "low",
+      "categories": [
+        "format",
+        "specificity"
+      ],
+      "task_type": "other",
+      "expected_behavior": "이동/피킹 목록은 기본적으로 `가져갈 상품`과 `수량` 중심으로 제공하고, 슬롯/열 정보는 사용자가 요청하거나 보충 작업 순서가 필요한 경우에만 별도 상세로 제공해야 했다.",
+      "dissatisfaction": "사용자가 원한 핵심 산출물은 이동할 재고의 상품명과 수량이었는데, 추가 슬롯 컬럼이 들어가 후속 수정 요청이 필요했다.",
+      "candidate_rule": "이동/피킹 목록 요청에는 기본적으로 상품명과 수량만 포함하고, 위치·슬롯·열 정보는 사용자가 요청한 경우에만 추가한다.",
+      "candidate_checklist_items": [
+        "목록 요청의 기본 표가 사용자가 명시한 목적에 필요한 최소 컬럼만 포함한다.",
+        "위치/슬롯 정보가 필요하면 별도 상세 섹션으로 분리하거나 사용자 요청 여부를 확인했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-22/040523-20260621_125901_993bed8b-generic-automation-section.md",
+      "title": "Feedback Log: Generic Automation Section Needed Replacement",
+      "severity": "medium",
+      "categories": [
+        "specificity",
+        "actionability"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "AX/업무 리포트는 단순 자동화 사례 나열보다, AI에게 배경·목표·제약·자료·판단 기준·예시·검증 기준을 어떻게 전달했는지와 그 효과를 사례 중심으로 보여줘야 했다.",
+      "dissatisfaction": "업무자동화 사례 섹션이 너무 일반적이고 뻔하게 느껴져, 사용자가 원하는 더 실전적인 학습 포인트인 “AI에게 업무 컨텍스트를 잘 넘기는 법”을 충분히 다루지 못했다.",
+      "candidate_rule": "반복 리포트의 섹션이 사용자가 “뻔하다”고 지적한 경우, 단순 주제명만 바꾸지 말고 선별 기준·수집 키워드·출력 템플릿까지 함께 바꿔 더 구체적인 재현 포인트가 나오게 해야 한다.",
+      "candidate_checklist_items": [
+        "사용자가 제거하라고 한 섹션명이 prompt/template에 더 이상 남아 있지 않다.",
+        "대체 주제가 선별 기준과 출력 템플릿에 모두 반영되어 있다.",
+        "수집 또는 후보 scoring 로직도 새 주제의 신호를 잡도록 조정되어 있다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-22/040623-20260621_132151_b6209503-invalid-external-skills-config.md",
+      "title": "Feedback Log: External Skills Path Config Needed Rework",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "requirement-miss"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "사용자가 지정한 외부 스킬 경로를 Hermes 설정에 올바른 형식으로 추가하고, 즉시 Hermes가 새 스킬을 인식하는지 검증해야 했다.",
+      "dissatisfaction": "명시적으로 외부 스킬 경로 추가를 요청받았는데, 첫 설정 값이 Hermes가 기대한 형태로 적용되지 않아 즉시 성공하지 못했고 추가 재작업이 필요했다.",
+      "candidate_rule": "Hermes config 값을 CLI로 설정한 뒤에는 YAML 표현만 보지 말고 실제 기능 명령으로 검증하며, list/dict 설정에서 JSON 문자열로 저장되는지 주의한다.",
+      "candidate_checklist_items": [
+        "Hermes config set 후 `config.yaml`의 타입/표현이 의도와 맞는지 확인했다.",
+        "설정 변경의 실제 효과를 `hermes skills list` 같은 기능 명령으로 확인했다.",
+        "검증 실패 시 최종 성공만 보고하지 않고 재작업 원인을 feedback 후보로 남겼다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/002843-20260623_000102_29f312-overly-domain-specific-skill-plan.md",
+      "title": "Feedback Log: Overly Domain-Specific Skill Plan",
+      "severity": "high",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "현재 작업 이력은 참고만 하고, 사용자가 원하는 추상화 수준을 먼저 반영해 범용 skill 목적·변수·루프·raw-only 규칙을 계획했어야 한다.",
+      "dissatisfaction": "사용자가 의도한 핵심은 “루브릭 미달 → 자료 수집 → wiki 전문화 → 새 질문 재평가 반복”이었는데, agent가 최근 작업 맥락인 marketing-wiki 수집 절차에 과적합해 범용 workflow를 잘못 좁혔다.",
+      "candidate_rule": "최근 작업 맥락에서 skill을 만들 때는 특정 프로젝트 절차를 그대로 skill화하기 전에, 사용자가 원하는 추상화 수준과 재사용 범위를 명시적으로 분리해 계획해야 한다.",
+      "candidate_checklist_items": [
+        "Skill 목적이 최근 프로젝트명/도메인에 과적합되어 있지 않은지 확인한다.",
+        "사용자가 설명한 “이 skill의 진짜 목적” 문장을 한 줄 정의에 그대로 반영한다.",
+        "프로젝트 고유 폴더나 스크립트는 확정 요구가 있을 때만 skill 본문에 넣는다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/002844-20260623_000102_29f312-missing-agent-isolation-rule.md",
+      "title": "Feedback Log: Missing Agent Isolation Rule in Rubric Loop",
+      "severity": "high",
+      "categories": [
+        "requirement-miss",
+        "context-misread",
+        "verification"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "계획 단계부터 Agent Isolation Rule을 hard rule로 두고, 질문 생성 agent, 질문별 answer agent, 답변별 judge agent, parent orchestrator의 역할과 금지를 분리했어야 한다.",
+      "dissatisfaction": "사용자는 한 컨텍스트에서 질문·답변·채점이 섞이면 평가 오염이 발생하므로 “절대안돼”라고 정정했다. 이 규칙은 workflow의 핵심 안전장치였는데 초기 계획에서 빠졌다.",
+      "candidate_rule": "평가/캘리브레이션 workflow를 설계할 때 질문 생성, 답변 생성, 채점은 독립 신규 에이전트로 분리하는지 먼저 확인하고, 같은 컨텍스트 결합을 금지 규칙으로 명시해야 한다.",
+      "candidate_checklist_items": [
+        "질문 생성 agent가 답변하거나 채점하지 않도록 금지했는가?",
+        "답변 agent가 루브릭을 보지 않고 자기 답변을 채점하지 않도록 금지했는가?",
+        "judge agent가 답변 수정이나 새 근거 추가를 하지 않도록 금지했는가?",
+        "parent agent의 역할을 orchestration/검증/평균 계산으로 제한했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/002845-20260623_000102_29f312-wrong-skill-target-path.md",
+      "title": "Feedback Log: Wrong Skill Target Path",
+      "severity": "high",
+      "categories": [
+        "context-misread",
+        "verification",
+        "requirement-miss"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "사용자 응답이 모호하고 live evidence가 충돌하면, 존재하는 `jarvis` 경로와 사용자가 적은 `jarvice` 문자열 중 어느 것을 사용할지 다시 확인하거나, 명시적으로 존재하는 skill root를 선택해야 했다.",
+      "dissatisfaction": "live check에서 `jarvice` 경로는 없고 `jarvis` 경로가 존재한다는 증거가 있었는데도, 모호한 사용자 응답을 잘못 해석해 새 잘못된 디렉터리를 만들었다.",
+      "candidate_rule": "파일 생성 대상 경로에서 사용자 문구와 live filesystem evidence가 충돌하거나 유사 경로가 있으면, 특히 새 디렉터리 생성 전에는 정확한 경로를 재확인해야 한다.",
+      "candidate_checklist_items": [
+        "대상 parent directory가 존재하는지 확인했는가?",
+        "비슷한 이름의 기존 경로가 있으면 어느 쪽이 의도인지 확인했는가?",
+        "존재하지 않는 새 root를 만들기 전에 사용자의 명시 확인을 받았는가?",
+        "생성 후 잘못된 경로에 파일이 남지 않았는지 검증했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/010842-20260623_000102_29f312-reference-treated-as-dependency.md",
+      "title": "Feedback Log: Reference Treated as Dependency",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "사용자가 “패턴을 참고하라”고 한 경우에는 패턴만 추상화해 반영하고, 직접 호출·명시 의존·필수 단계로 쓸지 여부는 별도 명시 요청이 있을 때만 계획에 넣어야 했다.",
+      "dissatisfaction": "사용자가 의도한 것은 패턴 차용이었지만 agent는 명시 의존/직접 사용으로 해석했다. 그대로 두면 새 skill이 불필요하게 특정 skill에 묶이고, 사용자가 원하는 독립 workflow 문서가 되지 않는다.",
+      "candidate_rule": "사용자가 스킬·문서·과거 사례를 “참고”하라고 하면, 직접 의존성으로 명시할지 여부를 따로 확인하고 명시 요청 없이는 패턴만 추상화해 반영한다.",
+      "candidate_checklist_items": [
+        "사용자의 “참고”가 직접 실행/호출/의존을 뜻하는지 확인했다.",
+        "skill 본문에 불필요한 related skill 또는 호출 단계를 넣지 않았다.",
+        "참고한 패턴은 독립 workflow 규칙으로 재작성했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/010843-20260623_000102_29f312-missing-defaults-and-variables.md",
+      "title": "Feedback Log: Missing Defaults and Variables in Skill Plan",
+      "severity": "low",
+      "categories": [
+        "requirement-miss",
+        "decision-criteria",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "반복 실행 skill을 계획할 때는 `question_count`, `target_average`, `max_iterations`, batch size처럼 실행마다 달라질 수 있는 값을 변수로 분리하고 합리적 기본값을 명시했어야 한다.",
+      "dissatisfaction": "가벼운 planning correction이지만 반복 workflow skill에서는 기본값/변수 경계가 명확하지 않으면 future run에서 고정값처럼 오해되거나 매번 사용자가 다시 지정해야 한다.",
+      "candidate_rule": "반복 workflow, skill, config, automation을 계획할 때 종료조건·질문 수·iteration 수·batch size처럼 실행마다 바뀌는 값은 변수로 분리하고 기본값을 명시한다.",
+      "candidate_checklist_items": [
+        "종료조건 값이 변수로 분리되어 있다.",
+        "질문 수/반복 수/batch size 같은 실행 파라미터에 기본값이 있다.",
+        "고정 규칙과 조정 가능한 변수가 분리되어 있다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012201-20260619_004839_a87a6af4-raw-feedback-rejected-as-wiki-data.md",
+      "title": "Feedback Log: AI 품질 개선 피드백 루프 — raw-feedback-rejected-as-wiki-data",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "원본 로그는 raw/feedback 같은 원자료 계층에 저장 가능하다고 먼저 인정하고, 정제/승격 위치를 별도로 설명했어야 한다.",
+      "dissatisfaction": "raw 계층과 정제 지식 계층을 구분하지 않고 Wiki 전체에 넣는 것처럼 뭉뚱그려 판단했다.",
+      "candidate_rule": "Wiki나 지식베이스를 논할 때는 raw 계층과 정제 지식 계층을 분리해서 판단한다.",
+      "candidate_checklist_items": [
+        "원본 데이터 저장 위치와 정제 지식 페이지 저장 위치를 분리했는가?",
+        "raw 데이터 성격을 Wiki 전체가 아니라 raw/ 계층 기준으로 해석했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012202-20260619_004839_a87a6af4-raw-feedback-status-fields.md",
+      "title": "Feedback Log: AI 품질 개선 피드백 루프 — raw-feedback-status-fields",
+      "severity": "low",
+      "categories": [
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "raw feedback 로그에는 사건 당시 원본 기록만 포함하고, status/derived_pages/processing_status 등 사후 처리 상태는 분리했어야 한다.",
+      "dissatisfaction": "raw 프로퍼티에 상태를 두는 것은 raw 기본 원칙을 위반한다고 사용자가 정정했다.",
+      "candidate_rule": "raw 로그 스키마에는 원본 사건 기록 필드만 넣고 처리 상태·승격 여부·분석 결과는 derived layer로 분리한다.",
+      "candidate_checklist_items": [
+        "raw 파일에 status/processing/derived destination 필드를 넣지 않았는가?",
+        "사건 원본 기록과 사후 처리 메타데이터를 분리했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012203-20260620_081238_26c0d26d-missed-required-report-format.md",
+      "title": "Feedback Log: 정규 포맷 변환 요청 — missed-required-report-format",
+      "severity": "low",
+      "categories": [
+        "format",
+        "requirement-miss",
+        "context-misread"
+      ],
+      "task_type": "summarization",
+      "expected_behavior": "반복 루틴/정기 보고에서는 이전 성공 리포트의 섹션, 이모지, 항목 순서, 필드 표현을 템플릿으로 유지했어야 한다.",
+      "dissatisfaction": "사용자는 최근 채널 메시지의 예시 포맷을 제시하며 같은 포맷으로 재작성을 요청했다.",
+      "candidate_rule": "반복 운영 리포트는 새 요약 포맷을 만들지 말고 기존 성공 포맷을 템플릿으로 재사용한다.",
+      "candidate_checklist_items": [
+        "반복 보고 작업에서 이전 성공 포맷을 확인했는가?",
+        "섹션 순서, 이모지, 항목명, 필드 표현을 기준 예시와 맞췄는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012204-20260621_133458_188f0f-overaggressive-auto-sync-frequency.md",
+      "title": "Feedback Log: 파일 변경 자동 커밋 푸시 — overaggressive-auto-sync-frequency",
+      "severity": "low",
+      "categories": [
+        "decision-criteria",
+        "specificity"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "사이드이펙트가 큰 반복 자동화는 보수적 기본 주기를 제안하고, 주기를 변수로 분리해 확인했어야 한다.",
+      "dissatisfaction": "사용자는 이 프로젝트는 변경 주기가 빠르지 않으므로 5분은 너무 잦고 1시간에 한 번이면 충분하다고 정정했다.",
+      "candidate_rule": "반복 side effect 자동화는 공격적인 기본 주기를 피하고 주기·대상·범위를 명시 변수로 확인한다.",
+      "candidate_checklist_items": [
+        "반복 자동화의 주기 값이 프로젝트 변경 빈도에 비례하는가?",
+        "side effect가 큰 작업에서 너무 잦은 기본값을 제안하지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012205-20260621_141838_d4a1b7-mixed-wiki-generation-into-rubric-plan.md",
+      "title": "Feedback Log: 마케팅 전문가 위키 루브릭 설계 — mixed-wiki-generation-into-rubric-plan",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "현재 요청의 활성 범위가 루브릭 생성인지 wiki 생성인지 분리하고, 샘플 수/생성 기준을 명시했어야 한다.",
+      "dissatisfaction": "루브릭 생성과 wiki 생성을 단계적으로 분리하려 했는데 agent가 wiki 생성 작업을 섞어 scope를 넓혔다.",
+      "candidate_rule": "사용자가 workflow 단계를 분리하면 현재 단계에 미래 단계 artifact를 끌어오지 않는다.",
+      "candidate_checklist_items": [
+        "현재 task scope와 future/background task를 분리했는가?",
+        "사용자가 명시한 샘플 수를 보존했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012206-20260621_141838_d4a1b7-imagined-samples-instead-of-real-new-session-calibration.md",
+      "title": "Feedback Log: 마케팅 전문가 위키 루브릭 설계 — imagined-samples-instead-of-real-new-session-calibration",
+      "severity": "high",
+      "categories": [
+        "verification",
+        "context-misread",
+        "evidence"
+      ],
+      "task_type": "review",
+      "expected_behavior": "검증 대상이 실제 신규 세션 응답인지 합성 샘플인지 먼저 확정하고, 실제 출력 수집 후 채점해야 했다.",
+      "dissatisfaction": "실제 신규 세션 답변이 목표 점수 미만인지 검증하는 것이 핵심인데, agent가 상상 샘플로 대체하려 했다.",
+      "candidate_rule": "캘리브레이션/평가 작업에서 실제 모델 행동 검증이 목적이면 합성 예시로 대체하지 않는다.",
+      "candidate_checklist_items": [
+        "샘플이 synthetic인지 actual new-session output인지 확인했는가?",
+        "내가 만든 예시로 검증을 대체하지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012207-20260621_152041_28de40-rubric-failed-general-answer-under-40-verification.md",
+      "title": "Feedback Log: B2B SaaS 초기 성장 마케팅 전략 — rubric-failed-general-answer-under-40-verification",
+      "severity": "high",
+      "categories": [
+        "verification",
+        "evidence",
+        "decision-criteria"
+      ],
+      "task_type": "review",
+      "expected_behavior": "40점 미만 목표를 품질 게이트로 삼아 40점 이상이면 루브릭 실패/gap으로 표시하고 보정해야 했다.",
+      "dissatisfaction": "루브릭의 핵심 목표가 일반 답변 40점 미만인데 실제 일반 답변이 69점으로 평가되어 강도 검증에 실패했다.",
+      "candidate_rule": "평가 artifact에 명시 목표 threshold가 있으면 threshold 위반을 검증 실패로 보고 gap을 분석한다.",
+      "candidate_checklist_items": [
+        "점수를 루브릭의 calibration target과 비교했는가?",
+        "목표 위반 시 정상 결과가 아니라 failure로 표시했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012208-20260621_155317_b5b241-unnecessary-dual-mode-and-missing-idempotency.md",
+      "title": "Feedback Log: feedback-ai-logging 일괄 수집 개선 — unnecessary-dual-mode-and-missing-idempotency",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "specificity",
+        "actionability"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "현재 세션 전체를 수확하는 단일 모드와 기존 로그 의미 중복 비교 절차를 포함했어야 한다.",
+      "dissatisfaction": "핵심은 중간마다 스킬을 호출하지 않고 한 번에 현재 세션 불만족을 수확하는 것이었는데, agent가 모드를 늘리고 idempotency를 놓쳤다.",
+      "candidate_rule": "batch/harvest workflow는 사용자가 별도 모드를 요청하지 않는 한 하나의 idempotent path로 설계한다.",
+      "candidate_checklist_items": [
+        "하나의 session harvest path로 충분한가?",
+        "반복 실행 시 duplicate detection 규칙이 있는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012209-20260621_152002_3e3d33-rubric-skill-plan-ignored-user-workflow-and-target-location.md",
+      "title": "Feedback Log: 마케팅 전문가 답변 평가 루브릭 — rubric-skill-plan-ignored-user-workflow-and-target-location",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "명시된 name/path/language/workflow topology를 hard constraint로 두고 generic default를 제거했어야 한다.",
+      "dissatisfaction": "사용자가 지정한 이름·위치·언어·역할 경계·병렬 검증 흐름을 놓쳐 계획 재작성이 필요했다.",
+      "candidate_rule": "사용자가 제공한 이름, 경로, 언어, workflow topology는 계획의 hard constraint로 취급한다.",
+      "candidate_checklist_items": [
+        "정확한 skill name을 복사했는가?",
+        "정확한 target path를 사용했는가?",
+        "사용자가 대체한 obsolete validation step을 제거했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012210-20260621_152002_3e3d33-workflow-settings-mixed-into-rubric-artifact.md",
+      "title": "Feedback Log: 마케팅 전문가 답변 평가 루브릭 — workflow-settings-mixed-into-rubric-artifact",
+      "severity": "medium",
+      "categories": [
+        "context-misread",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "루브릭 파일에는 평가 기준만 두고, 실행 파라미터는 별도 workflow config 파일에 둬야 했다.",
+      "dissatisfaction": "루브릭 평가 기준표와 workflow 실행 설정의 경계가 흐려졌다.",
+      "candidate_rule": "평가 artifact와 workflow config는 분리한다. 고정 제약을 변수로 만들지 않는다.",
+      "candidate_checklist_items": [
+        "루브릭/evaluation concerns와 workflow/runtime concerns를 분리했는가?",
+        "고정 언어 같은 constraint를 변수로 만들지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012211-20260622_004940_73ebef-non-article-research-sources-missed.md",
+      "title": "Feedback Log: 마케팅의 기본 개념 #2 — non-article-research-sources-missed",
+      "severity": "medium",
+      "categories": [
+        "evidence",
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "research",
+      "expected_behavior": "초기 source gap 분석에서 article 외 source type별 커버리지를 점검하고 부족하면 병렬 조사·수집을 수행했어야 한다.",
+      "dissatisfaction": "사용자는 자료 조사가 충분하지 않고 corpus 편향이 있다고 지적하며 재작업을 요구했다.",
+      "candidate_rule": "연구 corpus 확장에서는 source type coverage를 명시적으로 점검하고 article-only 편향을 피한다.",
+      "candidate_checklist_items": [
+        "PDF/PPT/book/report/paper/product docs coverage를 확인했는가?",
+        "최종화 전에 source type gap을 점검했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012212-20260622_011539_7480da-feedback-logs-written-to-domain-wiki-path.md",
+      "title": "Feedback Log: 마케팅의 기본 개념 #7 — feedback-logs-written-to-domain-wiki-path",
+      "severity": "high",
+      "categories": [
+        "context-misread",
+        "verification",
+        "requirement-miss"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "feedback logging에서는 `WIKI_DEFAULT`/`WIKI_PATHS`가 도메인 wiki를 가리켜도 기본 feedback root가 `$HOME/wiki/raw/feedback`인지 먼저 확인해야 했다.",
+      "dissatisfaction": "도메인 wiki routing에 끌려가 feedback log default location을 잘못 잡았다.",
+      "candidate_rule": "feedback logging 기본 위치는 도메인 wiki routing과 분리하고, 쓰기 전에 feedback root를 검증한다.",
+      "candidate_checklist_items": [
+        "feedback log가 전역 raw/feedback에 들어가는지 확인했는가?",
+        "WIKI_DEFAULT가 도메인 wiki일 때 기본 경로로 잘못 쓰지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012213-20260622_233019_ccd310-ad-hoc-wiki-health-check-lacked-fixed-rules.md",
+      "title": "Feedback Log: llm-wiki 읽기전용 상태점검 — ad-hoc-wiki-health-check-lacked-fixed-rules",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "specificity",
+        "decision-criteria"
+      ],
+      "task_type": "review",
+      "expected_behavior": "상태 점검 전 고정 schema/severity/scope를 정의하고 같은 wiki를 재점검해도 동일한 결과가 나오도록 했어야 한다.",
+      "dissatisfaction": "사용자는 점검 방식이 일정한 규칙을 따르지 않는 것 같다고 지적했고 agent도 ad-hoc 판단을 인정했다.",
+      "candidate_rule": "health-check/checker는 고정 schema, severity, scope를 먼저 정의하고 deterministic하게 실행한다.",
+      "candidate_checklist_items": [
+        "점검 schema와 severity 기준이 고정되어 있는가?",
+        "raw 포함 여부 등 scope가 사전에 정해졌는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012214-20260622_233019_ccd310-rubric-files-not-namespaced-under-llm-wiki-directory.md",
+      "title": "Feedback Log: llm-wiki 읽기전용 상태점검 — rubric-files-not-namespaced-under-llm-wiki-directory",
+      "severity": "low",
+      "categories": [
+        "requirement-miss",
+        "specificity"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "특정 rubric family 파일은 생성 전 namespace 디렉터리 필요성을 확인하고 관련 문서/checker를 같은 하위 디렉터리에 배치했어야 한다.",
+      "dissatisfaction": "사용자가 namespace directory로 옮기라고 재작업을 요청했다.",
+      "candidate_rule": "도메인별 rubric/checker는 root에 평면 배치하지 말고 family namespace 디렉터리에 묶는다.",
+      "candidate_checklist_items": [
+        "관련 rubric/checker가 같은 namespace directory에 있는가?",
+        "생성 전 target path hierarchy를 확인했는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-23/012215-20260623_010403_ed178a-korean-filename-requirement-not-checked.md",
+      "title": "Feedback Log: llm-wiki 읽기전용 상태점검 #2 — korean-filename-requirement-not-checked",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "verification",
+        "format"
+      ],
+      "task_type": "review",
+      "expected_behavior": "한국어화 요구사항 검증 시 filename/slug 정책까지 포함되는지 확인하고, checker 한계를 pass 보고 전에 명시했어야 한다.",
+      "dissatisfaction": "사용자는 검증 통과 후 파일명은 여전히 영어임을 발견하고 의도를 정정했다.",
+      "candidate_rule": "검증 통과를 보고하기 전에 user-visible format requirements가 checker 범위에 실제 포함됐는지 확인한다.",
+      "candidate_checklist_items": [
+        "title뿐 아니라 filename/slug 요구가 있는지 확인했는가?",
+        "checker가 검사하지 않는 요구사항을 pass로 포장하지 않았는가?"
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040342-20260623_091829_aced5bf1-wrong-token-report-source-scope.md",
+      "title": "피드백 로그: Token Report Scoped To Discord Instead Of All Hermes",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "context-misread",
+        "specificity"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "토큰 최적화/관리 리포트는 기본적으로 Hermes 전체(all sources)를 집계해야 한다. 특정 source만 보는 경우에는 `Discord only` 또는 `source=discord`처럼 헤드라인과 숫자 섹션에 범위를 명확히 표시해야 한다.",
+      "dissatisfaction": "사용자는 전날 토큰을 많이 썼다고 인식했는데 리포트가 5M 수준만 보여 이상하다고 지적했다. 원인은 리포트가 `source=discord`만 집계했기 때문이며, 사용자의 실제 목적은 Hermes 전체 토큰 관리였다.",
+      "candidate_rule": "사용자가 “Hermes 토큰 관리/최적화”처럼 시스템 전체 운영 지표를 요청하면 기본 집계 범위는 all sources로 두고, source 제한이 있으면 헤드라인과 핵심 숫자에 명시해야 한다.",
+      "candidate_checklist_items": [
+        "리포트의 헤드라인 숫자가 전체 범위인지 source-specific인지 확인했다.",
+        "source filter 기본값이 사용자의 운영 목적과 일치한다.",
+        "source-specific 리포트라면 `집계 범위` 또는 숫자 라벨에 `source=...`를 표시했다.",
+        "scope 수정 뒤 dry-run 또는 실제 job run으로 새 artifact에 범위 라벨과 숫자가 반영됐는지 확인했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040342-20260623_094205_dfa21284-codex-alpha-release-gate.md",
+      "title": "피드백 로그: Codex Alpha Release Counted as Release",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "decision-criteria"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "Codex 릴리즈 체크는 `alpha`, `beta`, `rc`, `pre-release`, `preview`, `nightly`, `canary`, `dev` 등 정식 안정 버전이 아닌 태그/릴리즈를 보고 대상에서 제외해야 한다. 알파/프리릴리즈만 확인된 날은 “새 릴리즈 없음”으로 처리하고, 정식 stable/GA 릴리즈가 확인될 때만 “새 릴리즈 있음”으로 보고해야 한다.",
+      "dissatisfaction": "릴리즈 알림에서 alpha/prerelease와 stable/GA 정식 릴리즈의 경계를 분리하지 못하면, 실제 정식 배포가 아닌 항목도 “릴리즈 있음”으로 전달되어 사용자가 불필요한 알림을 받게 된다.",
+      "candidate_rule": "릴리즈 감시 자동화에서 “릴리즈 있음”을 판단할 때는 stable/GA 정식 버전과 alpha/beta/rc/prerelease를 명시적으로 분리하고, 사용자가 정식 버전만 원하면 프리릴리즈는 “없음”으로 처리한다.",
+      "candidate_checklist_items": [
+        "릴리즈 후보 태그/버전에 alpha, beta, rc, pre-release, preview, nightly, canary, dev 표기가 있는지 확인했다.",
+        "프리릴리즈만 있는 경우 “새 릴리즈 있음”으로 보고하지 않는다.",
+        "제목에 포함하는 버전 번호는 정식 stable/GA 릴리즈로 확인된 경우에만 사용한다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040346-20260623_093336_bfe5fe50-unsafe-incorrect-verification-command.md",
+      "title": "피드백 로그: Unsafe Incorrect Verification Command",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "actionability"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "수정 후 검증은 처음부터 안전한 read-only/deterministic 방식으로 수행해야 했다. 예를 들어 collector stdout을 임시 파일에 저장한 뒤 별도 Python 프로세스가 그 파일을 읽어 JSON을 parse하고, `Daily=5`, `Weekly=5`, `Monthly=10`을 확인해야 했다.",
+      "dissatisfaction": "검증 자체는 최종적으로 성공했지만, 중간에 차단되거나 위험하게 분류되는 검증 경로를 사용해 불필요한 실패와 재작업을 만들었다. 특히 Python interpreter로 직접 pipe하는 형태는 도구 보안 정책상 피해야 할 패턴이며, JSON 검증에는 임시 파일 또는 직접 파일 읽기 방식이 더 적절했다.",
+      "candidate_rule": "Scheduler/report 수정 검증에서 JSON stdout을 분석할 때는 interpreter pipe나 차단될 수 있는 execute_code 대신, 임시 파일에 저장한 뒤 안전한 parser로 읽어 검증한다.",
+      "candidate_checklist_items": [
+        "검증 명령이 보안 스캔에서 high-risk pipe-to-interpreter 패턴을 사용하지 않는다.",
+        "JSON stdout 검증은 임시 파일 또는 직접 파일 읽기 기반으로 수행했다.",
+        "첫 검증 실패가 발생하면 최종 보고 전에 복구 검증 output을 별도로 확보했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040427-20260623_161841_81682e70-missing-rubric-reproducibility-gate.md",
+      "title": "피드백 로그: Rubric Missing Same-Answer Reproducibility Gate",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "verification"
+      ],
+      "task_type": "planning",
+      "expected_behavior": "Rubric 작성 또는 검증 workflow에는 fixed rubric과 같은 evaluated answer를 N개의 clean judge session에 투입하고, score variance, cap 적용 일치, criterion-level disagreement를 집계해 통과 기준을 만족해야 rubric을 정상 후보로 인정하는 단계가 포함되어야 했다.",
+      "dissatisfaction": "루브릭 자체의 최소 정상성 검증에 필요한 judge 간 재현성 검사가 명시적 pass/fail gate로 빠져 있었다. 이 상태에서는 루브릭이 그럴듯해 보여도 judge가 임의 해석하는지 확인하기 어렵다.",
+      "candidate_rule": "루브릭을 만들거나 검증할 때는 같은 answer를 N개의 깨끗한 독립 judge session으로 평가해 score range, cap agreement, criterion disagreement를 확인하는 reproducibility sanity gate를 포함해야 한다.",
+      "candidate_checklist_items": [
+        "Fixed rubric version과 동일 answer를 N개 clean judge session에 제공했다.",
+        "각 judge는 다른 judge 결과를 보지 않고 checklist-first JSON score를 반환했다.",
+        "Parent가 total score range/stddev, cap 적용 일치율, criterion-level disagreement를 중앙 집계했다.",
+        "합의 기준을 통과하지 못한 criterion은 rubric 문구 수정 후보로 기록했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040438-20260623_231426_34958ad1-flat-skill-list-hard-to-distinguish.md",
+      "title": "피드백 로그: Flat Skill Inventory Was Hard To Distinguish",
+      "severity": "low",
+      "categories": [
+        "format",
+        "actionability"
+      ],
+      "task_type": "summarization",
+      "expected_behavior": "항목 수가 많은 inventory 결과는 처음부터 사용자가 판단하기 쉬운 축으로 묶고, 필요하면 `ai_tool`, cron/scheduler, 기타처럼 관리 위치나 사용 맥락 기준의 구분을 우선 제안해야 했다.",
+      "dissatisfaction": "스킬 목록을 단순 나열 위주로 제공해서, 어떤 묶음이 사용자의 업무 흐름상 의미 있는지 한눈에 파악하기 어려웠다.",
+      "candidate_rule": "항목 수가 많은 inventory를 보고할 때는 단순 나열보다 사용자가 관리·판단할 수 있는 2~4개의 의미 있는 그룹을 먼저 제시하고, 전체 표는 보조 자료로 둔다.",
+      "candidate_checklist_items": [
+        "항목 수가 20개를 넘으면 flat list만으로 끝내지 않았다.",
+        "사용자의 관리 기준이 드러나는 경로, origin, schedule, 업무축 같은 분류 기준을 우선 고려했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-24/040439-20260623_231426_34958ad1-macos-bash-mapfile-in-cron-script.md",
+      "title": "피드백 로그: macOS Bash 3 Incompatible mapfile in Cron Script",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "context-misread"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "macOS scheduler용 shell script는 기본 `/bin/bash` 3.x 호환으로 작성하거나, Bash 4+가 필요하면 명시적 shebang과 dependency 확인을 해야 했다. dry-run뿐 아니라 실제 commit/push 경로에서 스크립트를 검증해야 했다.",
+      "dissatisfaction": "사용자 환경이 macOS임에도 Bash 4 전용 기능을 넣어, 첫 실제 auto-sync 실행이 실패했고 이후 스크립트 수정과 재검증이 필요했다.",
+      "candidate_rule": "macOS에서 실행될 scheduler shell script를 작성할 때는 `/bin/bash` 3.x 호환성을 기본으로 검토하고, Bash 4+ 기능을 쓰지 않거나 명시적으로 dependency를 확인한 뒤 실제 실행 경로로 검증해야 한다.",
+      "candidate_checklist_items": [
+        "macOS 대상 shell script에서 `mapfile`/`readarray` 같은 Bash 4+ 전용 기능을 쓰지 않았다.",
+        "`bash -n`뿐 아니라 실제 cron/script 실행 경로를 한 번 검증했다.",
+        "실패한 실제 실행 output을 보고 수정 후 재실행으로 검증했다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-25/040028-20260624_094142_62e29f6e-official-gate-missing-for-news-briefing.md",
+      "title": "피드백 로그: Official Announcement Gate Missing For News Briefing",
+      "severity": "medium",
+      "categories": [
+        "requirement-miss",
+        "context-misread",
+        "actionability"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "Galaxy XR 브리핑 job은 Slack/Discord API 호출 전에 hard gate를 적용해야 한다. 직전 24시간 내 Samsung/Google/Qualcomm 등 공식 채널의 Galaxy XR 제품 직접 관련 신규 공식발표가 없으면, 뉴스/커뮤니티/루머/후속 보도 후보가 있어도 아무 채널에도 게시하지 않고 `[SILENT]`로 종료해야 한다.",
+      "dissatisfaction": "사용자가 원한 게시 기준은 “공식발표가 있을 때만 게시”였는데, 기존 자동화 기준은 “공식발표 없음” 상태의 브리핑도 게시할 수 있었다. 이로 인해 엘엔제이 #news에 사용자가 원하지 않는 비공식 뉴스/커뮤니티 브리핑이 올라갈 수 있었다.",
+      "candidate_rule": "사용자가 scheduled briefing에 “공식발표 없으면 올리지 말라”고 정정하면, 제목 표시만 바꾸지 말고 platform API 호출 전 `[SILENT]` hard gate로 게시 자체를 차단해야 한다.",
+      "candidate_checklist_items": [
+        "게시 조건이 title marker가 아니라 delivery 전 hard gate로 표현되어 있다.",
+        "공식발표가 없을 때 Slack/Discord API와 delivery script를 호출하지 않는다는 문장이 prompt에 있다.",
+        "뉴스/커뮤니티 후보가 있어도 공식발표 gate를 통과하지 못하면 `[SILENT]`로 종료한다."
+      ]
+    },
+    {
+      "path": "/Users/stark/wiki/raw/feedback/2026-06-26/040437-20260625_094324_a87fc371-fragile-credential-command-rework.md",
+      "title": "피드백 로그: Credential Command Error Caused QA Rework",
+      "severity": "medium",
+      "categories": [
+        "verification",
+        "context-misread",
+        "actionability"
+      ],
+      "task_type": "automation",
+      "expected_behavior": "QA 계정 자동화에서는 로그인 직후 인증 성공 여부를 URL, 사용자 표시명, auth API 응답, 업로드 화면 접근 가능 여부로 즉시 검증해야 한다. 로그인 실패나 credential 주입 오류가 확인되면 파일 선택/업로드 검증으로 넘어가지 말고 해당 원인을 분리 보고해야 한다.",
+      "dissatisfaction": "테스트 credential을 다루는 자동화 명령이 취약하게 구성되어 실제 로그인 단계가 실패했고, 그 결과 업로드 검증이 불필요하게 지연되었다. 로그인 실패/계정 상태를 먼저 분리 검증하지 않아 파일 선택 및 업로드 버튼 대기 단계에서야 문제가 드러났다.",
+      "candidate_rule": "인증이 필요한 브라우저 자동화에서는 파일 업로드나 본 작업 전에 로그인 성공을 별도 gate로 검증하고, credential 주입 실패를 기능 실패로 혼동하지 않는다.",
+      "candidate_checklist_items": [
+        "로그인 제출 직후 auth API 2xx, URL 이동, 사용자 표시명 또는 인증된 화면 요소를 확인했다.",
+        "로그인 실패 시 파일 선택/업로드 검증을 진행하지 않고 credential/account 상태 문제로 분리 보고했다.",
+        "비밀번호나 secret은 로그에 노출하지 않되, redaction 때문에 실제 값이 누락되지 않았는지 실행 전후 상태로 검증했다."
+      ]
+    }
+  ]
+}
