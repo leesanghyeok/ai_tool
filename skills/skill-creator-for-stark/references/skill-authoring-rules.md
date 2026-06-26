@@ -16,6 +16,7 @@ skills/<skill-name>/
   scripts/
   assets/
   history/
+  feedback/
 ```
 
 필수 파일은 `SKILL.md`다. 나머지는 필요할 때만 만든다.
@@ -25,6 +26,7 @@ skills/<skill-name>/
 - `scripts/`: deterministic 검증, 변환, 수집 helper, 반복 workflow.
 - `assets/`: 이미지, static artifact, non-text support file.
 - `history/`: 생성/개선 이력, trigger 예시, 간단한 검토 기록.
+- `feedback/`: 스킬 사용 중 발생한 불만족 raw log. `feedback-ai-logging-v2` 호환 포맷으로 사건 단위 파일을 둔다.
 
 ## Frontmatter 규칙
 
@@ -55,6 +57,16 @@ metadata:
 - `description`에는 사용 시점과 주요 near-miss를 압축적으로 넣되 특정 에이전트 실행 환경에 종속된 문구는 피한다.
 - YAML key, file path, command, JSON key, environment variable은 영어 identifier를 유지한다.
 - 설명 prose는 한국어로 쓴다.
+
+## Workflow mode와 품질 루브릭 적용 규칙
+
+`skill-creator-for-stark`는 작업을 먼저 mode로 분류한다.
+
+- `create`: 새 skill package 최초 생성이다. `/Users/stark/project/jarvis/ai_tool/rubric/skill/skill-quality-rubric-v1.md` 평가가 필수이며 `certification_score >= 95`와 D1-D5 hard gate 통과 전에는 완료로 보고하지 않는다.
+- `modify`: 기존 skill 수정이다. 구조 검증은 필수이고 품질 루브릭 평가는 선택이다. 사용자가 품질 검증, 95점, 릴리즈 가능 여부를 요구하거나 workflow, approval, verification, trigger, scope, template, validator에 큰 영향을 주는 수정이면 품질 평가를 필수로 승격한다. 생략하면 생략 사유를 최종 보고에 남긴다.
+- `quality-review-only`: 파일 수정 없는 검증 전용 mode다. target skill package와 rubric을 read-only로 평가하고 JSON scorecard를 산출한다. 별도 승인 없이 target skill, rubric, history, scorecard 파일을 쓰지 않는다.
+
+품질 평가는 canonical rubric의 baseline 90점이 아니라 이 creator workflow의 release 기준인 95점을 사용한다. 95점 미만이거나 D1-D5 hard gate 중 하나라도 실패하면 개선 loop로 돌아간다.
 
 ## 크기와 progressive disclosure gate
 
@@ -168,6 +180,12 @@ metadata:
 - 실행한 검증과 남은 문제.
 - 고도화된 반복 평가가 아니라 사람이 나중에 추적할 수 있는 lightweight 기록.
 
+`feedback/`로 뺄 것:
+
+- 해당 스킬을 실제로 사용하다가 발생한 불만족 사건 raw log.
+- `feedback-ai-logging-v2/references/file-format.md`와 호환되는 one incident one file Markdown.
+- 개별 스킬 개선 후보와 `skill-creator-for-stark` 개선 후보를 분리할 수 있는 evidence.
+
 ## Trigger example 규칙
 
 고급 평가 시스템을 만들지 않아도 trigger 예시는 남긴다.
@@ -206,6 +224,23 @@ git status --short
 
 validator가 없으면 checklist read-back과 frontmatter 확인으로 대체하되, 가능하면 validator를 만든다. 정식 test/lint/build가 없으면 focused ad-hoc verification으로 표시한다.
 
+## 실패 보고와 갱신 규칙
+
+스킬 생성/수정/품질 검증 중 실패가 발생하면 실패 단위를 숨기지 않고 다음을 분리해 보고한다.
+
+- 실패한 command/API/tool/subagent.
+- 기대 결과와 실제 error 또는 점수.
+- likely cause.
+- impact.
+- recovery action과 재시도 조건.
+
+다음 조건에서는 skill package를 갱신 대상으로 본다.
+
+- canonical rubric, validator, template, mode 정책이 바뀐다.
+- 문서에 적힌 path나 command가 live repo에서 더 이상 유효하지 않다.
+- 사용자 고정 규칙과 충돌하는 오래된 지시가 발견된다.
+- 95점 품질 평가에서 반복적으로 같은 dimension issue가 나온다.
+
 ## 흔한 실패 패턴
 
 - `SKILL.md`가 너무 길어지고 references가 비어 있음.
@@ -214,6 +249,7 @@ validator가 없으면 checklist read-back과 frontmatter 확인으로 대체하
 - 환경 준비 여부를 확인하지 않고 파일을 씀.
 - trigger example 없이 description만 작성함.
 - 반복 가능한 deterministic workflow를 매번 agent 판단으로 재작성하게 둠.
+- 생성된 스킬에 사용 불만족을 남기는 `feedback/` 절차가 없어 개선 evidence가 흩어짐.
 - subagent에게 초안 작성을 맡긴 뒤 parent 검증 없이 완료 처리.
 - 영어 prose가 많이 남아 사용자의 한국어 문서 기준을 어김.
 - 특정 에이전트 실행 환경이나 설치 방식에 불필요하게 종속됨.

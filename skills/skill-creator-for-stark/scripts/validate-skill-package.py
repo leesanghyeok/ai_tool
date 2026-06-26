@@ -12,17 +12,21 @@ import sys
 from pathlib import Path
 
 REQUIRED_KEYS = ["name", "description", "version", "author", "license"]
-ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history"}
+ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history", "feedback"}
 REQUIRED_SECTIONS = [
     "## 입력 변수",
     "## 출력 변수",
     "## 필수 환경",
-    "## Hard Gates",
-    "## Fast Fail",
-    "## Workflow",
-    "## Commit Pitfalls",
-    "## Verification Checklist",
+    "## 하드 게이트 (Hard Gates)",
+    "## 빠른 중단 조건 (Fast Fail)",
+    "## 작업 절차 (Workflow)",
+    "## 커밋 주의사항 (Commit Pitfalls)",
+    "## 검증 체크리스트 (Verification Checklist)",
 ]
+FEEDBACK_TOKENS = ["Feedback Logging", "피드백 로깅", "skill-dissatisfaction", "OUTPUT_FEEDBACK_LOG_FILES", "OUTPUT_SKILL_FEEDBACK_LOGGING_GUIDE"]
+VARIABLE_TABLE_HEADER = "| 변수 | 필수 | 기본값 | 설명 |"
+ENV_TABLE_HEADER = "| 환경 항목 | 필수 | 기본값 | 설명 |"
+VALID_REQUIRED_VALUES = {"required", "optional"}
 DESCRIPTION_MAX_CHARS = 1024
 DESCRIPTION_TARGET_WORDS = 100
 SKILL_BODY_MAX_WORDS = 5000
@@ -69,6 +73,53 @@ def check_links(skill_dir: Path, text: str, label: str) -> None:
         candidate = skill_dir / match
         if not candidate.exists():
             fail(f"linked support file not found in {label}: {match}")
+
+
+def section_text(text: str, heading: str) -> str:
+    start = text.find(heading)
+    if start == -1:
+        return ""
+    next_match = re.search(r"^## ", text[start + len(heading) :], flags=re.MULTILINE)
+    if not next_match:
+        return text[start:]
+    return text[start : start + len(heading) + next_match.start()]
+
+
+def check_variable_tables(text: str) -> None:
+    for heading in ["## 입력 변수", "## 출력 변수"]:
+        section = section_text(text, heading)
+        if VARIABLE_TABLE_HEADER not in section:
+            fail(f"variable table header missing in section: {heading}")
+        rows = [line for line in section.splitlines() if line.startswith("| `")]
+        if not rows:
+            fail(f"no variable rows found in section: {heading}")
+        for row in rows:
+            cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+            if len(cells) < 4:
+                fail(f"variable table row must have at least 4 cells in {heading}: {row}")
+            if cells[1] not in VALID_REQUIRED_VALUES:
+                fail(f"variable required cell must be required or optional in {heading}: {row}")
+            if not cells[2] or cells[2] in {"-", "TBD", "<default>"}:
+                fail(f"variable default cell must be explicit in {heading}: {row}")
+            if len(cells[3]) < 20:
+                fail(f"variable description too short in {heading}: {row}")
+
+    env_section = section_text(text, "## 필수 환경")
+    if ENV_TABLE_HEADER not in env_section:
+        fail("environment table header missing in section: ## 필수 환경")
+    env_rows = [line for line in env_section.splitlines() if line.startswith("| `")]
+    if not env_rows:
+        fail("no ENV rows found in section: ## 필수 환경")
+    for row in env_rows:
+        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+        if len(cells) < 4:
+            fail(f"ENV table row must have at least 4 cells: {row}")
+        if cells[1] not in VALID_REQUIRED_VALUES:
+            fail(f"ENV required cell must be required or optional: {row}")
+        if not cells[2] or cells[2] in {"-", "TBD", "<default>"}:
+            fail(f"ENV default cell must be explicit: {row}")
+        if len(cells[3]) < 20:
+            fail(f"ENV description too short: {row}")
 
 
 def main() -> None:
@@ -120,6 +171,11 @@ def main() -> None:
     for token in ["INPUT_", "OUTPUT_", "ENV_"]:
         if token not in text:
             fail(f"required variable prefix missing in SKILL.md: {token}")
+
+    if not any(token in text for token in FEEDBACK_TOKENS):
+        fail("skill feedback logging guidance missing: include feedback/ or Feedback Logging guidance")
+
+    check_variable_tables(text)
 
     for child in skill_dir.iterdir():
         if child.is_dir() and child.name not in ALLOWED_SUPPORT_DIRS:

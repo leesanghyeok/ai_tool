@@ -52,7 +52,7 @@
    - verification coverage review.
    - portability review.
 
-## Subagent prompt skeleton
+## Subagent prompt skeleton 작성 예시
 
 ```text
 너는 skill package 작성 보조 subagent다.
@@ -87,7 +87,7 @@ Parent agent는 subagent 결과를 self-report로 취급한다. 다음을 직접
 - 파일이 실제로 존재하는지 read-back한다.
 - YAML/JSON은 parse한다.
 - Markdown code fence balance를 확인한다.
-- `INPUT_`, `OUTPUT_`, `ENV_`가 실제 본문에 정의되어 있는지 확인한다.
+- `INPUT_`, `OUTPUT_`, `ENV_`가 실제 본문에 table로 정의되고 각 항목에 필수/기본값/설명이 있는지 확인한다.
 - `Hard Gates`, `Commit Pitfalls`, `Verification Checklist`가 있는지 확인한다.
 - `SKILL.md`가 지나치게 상세해져 references 분리 원칙을 어기지 않는지 확인한다.
 - deterministic 반복 작업이 문서 prose에만 남아 있지 않은지 확인한다.
@@ -114,8 +114,29 @@ Parent agent는 subagent 결과를 self-report로 취급한다. 다음을 직접
 - 검증 실패 시 영향과 recovery가 설명되는가.
 - 크기 제한과 trigger example 조건을 확인하는가.
 
-### portability review
+### 이식성 review
 
 - 특정 에이전트 실행 환경, 설치 방식, 외부 배포 방식에 불필요하게 종속되지 않는가.
 - support file 구조가 portable한가.
 - 현재 세션에서 바로 load 가능하다고 과장하지 않는가.
+
+
+## 품질 루브릭 평가 subagent 패턴
+
+`skill-quality-rubric-v1.md` 평가는 clean context를 기본으로 한다.
+
+- `create`: quality judge를 반드시 실행한다.
+- `modify`: 사용자가 품질 검증, 95점, 릴리즈 가능 여부를 요구하거나 workflow/approval/verification/trigger/scope/template/validator 변경이 크면 실행한다. 그 외에는 생략할 수 있지만 parent가 생략 사유를 보고한다.
+- `quality-review-only`: 파일 수정 없이 quality judge를 실행한다.
+
+큰 skill package나 high-stakes 평가는 D1-D8을 shard로 나눈 `parallel_clean_subagents`를 사용할 수 있다. shard judge는 자기 dimension만 채점하고 최종 pass/fail, global cap, 95점 통과 여부를 확정하지 않는다.
+
+Parent agent는 다음을 중앙에서 검증한다.
+
+- JSON scorecard가 parse되는가.
+- D1-D8 점수 합계가 `raw_total_score`와 일치하는가.
+- D1-D5 hard gate threshold를 모두 통과했는가.
+- local cap과 global cap이 한 번만 적용됐는가.
+- `certification_score >= 95`인지 확인했는가.
+- evidence path가 packet 안 파일에 근거하는가.
+- `quality-review-only`에서 파일 수정이 발생하지 않았는가.

@@ -1,10 +1,10 @@
-# Trigger examples and history rules
+# Trigger 예시와 history 규칙
 
 ## 목적
 
 고도화된 반복 평가 시스템 없이도 스킬 생성과 개선의 판단 근거가 나중에 추적되도록 한다. 이 문서는 trigger 예시와 lightweight history 기록 규칙을 정의한다.
 
-## Trigger examples
+## Trigger 예시
 
 새 스킬 또는 trigger 변경이 있는 스킬은 가능하면 다음 예시를 남긴다.
 
@@ -26,7 +26,7 @@ should_not_trigger:
 - 과소 trigger와 과잉 trigger를 모두 줄이는 것이 목적이다.
 - 실행형 평가나 반복 점수화는 기본 범위가 아니다.
 
-## History record
+## History 기록
 
 작업 이력은 `history/YYYYMMDD-<short-topic>.md` 같은 파일로 남길 수 있다.
 
@@ -44,13 +44,13 @@ should_not_trigger:
 
 - ...
 
-## Trigger examples
+## Trigger 예시
 
-### should_trigger
+### 사용해야 하는 예시 (`should_trigger`)
 
 - ...
 
-### should_not_trigger
+### 사용하지 말아야 하는 예시 (`should_not_trigger`)
 
 - ...
 

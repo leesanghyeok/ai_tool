@@ -1,4 +1,4 @@
-# Deterministic workflow rules
+# 결정론적 workflow 규칙
 
 ## 목적
 
@@ -6,7 +6,7 @@
 
 ## 분류 기준
 
-### deterministic workflow
+### 결정론적 workflow
 
 다음 조건을 만족하면 script 후보로 본다.
 
@@ -20,11 +20,12 @@
 - frontmatter parse.
 - Markdown fence balance check.
 - JSON/YAML schema check.
+- quality scorecard 점수 합계, hard gate, minimum score 검증.
 - 파일 tree consistency check.
 - 반복 데이터 변환.
 - report skeleton 생성.
 
-### non-deterministic workflow
+### 비결정론적 workflow
 
 다음 조건이면 문서화된 판단 workflow로 둔다.
 

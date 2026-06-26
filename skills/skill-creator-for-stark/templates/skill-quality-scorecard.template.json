@@ -1,0 +1,21 @@
+{
+  "skill_path": "string",
+  "evaluated_at": "YYYY-MM-DDTHH:mm:ssZ",
+  "read_only": true,
+  "rubric_version": "agent-skill-quality-v1",
+  "judging_context": "clean_subagent",
+  "baseline_passing_score": 90,
+  "minimum_creator_score": 95,
+  "raw_total_score": 0,
+  "certification_score": 0,
+  "max_score": 100,
+  "pass_95": false,
+  "hard_gate_pass": false,
+  "quality_certification": "unverified",
+  "hard_gates": [],
+  "global_caps_applied": [],
+  "dimension_scores": [],
+  "issues": [],
+  "unverified": [],
+  "next_actions": []
+}
