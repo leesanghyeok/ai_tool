@@ -47,7 +47,7 @@ categories: [skill-workflow]
 
 `sha256`은 closing frontmatter delimiter 뒤의 Markdown body만 대상으로 계산한다.
 
-## Workflow에 넣을 절차
+## 작업 절차에 넣을 내용
 
 생성되는 스킬의 `Workflow` 또는 `Final Response Checklist` 주변에 다음 절차를 반영한다.
 
@@ -59,7 +59,18 @@ categories: [skill-workflow]
 6. 가능하면 `feedback-ai-logging-v2/scripts/validate-feedback-log.py` 또는 동등한 parser로 검증하고, 최소한 read-back으로 frontmatter와 필수 section을 확인한다.
 7. 개별 스킬 개선 후보와 `skill-creator-for-stark` 개선 후보를 분리해 보고한다.
 
-## Creator로 환류하는 기준
+
+## 템플릿과 reference 분리
+
+feedback log처럼 스킬이 직접 생성하는 Markdown 파일의 skeleton은 `templates/`에 둔다. `references/`에는 형식 설명, 사건 선정 기준, routing, 중복 판단, taxonomy, migration runbook만 둔다.
+
+- 좋은 배치: `templates/feedback-log.template.md` — frontmatter/body skeleton, 작성자가 복사해 채울 구조.
+- 좋은 배치: `references/file-format.md` — field 의미, hash 기준, validator 규칙 설명.
+- 나쁜 배치: 생성 산출물 skeleton을 `references/`에만 두고 workflow에서 그 파일을 복사 기준으로 사용하게 하는 것.
+
+개별 스킬 feedback에서 산출물 skeleton 위치 문제가 발견되면, 해당 스킬 수정 후보와 `skill-creator-for-stark` template/rules/validator 개선 후보를 분리해 보고한다.
+
+## Creator 환류 기준
 
 다음은 개별 스킬만 고치는 대신 `skill-creator-for-stark` 개선 후보로 보고한다.
 

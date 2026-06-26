@@ -4,17 +4,46 @@
   "read_only": true,
   "rubric_version": "agent-skill-quality-v1",
   "judging_context": "clean_subagent",
+  "context_contamination_notes": "string",
+  "workflow_mode": "create | modify | quality-review-only | unspecified",
   "baseline_passing_score": 90,
-  "minimum_creator_score": 95,
+  "minimum_certification_score": 95,
   "raw_total_score": 0,
   "certification_score": 0,
   "max_score": 100,
+  "pass": false,
   "pass_95": false,
   "hard_gate_pass": false,
   "quality_certification": "unverified",
   "hard_gates": [],
   "global_caps_applied": [],
   "dimension_scores": [],
+  "contract_checks": {
+    "input_contract_minimal": false,
+    "output_contract_actionable": false,
+    "env_contract_separated": false,
+    "variable_table_columns_valid": false
+  },
+  "artifact_placement_checks": {
+    "templates_for_skeletons": false,
+    "references_for_judgment_rules": false,
+    "scripts_for_deterministic_work": false,
+    "history_separated": false,
+    "feedback_separated": false
+  },
+  "feedback_logging": {
+    "included": false,
+    "path_policy": "string",
+    "format_reference": "string",
+    "dedupe_or_hash_rule": "string",
+    "redaction_rule": "string"
+  },
+  "parent_verification": {
+    "score_bounds_checked": false,
+    "hard_gates_checked": false,
+    "caps_checked": false,
+    "schema_parse_checked": false
+  },
   "issues": [],
   "unverified": [],
   "next_actions": []

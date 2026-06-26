@@ -1,10 +1,10 @@
-# Output routing
+# 출력 경로 결정 (Output routing)
 
 ## 목적
 
 feedback raw log가 프로젝트별 domain wiki로 잘못 저장되지 않게 output root와 subdir 결정 기준을 고정한다.
 
-## Routing priority
+## 경로 우선순위 (Routing priority)
 
 1. `INPUT_OUTPUT_ROOT`가 명시되어 있으면 사용한다.
 2. 없으면 `FEEDBACK_WIKI_PATH` 환경값을 사용한다.
@@ -14,6 +14,6 @@ feedback raw log가 프로젝트별 domain wiki로 잘못 저장되지 않게 ou
 
 `INPUT_OUTPUT_SUBDIR` 기본값은 `raw/feedback`이다.
 
-## Recovery
+## 복구 (Recovery)
 
 잘못된 domain wiki에 raw feedback file을 썼다면 body를 수정하지 말고 올바른 root로 이동한다. Filename과 frontmatter가 틀리지 않았다면 보존하고, 이동 후 validator로 body-only hash를 확인한다.

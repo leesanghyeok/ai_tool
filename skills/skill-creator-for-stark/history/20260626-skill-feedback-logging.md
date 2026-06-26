@@ -1,6 +1,6 @@
 # 2026-06-26 스킬 feedback logging 절차 추가
 
-## Mode
+## 작업 모드 (Mode)
 
 `modify`
 

@@ -1,4 +1,4 @@
-# Incident selection
+# 사건 선정 기준 (Incident selection)
 
 ## 기록할 사건 조건
 
