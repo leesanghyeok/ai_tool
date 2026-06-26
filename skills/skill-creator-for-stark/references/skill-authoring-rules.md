@@ -92,37 +92,40 @@ metadata:
 
 ## INPUT_/OUTPUT_/ENV_ 변수 규칙
 
-모든 주요 입력은 `INPUT_` prefix로 관리한다.
+`INPUT_`, `OUTPUT_`, `ENV_`는 bullet list가 아니라 표로 작성한다. 각 표는 필수 여부, 기본값, 설명을 포함해야 한다.
 
-예:
+필수 table header:
 
-- `INPUT_TASK_SCOPE`
-- `INPUT_TARGET_PATH`
-- `INPUT_APPROVAL_SCOPE`
-- `INPUT_HISTORY_POLICY`
+```markdown
+| 변수 | 필수 | 기본값 | 설명 |
+|---|---:|---|---|
+```
 
-모든 주요 산출물은 `OUTPUT_` prefix로 관리한다.
+환경 table은 다음 header를 사용한다.
 
-예:
-
-- `OUTPUT_CREATED_FILES`
-- `OUTPUT_HISTORY_RECORD`
-- `OUTPUT_VERIFICATION_RESULT`
-- `OUTPUT_NEXT_ACTIONS`
-
-실행 전제 조건은 `ENV_` prefix로 관리한다.
-
-예:
-
-- `ENV_REPO_ROOT`
-- `ENV_WRITE_ALLOWED`
-- `ENV_GIT_AVAILABLE`
+```markdown
+| 환경 항목 | 필수 | 기본값 | 설명 |
+|---|---:|---|---|
+```
 
 규칙:
 
-- 변수는 스킬 본문에서 한 번 이상 정의되어야 한다.
+- `INPUT_`는 사용자가 제공하거나 agent가 확인해야 하는 작업 입력이다.
+- `OUTPUT_`는 최종 보고와 검증에서 대응시킬 산출물이다.
+- `ENV_`는 사용자 입력이 아니라 스킬 실행에 필요한 도구, 권한, CLI/MCP/read-write surface, 검증 명령 조건이다.
+- `필수` 값은 `required` 또는 `optional`로 쓴다.
+- `기본값`은 optional이면 실제 default를 쓰고, required이면 `없음` 또는 fast-fail 조건을 쓴다.
+- `설명`은 한 줄 label이 아니라 의미, 필요한 이유, 없을 때 처리, 어떤 산출물/검증에 영향을 주는지를 설명한다.
+- 변수가 필수인지 판단하기 어렵다면 optional로 숨기지 말고 “없으면 어떤 결정을 못 하는가”를 설명하고 required 여부를 정한다.
 - final response는 실제 산출물을 `OUTPUT_` 변수와 대응시켜 보고해야 한다.
-- 입력이 없을 때 추정하지 말아야 할 항목은 fast fail한다.
+
+좋은 설명 예:
+
+- `INPUT_SKILL_NAME`: 생성/수정할 스킬의 directory basename과 frontmatter `name`이다. 1-64자 lowercase hyphen slug여야 하며 없으면 target path와 validator 기준을 정할 수 없어 fast fail한다.
+
+나쁜 설명 예:
+
+- `INPUT_SKILL_NAME`: 스킬 이름.
 
 ## SKILL.md와 support files 분리 기준
 

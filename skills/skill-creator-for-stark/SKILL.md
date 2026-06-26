@@ -38,46 +38,51 @@ metadata:
 
 ## 입력 변수
 
-스킬 작성 전에 다음 입력을 명시하거나 tool로 확인한다. 중요한 입력이 빠졌고 안전하게 추론할 수 없으면 fast fail한다.
+스킬 작성 전에 다음 입력을 표로 채운다. 모든 입력은 `필수`, `기본값`, `설명`을 가져야 한다. 설명은 변수의 의미, 필요한 이유, 없을 때의 처리 방식을 포함한다.
 
-- `INPUT_SKILL_GOAL`: 만들거나 수정할 스킬의 목적.
-- `INPUT_TRIGGER_CONDITIONS`: 스킬을 사용해야 하는 상황.
-- `INPUT_TARGET_USERS`: 주 사용자 또는 사용 맥락.
-- `INPUT_REPO_ROOT`: repository root.
-- `INPUT_SKILL_ROOT`: `skills/` root.
-- `INPUT_SKILL_NAME`: 생성/수정할 skill name과 directory basename.
-- `INPUT_CONSTRAINTS`: 반드시 지켜야 하는 사용자 규칙.
-- `INPUT_REFERENCE_MATERIALS`: 참고할 기존 문서, 세션, 파일, repo artifact.
-- `INPUT_APPROVAL_SCOPE`: 사용자가 승인한 실행 범위.
-- `INPUT_OVERWRITE_POLICY`: 대상 스킬이 이미 있을 때 merge, patch, replace, abort 중 어떤 정책을 쓸지.
-- `INPUT_HISTORY_POLICY`: 스킬 생성/개선 이력을 어디에 어떤 형식으로 남길지.
-- `INPUT_TRIGGER_EXAMPLE_POLICY`: `should_trigger` / `should_not_trigger` 예시를 작성만 할지, 검토까지 할지, 생략할지.
+| 변수 | 필수 | 기본값 | 설명 |
+|---|---:|---|---|
+| `INPUT_SKILL_GOAL` | required | 없음 | 만들거나 수정할 스킬이 해결해야 하는 문제와 최종 목적이다. 이 값이 없으면 스킬의 범위와 성공 기준을 정할 수 없으므로 fast fail한다. |
+| `INPUT_TRIGGER_CONDITIONS` | required | 없음 | 새 스킬이 언제 사용되어야 하는지에 대한 사용자 요청, 상황, near-miss 경계다. description과 `should_trigger` / `should_not_trigger` 예시의 근거가 된다. |
+| `INPUT_TARGET_USERS` | optional | `현재 사용자와 유사한 agent 사용자` | 스킬을 읽고 실행할 주 사용자 또는 사용 맥락이다. 특정 실행 환경이 아니라 사용자 수준, 팀 맥락, 도메인 숙련도를 설명한다. |
+| `INPUT_REPO_ROOT` | required | 현재 작업 repository | 스킬 파일을 생성하거나 수정할 repository root다. 상대 경로 해석, git 검증, unrelated change 확인의 기준이 된다. |
+| `INPUT_SKILL_ROOT` | required | `<INPUT_REPO_ROOT>/skills` | 스킬 디렉터리들이 위치한 root다. 존재하지 않으면 생성 승인이 필요하다. |
+| `INPUT_SKILL_NAME` | required | 없음 | 생성/수정할 스킬의 directory basename과 frontmatter `name`이다. 1-64자 lowercase hyphen slug여야 한다. |
+| `INPUT_CONSTRAINTS` | optional | 사용자 고정 규칙 + 현재 요청 | 반드시 지켜야 하는 언어, 형식, 승인, 보안, scope 제한이다. 없으면 현재 사용자 고정 규칙과 대화의 명시 요구를 기본으로 사용한다. |
+| `INPUT_REFERENCE_MATERIALS` | optional | `[]` | 참고할 기존 스킬, 문서, 세션, 파일, repo artifact 목록이다. 참고 자료는 직접 의존성으로 넣기 전에 사용 목적을 구분한다. |
+| `INPUT_APPROVAL_SCOPE` | required | 없음 | 파일 쓰기, overwrite, metadata 변경 등 사용자가 승인한 실행 범위다. 필요한 write 승인이 없으면 후보/계획만 보고한다. |
+| `INPUT_OVERWRITE_POLICY` | optional | `abort_if_exists` | 대상 스킬이 이미 있을 때의 정책이다. `abort_if_exists`, `merge`, `patch`, `replace` 중 하나로 기록한다. |
+| `INPUT_HISTORY_POLICY` | optional | `history/YYYYMMDD-<topic>.md` | 스킬 생성/개선 이력을 남길지와 경로 형식이다. 기본값은 lightweight history 기록을 남기는 것이다. |
+| `INPUT_TRIGGER_EXAMPLE_POLICY` | optional | `draft_min_3_each` | `should_trigger` / `should_not_trigger` 예시를 얼마나 만들지 정한다. 기본값은 각 3개 이상 작성하고 실행형 평가는 하지 않는 것이다. |
 
 ## 출력 변수
 
-작업 결과는 다음 산출물 변수에 대응시켜 보고한다.
+작업 결과는 다음 산출물 변수에 대응시켜 보고한다. 모든 출력은 `필수`, `기본값`, `설명`을 가져야 하며, 생성되지 않은 선택 산출물은 빈 배열이나 생략 사유로 보고한다.
 
-- `OUTPUT_SKILL_DIR`: 생성/수정된 skill directory.
-- `OUTPUT_SKILL_MD`: 생성/수정된 `SKILL.md` 경로.
-- `OUTPUT_REFERENCES`: 생성/수정된 `references/` 파일 목록.
-- `OUTPUT_TEMPLATES`: 생성/수정된 `templates/` 파일 목록.
-- `OUTPUT_SCRIPTS`: 생성/수정된 `scripts/` 파일 목록.
-- `OUTPUT_HISTORY_RECORD`: 생성/수정된 작업 이력 파일 또는 기록 위치.
-- `OUTPUT_TRIGGER_EXAMPLES`: `should_trigger` / `should_not_trigger` 예시 목록 또는 파일.
-- `OUTPUT_VERIFICATION_RESULT`: 실행한 검증과 결과.
-- `OUTPUT_OPEN_QUESTIONS`: 남은 질문 또는 미확인 사항.
-- `OUTPUT_NEXT_ACTIONS`: commit, 추가 review 등 다음 단계.
+| 변수 | 필수 | 기본값 | 설명 |
+|---|---:|---|---|
+| `OUTPUT_SKILL_DIR` | required | 없음 | 생성/수정된 skill directory의 절대 경로다. 파일 쓰기를 하지 못했으면 계획상 target path와 미작성 사유를 함께 보고한다. |
+| `OUTPUT_SKILL_MD` | required | 없음 | 생성/수정된 `SKILL.md` 경로다. read-back과 validator의 주 검증 대상이다. |
+| `OUTPUT_REFERENCES` | optional | `[]` | 생성/수정된 `references/` 파일 목록이다. 긴 판단 기준, runbook, taxonomy, 사례가 없으면 빈 배열로 둔다. |
+| `OUTPUT_TEMPLATES` | optional | `[]` | 생성/수정된 `templates/` 파일 목록이다. 반복 skeleton이나 출력 형식이 없으면 빈 배열로 둔다. |
+| `OUTPUT_SCRIPTS` | optional | `[]` | 생성/수정된 `scripts/` 파일 목록이다. deterministic 반복 작업이 없거나 아직 분리하지 못했으면 이유를 보고한다. |
+| `OUTPUT_HISTORY_RECORD` | optional | 없음 | 생성/수정 이력을 남긴 파일 경로다. `INPUT_HISTORY_POLICY=none`이면 생략 사유를 보고한다. |
+| `OUTPUT_TRIGGER_EXAMPLES` | required | 없음 | `should_trigger` / `should_not_trigger` 예시 목록 또는 파일 경로다. 예시를 만들 수 없으면 부족한 입력을 `OUTPUT_OPEN_QUESTIONS`에 남긴다. |
+| `OUTPUT_VERIFICATION_RESULT` | required | 없음 | validator, syntax check, `git diff --check`, read-back, ad-hoc verification의 실제 결과다. 검증하지 못한 항목은 `unverified`로 표시한다. |
+| `OUTPUT_OPEN_QUESTIONS` | optional | `[]` | 승인, 경로, overwrite, reference 해석, runtime-independent 설계 등 미확인 사항이다. |
+| `OUTPUT_NEXT_ACTIONS` | optional | `[]` | commit, 추가 review, 실제 sample run, 후속 skill patch 같은 다음 단계다. |
 
 ## 필수 환경
 
-작업 전에 다음 환경을 확인한다.
+이 섹션의 `ENV_` 항목은 사용자 입력이 아니라 스킬이 실행되려면 필요한 도구, 권한, 명령, read/write surface 조건이다. 새 스킬 템플릿에도 같은 방식으로 작성한다.
 
-- `ENV_REPO_ROOT`: `INPUT_REPO_ROOT`가 존재하고 접근 가능해야 한다.
-- `ENV_SKILL_ROOT`: `INPUT_SKILL_ROOT`가 존재하거나 생성 승인을 받아야 한다.
-- `ENV_WRITE_ALLOWED`: 파일 생성/수정 승인이 있어야 한다.
-- `ENV_VALIDATOR_COMMAND`: validator를 만들거나 실행하려면 `python3` 또는 대체 실행 명령이 있어야 한다.
-- `ENV_GIT_AVAILABLE`: diff/status 검증을 위해 `git` 사용 가능 여부를 확인한다.
-- `ENV_EXISTING_WORKTREE`: unrelated worktree changes가 있는지 확인한다.
+| 환경 항목 | 필수 | 기본값 | 설명 |
+|---|---:|---|---|
+| `ENV_FILESYSTEM_READ` | required | 현재 workspace 권한 | source skill, reference materials, 기존 target directory, validator script를 읽을 수 있어야 한다. 읽을 수 없으면 현재 상태 확인과 중복/overwrite 판단이 불가능하다. |
+| `ENV_FILESYSTEM_WRITE` | required | 현재 workspace 권한 + `INPUT_APPROVAL_SCOPE` | 승인된 범위 안에서 target skill directory와 support files를 쓸 수 있어야 한다. 쓰기 승인이 없으면 파일 생성 없이 계획만 보고한다. |
+| `ENV_VALIDATOR_COMMAND` | required | `python3 scripts/validate-skill-package.py` | 생성된 skill package의 frontmatter, 변수 표, hard gate, support links를 deterministic하게 검증하는 명령이다. 없으면 대체 검증을 명시한다. |
+| `ENV_GIT_COMMAND` | optional | `git` | `git diff --check`, `git status --short`, unrelated changes 확인에 사용한다. git repo가 아니면 생략 사유를 보고한다. |
+| `ENV_LOOKUP_TOOLS` | optional | 현재 사용 가능한 read/search 도구 | reference material, 기존 유사 스킬, session history를 읽기 위한 read-only 도구다. 없으면 사용자가 제공한 자료와 파일 시스템만 사용한다. |
 
 ## Hard Gates
 
