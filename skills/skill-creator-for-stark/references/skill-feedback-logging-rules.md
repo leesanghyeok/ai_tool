@@ -13,6 +13,7 @@
 - 포맷은 `feedback-ai-logging-v2/references/file-format.md`를 기반으로 한다.
 - 가능한 경우 `feedback-ai-logging-v2` 스킬을 함께 사용해 사건 선정, 중복 검사, body-only `sha256`, validator 절차를 따른다.
 - 대상 스킬 자체 개선과 raw feedback logging을 한 파일에 섞지 않는다. raw log는 사건 데이터이고, 개선 반영은 별도 skill patch 또는 creator 개선 workflow에서 수행한다.
+- raw feedback의 처리 여부는 feedback 파일 안에 쓰지 않고 별도 processing ledger에서 추적한다. 최소 key는 `sha256 + consumer + filename`이다.
 
 ## 디렉터리와 파일 포맷
 
@@ -58,6 +59,7 @@ categories: [skill-workflow]
 5. 중복이 아니면 새 feedback log를 작성하고 body-only `sha256`을 계산한다.
 6. 가능하면 `feedback-ai-logging-v2/scripts/validate-feedback-log.py` 또는 동등한 parser로 검증하고, 최소한 read-back으로 frontmatter와 필수 section을 확인한다.
 7. 개별 스킬 개선 후보와 `skill-creator-for-stark` 개선 후보를 분리해 보고한다.
+8. 이미 처리한 feedback인지 판단해야 하면 raw log를 수정하지 말고 processing ledger를 확인한다. ledger identity는 `sha256 + consumer + filename`이며, `consumer`는 처음에는 `feedback-ai-logging-v2`, `skill-creator-for-stark`, `rubric-skill`, `memory` 네 가지만 사용한다.
 
 
 ## 템플릿과 reference 분리
@@ -79,6 +81,33 @@ feedback log처럼 스킬이 직접 생성하는 Markdown 파일의 skeleton은 
 - 생성된 스킬들이 공통으로 feedback logging 절차를 누락하거나, `feedback/` 디렉터리를 validator가 거부한다.
 - 사용자 고정 규칙과 충돌하는 문구가 여러 스킬에 반복 삽입된다.
 - 검증 스크립트가 잡아야 할 구조 누락을 놓쳤다.
+
+## Processing ledger 최소 규칙
+
+feedback 반복 처리 여부가 필요하면 raw log와 분리된 ledger를 둔다. skill-local feedback의 기본 위치는 `<SKILL_DIR>/history/feedback-processing-ledger.jsonl`이다. ledger는 append-friendly JSONL을 권장한다.
+
+최소 field:
+
+```json
+{
+  "filename": "153012-unknown-session-missing-verification.md",
+  "sha256": "<body-only-sha256>",
+  "consumer": "skill-creator-for-stark",
+  "status": "done",
+  "decision": "반영하거나 제외한 짧은 이유",
+  "evidence": ["<검증 또는 변경 근거 path>"],
+  "handled_at": "<ISO-8601>"
+}
+```
+
+규칙:
+
+- identity는 `sha256 + consumer + filename`이다. `target_artifact`는 path 이동에 취약하므로 key에 넣지 않는다.
+- `consumer`는 기본적으로 `feedback-ai-logging-v2`, `skill-creator-for-stark`, `rubric-skill`, `memory`만 허용한다. 필요한 consumer가 실제로 생길 때만 늘린다.
+- `status`는 `todo`, `done`, `skip`만 사용한다.
+- `done`은 가능하면 evidence path나 검증 결과를 가진다.
+- `skip`은 `decision`에 `not-applicable`, `duplicate`, `insufficient-evidence`, `out-of-scope` 같은 짧은 이유를 적는다.
+- raw feedback log에는 status, 처리 이력, 승격 여부를 쓰지 않는다.
 
 ## 주의사항
 

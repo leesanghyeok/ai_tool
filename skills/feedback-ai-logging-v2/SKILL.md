@@ -1,7 +1,7 @@
 ---
 name: feedback-ai-logging-v2
 description: AI 또는 agent 출력·workflow 불만족 사건을 raw feedback Markdown으로 남겨야 할 때 사용합니다. 현재/과거 세션, transcript, 파일에서 기대와 실제 차이, 근거, 후보 규칙을 사건 단위로 기록하고 중복·hash·path 검증을 수행합니다.
-version: 2.1.0
+version: 2.2.0
 author: Agent
 license: MIT
 metadata:
@@ -16,6 +16,8 @@ metadata:
 이 스킬은 사용자가 AI 또는 agent 출력, workflow, 스킬 사용 경험에 대한 불만족·정정·재작업 사건을 나중에 분석 가능한 raw Markdown 로그로 남기고 싶을 때 사용한다. 목표는 즉시 guide, rubric, memory, skill을 고치는 것이 아니라 사건 당시의 기대 동작, 실제 동작, 차이, 근거, 후보 규칙을 깨끗하게 보존하는 것이다.
 
 피드백 로그는 raw data다. 사건 하나마다 Markdown 파일 하나를 만들고, raw log 안에는 승격 상태, 처리 상태, TODO 진행 상황을 쓰지 않는다. 반복 패턴을 규칙, 루브릭, 문서, 스킬 patch로 승격하는 일은 별도 workflow에서 다룬다.
+
+이미 처리한 feedback인지 판단해야 할 때도 raw log를 수정하지 않는다. 처리 여부는 별도 processing ledger에서 `sha256 + consumer + filename`으로 추적한다. 기본 `consumer`는 `feedback-ai-logging-v2`, `skill-creator-for-stark`, `rubric-skill`, `memory` 네 가지만 사용하고, `status`는 `todo`, `done`, `skip`만 사용한다.
 
 ## 사용 판단
 
@@ -82,6 +84,7 @@ metadata:
 - Routing gate: global feedback은 `raw/feedback/YYYY-MM-DD/`에, skill 사용 불만족은 해당 스킬의 `feedback/YYYY-MM-DD/`에 저장한다. 사용자가 명시한 output directory를 domain wiki default보다 우선한다.
 - Hash validation gate: 작성 후 body-only hash와 deterministic validator가 통과해야 completed로 보고한다.
 - Raw/derived separation gate: raw log 안에는 처리 상태, 승격 여부, guide/rubric/skill patch 내용을 섞지 않는다.
+- Processing ledger gate: 처리 여부 추적이 필요하면 raw log가 아니라 별도 ledger를 사용한다. ledger identity는 `sha256 + consumer + filename`이고 `status`는 `todo`, `done`, `skip`만 허용한다.
 
 ## 빠른 중단 조건 (Fast Fail)
 
@@ -145,7 +148,14 @@ metadata:
     - `OUTPUT_` 값을 채워 생성, 중복 skip, 비사건 skip, 검증 결과, 남은 문제를 보고한다.
     - raw log 생성과 derived rule/rubric/skill patch는 다음 단계로 분리한다.
 
-11. **스킬 사용 불만족 feedback 처리**
+11. **processing ledger 분리**
+    - raw feedback의 처리 여부를 추적해야 하면 feedback 파일을 수정하지 않고 별도 ledger를 사용한다.
+    - skill-local feedback은 `<SKILL_DIR>/history/feedback-processing-ledger.jsonl`을 기본 위치로 둔다.
+    - ledger entry의 최소 key는 `sha256 + consumer + filename`이다. `target_artifact`는 경로 이동에 취약하므로 넣지 않는다.
+    - `consumer`는 처음에는 `feedback-ai-logging-v2`, `skill-creator-for-stark`, `rubric-skill`, `memory`만 사용한다.
+    - `status`는 `todo`, `done`, `skip`만 사용한다. `done`에는 가능하면 evidence를, `skip`에는 decision 이유를 남긴다.
+
+12. **스킬 사용 불만족 feedback 처리**
     - 이 스킬 자체 또는 다른 스킬 사용 중 사용자가 “스킬 피드백에 남겨”라고 명시하면 해당 스킬의 `feedback/` 아래에 raw log를 저장한다.
     - 중복 검사, body-only `sha256`, `read-back`, validator 검증을 동일하게 적용한다.
     - 개별 스킬 개선 후보와 `skill-creator-for-stark` 개선 후보를 raw log 본문에 처리 상태로 쓰지 않고 최종 보고의 `OUTPUT_NEXT_ACTIONS`에만 분리한다.
@@ -178,6 +188,7 @@ OUTPUT_NEXT_ACTIONS: [...]
 - source excerpt는 재현에 필요한 최소 범위만 남긴다.
 - 외부 delivery, production mutation, credential 사용은 이 스킬의 기본 workflow가 아니다.
 - raw log에는 처리 상태, 승격 여부, TODO 진행 상태를 쓰지 않는다.
+- 처리 상태가 필요하면 raw log를 수정하지 않고 processing ledger에만 기록한다.
 
 ## 커밋 주의사항 (Commit Pitfalls)
 
@@ -187,6 +198,7 @@ OUTPUT_NEXT_ACTIONS: [...]
 - 검증 실패 상태를 완료로 보고하지 않는다.
 - generated raw log와 skill source 변경을 같은 commit에 넣을지 여부는 사용자의 승인 범위에 맞춘다.
 - skill-local feedback 경로와 global `raw/feedback` 경로를 혼동하지 않는다.
+- processing ledger를 쓰더라도 raw feedback file에 status field를 추가하지 않는다.
 
 ## 검증 체크리스트 (Verification Checklist)
 
@@ -202,6 +214,7 @@ OUTPUT_NEXT_ACTIONS: [...]
 - [ ] 생성 파일 skeleton은 `templates/feedback-log.template.md`에 있고, format 설명은 `references/file-format.md`에 있다.
 - [ ] 스킬 사용 불만족을 해당 스킬 `feedback/`에 raw log로 남기는 절차가 포함되어 있다.
 - [ ] 생성된 feedback log가 있다면 validator, hash check, read-back이 통과한다.
+- [ ] 처리 여부를 추적해야 한다면 raw log가 아니라 processing ledger를 사용하며, identity가 `sha256 + consumer + filename`이다.
 - [ ] validator가 `references/file-format.md`와 `templates/feedback-log.template.md`의 필수 frontmatter field와 body section을 모두 검증한다.
 - [ ] 실패 보고가 필요한 경우 failed command, likely cause, impact, recovery action을 분리한다.
 - [ ] 최종 응답이 `OUTPUT_` 변수와 대응된다.
@@ -214,4 +227,5 @@ OUTPUT_NEXT_ACTIONS: [...]
 - severity/categories 요약.
 - validator, hash, read-back 검증 결과.
 - skill-local feedback을 사용했다면 대상 `feedback/` 저장 기준.
+- processing ledger를 사용했다면 `consumer`, `status`, identity 기준.
 - 미확인 사항과 다음 단계.
