@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rubric-design-v2/judge-scorecard.schema.json",
+  "title": "Rubric Design v2 Scorecard",
+  "description": "Generated judge scorecard or skill-quality certification scorecard. JSON key and enum values remain stable English identifiers.",
+  "oneOf": [
+    { "$ref": "#/$defs/judge_scorecard" },
+    { "$ref": "#/$defs/skill_quality_scorecard" }
+  ],
+  "$defs": {
+    "cap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rule", "cap", "reason"],
+      "properties": {
+        "rule": { "type": "string" },
+        "rule_id": { "type": "string" },
+        "cap": { "type": "number", "minimum": 0, "maximum": 100 },
+        "reason": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "checklist_item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["score", "max_score"],
+      "properties": {
+        "criterion": { "type": "string" },
+        "criterion_id": { "type": "string" },
+        "score": { "type": "number", "minimum": 0 },
+        "max_score": { "type": "number", "minimum": 1 },
+        "evidence": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "paths": { "type": "array", "items": { "type": "string" } },
+        "comment": { "type": "string" }
+      }
+    },
+    "dimension_score": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["score", "max_score", "checklist", "summary"],
+      "properties": {
+        "dimension_id": { "type": "string" },
+        "dimension": { "type": "string" },
+        "score": { "type": "number", "minimum": 0 },
+        "max_score": { "type": "number", "minimum": 1 },
+        "gate_type": { "type": "string" },
+        "checklist": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/checklist_item" }
+        },
+        "local_caps_applied": { "type": "array", "items": { "type": "object" } },
+        "summary": { "type": "string" },
+        "recommended_fixes": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "hard_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension_id", "required_score", "actual_score", "passed", "blocking_issues"],
+      "properties": {
+        "dimension_id": { "type": "string", "enum": ["D1", "D2", "D3", "D4", "D5"] },
+        "required_score": { "type": "number" },
+        "actual_score": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "blocking_issues": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "judge_scorecard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluation_target",
+        "judging_context",
+        "context_contamination_notes",
+        "total_score",
+        "max_score",
+        "global_caps_applied",
+        "dimension_scores",
+        "critical_missing_points",
+        "recommended_revisions",
+        "confidence",
+        "needs_human_review"
+      ],
+      "properties": {
+        "evaluation_target": { "type": "string", "minLength": 1 },
+        "judging_context": { "type": "string", "enum": ["clean_subagent", "parallel_clean_subagents", "same_context_exception"] },
+        "context_contamination_notes": { "type": "string" },
+        "total_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "max_score": { "type": "number", "const": 100 },
+        "global_caps_applied": { "type": "array", "items": { "$ref": "#/$defs/cap" } },
+        "dimension_scores": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/dimension_score" } },
+        "critical_missing_points": { "type": "array", "items": { "type": "string" } },
+        "recommended_revisions": { "type": "array", "items": { "type": "string" } },
+        "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+        "needs_human_review": { "type": "boolean" }
+      }
+    },
+    "skill_quality_scorecard": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "skill_path",
+        "rubric_version",
+        "judging_context",
+        "workflow_mode",
+        "minimum_certification_score",
+        "raw_total_score",
+        "certification_score",
+        "max_score",
+        "pass",
+        "hard_gates",
+        "global_caps_applied",
+        "dimension_scores",
+        "parent_verification",
+        "contract_checks"
+      ],
+      "properties": {
+        "skill_path": { "type": "string" },
+        "rubric_version": { "type": "string" },
+        "judging_context": { "type": "string", "enum": ["clean_subagent", "parallel_clean_subagents", "same_context_exception"] },
+        "workflow_mode": { "type": "string" },
+        "minimum_certification_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "raw_total_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "certification_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "max_score": { "type": "number", "const": 100 },
+        "pass": { "type": "boolean" },
+        "hard_gates": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/hard_gate" } },
+        "global_caps_applied": { "type": "array", "items": { "$ref": "#/$defs/cap" } },
+        "dimension_scores": { "type": "array", "minItems": 8, "items": { "$ref": "#/$defs/dimension_score" } },
+        "parent_verification": {
+          "type": "object",
+          "required": ["score_bounds_checked", "hard_gates_checked", "caps_checked", "schema_parse_checked"],
+          "properties": {
+            "score_bounds_checked": { "type": "boolean", "const": true },
+            "hard_gates_checked": { "type": "boolean", "const": true },
+            "caps_checked": { "type": "boolean", "const": true },
+            "schema_parse_checked": { "type": "boolean", "const": true }
+          }
+        },
+        "contract_checks": { "type": "object" }
+      }
+    }
+  }
+}

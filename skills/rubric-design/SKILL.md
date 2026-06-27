@@ -31,6 +31,7 @@ metadata:
 
 - 새 루브릭 설계.
 - 기존 루브릭 개선 또는 보정.
+- raw feedback log를 근거로 루브릭 기준, cap, calibration sample을 개선.
 - 모호한 평가 기준을 100점 루브릭으로 전환.
 - LLM-as-a-Judge 평가용 루브릭 작성.
 - AI 출력, 연구 요약, 문서, 코드 리뷰, 모델 응답, 에이전트 작업 평가.
@@ -57,6 +58,8 @@ metadata:
 - 에이전트 작업 결과가 가장 중요함 → 요구사항 충족, 검증 근거, 실패 처리, 사용자 의도 정합성 비중을 높입니다.
 
 기존 루브릭을 수정할 때는 “새 버전이 이전 버전보다 무엇을 더 강하게 보상해야 하는가?”를 먼저 정합니다.
+
+raw feedback log를 근거로 루브릭을 개선했다면 raw log 본문에는 처리 상태를 쓰지 않고, 별도 processing ledger에 `consumer=rubric-skill`, `status=done|skip`, `sha256 + consumer + filename` identity로 기록합니다. ledger update가 실패하면 루브릭 개선을 fully completed로 보고하지 말고 `partial`로 분리합니다.
 
 ### 2. 체크리스트는 관찰 가능한 근거여야 한다
 
@@ -778,6 +781,7 @@ Local caps:
 - [ ] Persona/system-prompt evaluation에서 Hermes default profile을 평가할 때 active identity source인 `~/.hermes/SOUL.md`를 canonical prompt와 read-back check(hash/size)한다.
 - [ ] canonical persona source가 one-off score artifacts와 분리되어 있다. 특정 run result로 rubric을 덮어쓰지 않는다.
 - [ ] 반복 사용을 위한 calibration loop가 정의되어 있다.
+- [ ] raw feedback log를 루브릭 개선 근거로 사용했다면 processing ledger에 `consumer=rubric-skill` entry가 추가됐고, raw feedback file에는 처리 상태를 쓰지 않았다.
 
 ## origin/main 병합 보강
 

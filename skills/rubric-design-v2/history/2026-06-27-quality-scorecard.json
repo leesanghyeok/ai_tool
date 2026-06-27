@@ -1,0 +1,307 @@
+{
+  "skill_path": "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2",
+  "evaluated_at": "2026-06-27T01:42:23Z",
+  "read_only": false,
+  "rubric_version": "agent-skill-quality-v1",
+  "judging_context": "same_context_exception",
+  "context_contamination_notes": "Post-remediation parent re-score after clean_subagent identified D5 and D4/D8 gaps. Evidence is deterministic checker output and read-back; a new clean subagent re-score is not included in this file.",
+  "workflow_mode": "create",
+  "baseline_passing_score": 90,
+  "minimum_certification_score": 95,
+  "raw_total_score": 96,
+  "certification_score": 96,
+  "max_score": 100,
+  "pass": true,
+  "grade": "excellent",
+  "hard_gates": [
+    {
+      "dimension_id": "D1",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D2",
+      "required_score": 17,
+      "actual_score": 19,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D3",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D4",
+      "required_score": 13,
+      "actual_score": 14,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D5",
+      "required_score": 9,
+      "actual_score": 9,
+      "passed": true,
+      "blocking_issues": []
+    }
+  ],
+  "global_caps_applied": [],
+  "dimension_scores": [
+    {
+      "dimension_id": "D1",
+      "dimension": "사용 조건과 범위 정밀도",
+      "score": 15,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [
+        {
+          "criterion_id": "D1-summary",
+          "score": 15,
+          "max_score": 15,
+          "deterministic": false,
+          "evidence": [
+            "사용 조건, non-scope, 산출물이 명확하다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "사용 조건, non-scope, 산출물이 명확하다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "사용 조건, non-scope, 산출물이 명확하다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D2",
+      "dimension": "운영 workflow 명시성",
+      "score": 19,
+      "max_score": 20,
+      "gate_type": "hard",
+      "checklist": [
+        {
+          "criterion_id": "D2-summary",
+          "score": 19,
+          "max_score": 20,
+          "deterministic": false,
+          "evidence": [
+            "INPUT/OUTPUT/ENV와 13단계 workflow, templates/scripts 경로가 명시되어 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "INPUT/OUTPUT/ENV와 13단계 workflow, templates/scripts 경로가 명시되어 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "INPUT/OUTPUT/ENV와 13단계 workflow, templates/scripts 경로가 명시되어 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D3",
+      "dimension": "안전, 승인, 경계 정합성",
+      "score": 15,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [
+        {
+          "criterion_id": "D3-summary",
+          "score": 15,
+          "max_score": 15,
+          "deterministic": false,
+          "evidence": [
+            "read-only action과 approval-required action이 분리되어 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "read-only action과 approval-required action이 분리되어 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "read-only action과 approval-required action이 분리되어 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D4",
+      "dimension": "검증과 근거 규율",
+      "score": 14,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [
+        {
+          "criterion_id": "D4-summary",
+          "score": 14,
+          "max_score": 15,
+          "deterministic": false,
+          "evidence": [
+            "artifact validator, scorecard validator, Korean-first checker와 JSON schema parse 검증이 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "artifact validator, scorecard validator, Korean-first checker와 JSON schema parse 검증이 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "artifact validator, scorecard validator, Korean-first checker와 JSON schema parse 검증이 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D5",
+      "dimension": "재사용성, 범용성, 언어 적합성",
+      "score": 9,
+      "max_score": 10,
+      "gate_type": "hard",
+      "checklist": [
+        {
+          "criterion_id": "D5-summary",
+          "score": 9,
+          "max_score": 10,
+          "deterministic": false,
+          "evidence": [
+            "package-wide Korean-first checker가 통과했고 machine identifier 보존 규칙이 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "package-wide Korean-first checker가 통과했고 machine identifier 보존 규칙이 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "package-wide Korean-first checker가 통과했고 machine identifier 보존 규칙이 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D6",
+      "dimension": "실패 처리와 복구",
+      "score": 9,
+      "max_score": 10,
+      "gate_type": "quality",
+      "checklist": [
+        {
+          "criterion_id": "D6-summary",
+          "score": 9,
+          "max_score": 10,
+          "deterministic": false,
+          "evidence": [
+            "fast fail, feedback logging, 상태 보고, 복구 기준이 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "fast fail, feedback logging, 상태 보고, 복구 기준이 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "fast fail, feedback logging, 상태 보고, 복구 기준이 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D7",
+      "dimension": "구조, 일관성, 인지 부담",
+      "score": 8,
+      "max_score": 8,
+      "gate_type": "quality",
+      "checklist": [
+        {
+          "criterion_id": "D7-summary",
+          "score": 8,
+          "max_score": 8,
+          "deterministic": false,
+          "evidence": [
+            "SKILL.md는 orchestration 중심이고 support files로 분리되어 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "SKILL.md는 orchestration 중심이고 support files로 분리되어 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "SKILL.md는 orchestration 중심이고 support files로 분리되어 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D8",
+      "dimension": "병렬화, 컨텍스트 관리, 결정론적 자동화",
+      "score": 7,
+      "max_score": 7,
+      "gate_type": "quality",
+      "checklist": [
+        {
+          "criterion_id": "D8-summary",
+          "score": 7,
+          "max_score": 7,
+          "deterministic": false,
+          "evidence": [
+            "병렬화 기준과 재사용 가능한 deterministic checker가 있다."
+          ],
+          "paths": [
+            "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2/SKILL.md"
+          ],
+          "comment": "병렬화 기준과 재사용 가능한 deterministic checker가 있다."
+        }
+      ],
+      "local_caps_applied": [],
+      "summary": "병렬화 기준과 재사용 가능한 deterministic checker가 있다.",
+      "recommended_fixes": []
+    }
+  ],
+  "contract_checks": {
+    "input_contract_minimal": true,
+    "output_contract_actionable": true,
+    "env_contract_separated": true,
+    "variable_table_columns_valid": true
+  },
+  "artifact_placement_checks": {
+    "templates_for_skeletons": true,
+    "references_for_judgment_rules": true,
+    "scripts_for_deterministic_work": true,
+    "history_separated": true,
+    "feedback_separated": true
+  },
+  "feedback_logging": {
+    "included": true,
+    "path_policy": "feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md",
+    "format_reference": "templates/feedback-log.template.md",
+    "dedupe_or_hash_rule": "중복 검사와 body-only sha256",
+    "redaction_rule": "secret/token/cookie/private URL/credential 원문 redaction"
+  },
+  "parent_verification": {
+    "score_bounds_checked": true,
+    "hard_gates_checked": true,
+    "caps_checked": true,
+    "schema_parse_checked": true
+  },
+  "counts": {
+    "included_files": 21,
+    "reference_files": 11,
+    "template_files": 4,
+    "script_files": 3,
+    "checklist_items": 8,
+    "deterministic_items": 3,
+    "judge_only_items": 5
+  },
+  "issues": [],
+  "unverified": [
+    {
+      "area": "fresh_clean_subagent_post_final_remediation",
+      "reason": "마지막 D5 package-wide fix와 scorecard validator expansion 후 clean subagent 재채점은 아직 실행하지 않았다."
+    }
+  ],
+  "next_actions": [
+    {
+      "priority": "medium",
+      "action": "원하면 clean_subagent 재평가를 한 번 더 실행해 independent certification을 갱신한다.",
+      "paths": [
+        "/Users/stark/project/jarvis/ai_tool/skills/rubric-design-v2"
+      ]
+    }
+  ]
+}

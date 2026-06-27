@@ -28,6 +28,12 @@ DIMENSION_MAX = {
     "D7": 8,
     "D8": 7,
 }
+CONTRACT_CHECK_KEYS = {
+    "input_contract_minimal",
+    "output_contract_actionable",
+    "env_contract_separated",
+    "variable_table_columns_valid",
+}
 
 
 def fail(message: str) -> None:
@@ -43,9 +49,30 @@ def main() -> None:
     minimum_score = int(sys.argv[2]) if len(sys.argv) == 3 else 95
     data = json.loads(path.read_text(encoding="utf-8"))
 
-    for key in ["skill_path", "rubric_version", "raw_total_score", "certification_score", "hard_gates", "dimension_scores"]:
+    for key in [
+        "skill_path",
+        "rubric_version",
+        "raw_total_score",
+        "certification_score",
+        "hard_gates",
+        "dimension_scores",
+        "contract_checks",
+    ]:
         if key not in data:
             fail(f"scorecard missing required key: {key}")
+
+    contract_checks = data["contract_checks"]
+    if not isinstance(contract_checks, dict):
+        fail("contract_checks must be an object")
+    actual_contract_keys = set(contract_checks)
+    if actual_contract_keys != CONTRACT_CHECK_KEYS:
+        fail(
+            "contract_checks must contain exactly "
+            f"{sorted(CONTRACT_CHECK_KEYS)}: {sorted(actual_contract_keys)}"
+        )
+    for key, value in contract_checks.items():
+        if not isinstance(value, bool):
+            fail(f"contract_checks.{key} must be boolean")
 
     dimensions = {item.get("dimension_id"): item for item in data["dimension_scores"]}
     if set(dimensions) != set(DIMENSION_MAX):
@@ -65,18 +92,20 @@ def main() -> None:
         fail(f"raw_total_score mismatch: dimensions={total} raw_total_score={data['raw_total_score']}")
 
     hard_gates = {item.get("dimension_id"): item for item in data["hard_gates"]}
+    missing_hard_gates = set(HARD_GATE_THRESHOLDS) - set(hard_gates)
+    if missing_hard_gates:
+        fail(f"hard_gates missing required dimensions: {sorted(missing_hard_gates)}")
     for dimension_id, required in HARD_GATE_THRESHOLDS.items():
         actual = dimensions[dimension_id]["score"]
         if actual < required:
             fail(f"hard gate failed: {dimension_id} {actual} < {required}")
-        if dimension_id in hard_gates:
-            gate = hard_gates[dimension_id]
-            if gate.get("actual_score") != actual:
-                fail(f"hard gate actual_score mismatch for {dimension_id}")
-            if gate.get("required_score") != required:
-                fail(f"hard gate required_score mismatch for {dimension_id}")
-            if gate.get("passed") is not True:
-                fail(f"hard gate passed flag must be true for {dimension_id}")
+        gate = hard_gates[dimension_id]
+        if gate.get("actual_score") != actual:
+            fail(f"hard gate actual_score mismatch for {dimension_id}")
+        if gate.get("required_score") != required:
+            fail(f"hard gate required_score mismatch for {dimension_id}")
+        if gate.get("passed") is not True:
+            fail(f"hard gate passed flag must be true for {dimension_id}")
 
     if data["certification_score"] < minimum_score:
         fail(f"certification_score below minimum: {data['certification_score']} < {minimum_score}")

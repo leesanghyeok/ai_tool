@@ -60,8 +60,9 @@ Parent agent는 judge 결과를 그대로 믿지 않는다. 다음을 직접 확
 4. D1-D5 hard gate threshold가 모두 통과했는가.
 5. local cap과 global cap이 적용됐고 `certification_score`에 반영됐는가.
 6. `certification_score >= 95` 여부를 확인했는가.
-7. issue와 recommended fix가 구체적 path와 evidence를 포함하는가.
-8. `quality-review-only`에서 target skill, rubric, scorecard 파일을 쓰지 않았는가.
+7. `contract_checks`의 네 key가 모두 boolean이며, `input_contract_minimal`, `output_contract_actionable`, `env_contract_separated`, `variable_table_columns_valid`가 rubric의 `INPUT_`/`OUTPUT_`/`ENV_` 기준과 일치하는가.
+8. issue와 recommended fix가 구체적 path와 evidence를 포함하는가.
+9. `quality-review-only`에서 target skill, rubric, scorecard 파일을 쓰지 않았는가.
 
 ## 실패와 수정 loop
 

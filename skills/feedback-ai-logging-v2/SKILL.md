@@ -85,6 +85,7 @@ metadata:
 - Hash validation gate: 작성 후 body-only hash와 deterministic validator가 통과해야 completed로 보고한다.
 - Raw/derived separation gate: raw log 안에는 처리 상태, 승격 여부, guide/rubric/skill patch 내용을 섞지 않는다.
 - Processing ledger gate: 처리 여부 추적이 필요하면 raw log가 아니라 별도 ledger를 사용한다. ledger identity는 `sha256 + consumer + filename`이고 `status`는 `todo`, `done`, `skip`만 허용한다.
+- Feedback-derived update ledger gate: raw feedback을 guide, rubric, memory, skill patch 같은 derived artifact 개선에 사용했다면 같은 승인 범위 안에서 해당 `consumer`의 processing ledger entry를 `done` 또는 `skip`으로 기록해야 completed로 보고할 수 있다. ledger를 쓸 수 없으면 `partial` 또는 `blocked`로 보고한다.
 
 ## 빠른 중단 조건 (Fast Fail)
 
@@ -151,9 +152,12 @@ metadata:
 11. **processing ledger 분리**
     - raw feedback의 처리 여부를 추적해야 하면 feedback 파일을 수정하지 않고 별도 ledger를 사용한다.
     - skill-local feedback은 `<SKILL_DIR>/history/feedback-processing-ledger.jsonl`을 기본 위치로 둔다.
+    - global raw feedback은 feedback wiki의 `output/feedback-processing-ledger.jsonl`을 기본 위치로 둔다.
     - ledger entry의 최소 key는 `sha256 + consumer + filename`이다. `target_artifact`는 경로 이동에 취약하므로 넣지 않는다.
     - `consumer`는 처음에는 `feedback-ai-logging-v2`, `skill-creator-for-stark`, `rubric-skill`, `memory`만 사용한다.
     - `status`는 `todo`, `done`, `skip`만 사용한다. `done`에는 가능하면 evidence를, `skip`에는 decision 이유를 남긴다.
+    - raw feedback을 derived artifact 개선에 사용했다면 artifact write와 ledger write를 같은 작업 단위로 검증한다. 예: 루브릭 개선에 사용한 feedback은 `consumer=rubric-skill`, memory 반영은 `consumer=memory`, skill 개선은 해당 skill consumer로 기록한다.
+    - ledger write를 못 했으면 raw feedback 처리를 완료로 보고하지 않고, 실패 command/path와 복구 행동을 분리해 보고한다.
 
 12. **스킬 사용 불만족 feedback 처리**
     - 이 스킬 자체 또는 다른 스킬 사용 중 사용자가 “스킬 피드백에 남겨”라고 명시하면 해당 스킬의 `feedback/` 아래에 raw log를 저장한다.
