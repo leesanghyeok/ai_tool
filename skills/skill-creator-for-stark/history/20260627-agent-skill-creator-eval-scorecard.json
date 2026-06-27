@@ -1,0 +1,141 @@
+{
+  "skill_path": "/Users/stark/project/jarvis/ai_tool/skills/skill-creator-for-stark",
+  "evaluated_at": "2026-06-27T11:45:29Z",
+  "read_only": true,
+  "rubric_version": "agent-skill-quality-v1",
+  "judging_context": "clean_subagent + parent_verification",
+  "context_contamination_notes": "Clean subagent advisory result was reconciled by parent with validator, parse, rollout, pipeline, diff-check, and ad-hoc fixture verification.",
+  "workflow_mode": "modify",
+  "baseline_passing_score": 90,
+  "minimum_certification_score": 95,
+  "raw_total_score": 96,
+  "certification_score": 96,
+  "max_score": 100,
+  "pass": true,
+  "pass_95": true,
+  "hard_gate_pass": true,
+  "quality_certification": "passed_95",
+  "hard_gates": [
+    {
+      "dimension_id": "D1",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true
+    },
+    {
+      "dimension_id": "D2",
+      "required_score": 17,
+      "actual_score": 19,
+      "passed": true
+    },
+    {
+      "dimension_id": "D3",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true
+    },
+    {
+      "dimension_id": "D4",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true
+    },
+    {
+      "dimension_id": "D5",
+      "required_score": 9,
+      "actual_score": 9,
+      "passed": true
+    }
+  ],
+  "global_caps_applied": [],
+  "dimension_scores": [
+    {
+      "dimension_id": "D1",
+      "score": 15,
+      "max_score": 15,
+      "notes": "Trigger/scope and non-scope are explicit."
+    },
+    {
+      "dimension_id": "D2",
+      "score": 19,
+      "max_score": 20,
+      "notes": "Workflow, commands, schema, and contract tables are explicit; contract rows remediated to 6/6/4."
+    },
+    {
+      "dimension_id": "D3",
+      "score": 15,
+      "max_score": 15,
+      "notes": "Approval, mutation, credential, quality-review-only, and --promote boundaries are clear."
+    },
+    {
+      "dimension_id": "D4",
+      "score": 15,
+      "max_score": 15,
+      "notes": "Validator, eval runner, rollout, pipeline checker, diff-check, JSON parse, and ad-hoc fixture verification are defined and exercised."
+    },
+    {
+      "dimension_id": "D5",
+      "score": 9,
+      "max_score": 10,
+      "notes": "Korean-first and reusable; Stark-specific scope/path is intentional."
+    },
+    {
+      "dimension_id": "D6",
+      "score": 10,
+      "max_score": 10,
+      "notes": "Failure reporting and recovery fields are explicit."
+    },
+    {
+      "dimension_id": "D7",
+      "score": 6,
+      "max_score": 8,
+      "notes": "Remaining minor trigger duplication warning and package-authoring warning."
+    },
+    {
+      "dimension_id": "D8",
+      "score": 7,
+      "max_score": 7,
+      "notes": "Subagent, context management, deterministic scripts, eval runner, and pipeline checker are separated."
+    }
+  ],
+  "contract_checks": {
+    "input_contract_minimal": true,
+    "output_contract_actionable": true,
+    "env_contract_separated": true,
+    "variable_table_columns_valid": true
+  },
+  "artifact_placement_checks": {
+    "templates_for_skeletons": true,
+    "references_for_judgment_rules": true,
+    "scripts_for_deterministic_work": true,
+    "history_separated": true,
+    "feedback_separated": true
+  },
+  "feedback_logging": {
+    "included": true,
+    "path_policy": "skill-local feedback/ raw logs",
+    "format_reference": "references/skill-feedback-logging-rules.md and references/file-format.md",
+    "dedupe_or_hash_rule": "중복 검사와 read-back 검증",
+    "redaction_rule": "secret-like values are not preserved in raw evidence or history"
+  },
+  "parent_verification": {
+    "score_bounds_checked": true,
+    "hard_gates_checked": true,
+    "caps_checked": true,
+    "schema_parse_checked": true
+  },
+  "issues": [
+    {
+      "severity": "low-medium",
+      "dimension": "D7",
+      "issue": "Trigger section duplication warning remains but is not hard-gate blocking."
+    },
+    {
+      "severity": "low",
+      "dimension": "D5",
+      "issue": "Stark-specific name and canonical rubric path are intentional but prevent D5 max score."
+    }
+  ],
+  "unverified": [],
+  "next_actions": []
+}

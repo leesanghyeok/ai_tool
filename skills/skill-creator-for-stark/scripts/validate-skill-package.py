@@ -6,12 +6,13 @@ Usage:
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 REQUIRED_KEYS = ["name", "description", "version", "author", "license"]
-ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history", "feedback"}
+ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history", "feedback", "evals"}
 REQUIRED_SECTIONS = [
     "## 입력 변수",
     "## 출력 변수",
@@ -45,6 +46,11 @@ PACKAGE_AUTHORING_ALLOWLIST = {
     "skill-creator-for-stark",
     "agent-skill-authoring",
 }
+VALID_EVAL_TYPES = {"command", "llm-judge"}
+MIN_GOLDEN_CASES = 3
+OUTPUT_PLACEHOLDER = "{output}"
+_JSON_BLOCK = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+
 TEMPLATE_HINT_TERMS = [
     "template",
     "템플릿",
@@ -96,8 +102,13 @@ def word_count(text: str) -> int:
 
 
 def check_links(skill_dir: Path, text: str, label: str) -> None:
-    for match in re.findall(r"`((?:references|templates|scripts|assets|history)/[^`]+)`", text):
+    generated_skill_examples = {"scripts/run_evals.py", "scripts/run_pipeline.py"}
+    for match in re.findall(r"`((?:references|templates|scripts|assets|history|evals)/[^`]+)`", text):
         if "<" in match or ">" in match:
+            continue
+        if skill_dir.name in PACKAGE_AUTHORING_ALLOWLIST and match in generated_skill_examples:
+            continue
+        if "*" in match or " " in match:
             continue
         candidate = skill_dir / match
         if not candidate.exists():
@@ -224,6 +235,78 @@ def check_feedback_guidance(text: str) -> None:
         fail("skill feedback logging guidance must identify dissatisfaction incidents")
 
 
+def _parse_eval_spec(spec_path: Path) -> dict:
+    text = spec_path.read_text(encoding="utf-8")
+    match = _JSON_BLOCK.search(text)
+    if not match:
+        fail(f"eval spec has no fenced json block: {spec_path}")
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        fail(f"eval spec JSON does not parse: {spec_path}: {exc}")
+
+
+def check_eval_spec(skill_dir: Path) -> None:
+    evals_dir = skill_dir / "evals"
+    if not evals_dir.exists():
+        return
+    if not evals_dir.is_dir():
+        fail("evals exists but is not a directory")
+
+    specs = sorted(evals_dir.glob("*.eval.md"))
+    if not specs:
+        fail("evals/ exists but no evals/*.eval.md spec was found")
+    if not (skill_dir / "scripts" / "run_evals.py").exists():
+        fail("evals/ exists but scripts/run_evals.py is missing")
+
+    for spec_path in specs:
+        spec = _parse_eval_spec(spec_path)
+        if not spec.get("skill"):
+            fail(f"eval spec missing 'skill': {spec_path}")
+
+        run_cmd = spec.get("run")
+        if run_cmd is not None:
+            if not isinstance(run_cmd, str) or not run_cmd.strip():
+                fail(f"eval spec 'run' must be a non-empty string: {spec_path}")
+            if OUTPUT_PLACEHOLDER not in run_cmd:
+                fail(f"eval spec 'run' must contain {OUTPUT_PLACEHOLDER}: {spec_path}")
+
+        criteria = spec.get("criteria")
+        if not isinstance(criteria, list) or not criteria:
+            fail(f"eval spec 'criteria' must be a non-empty list: {spec_path}")
+        for index, criterion in enumerate(criteria):
+            where = f"{spec_path}: criteria[{index}]"
+            if not isinstance(criterion, dict):
+                fail(f"{where} must be an object")
+            for key in ("id", "text", "type"):
+                if not criterion.get(key):
+                    fail(f"{where} missing '{key}'")
+            if criterion.get("type") not in VALID_EVAL_TYPES:
+                fail(f"{where} type must be command or llm-judge")
+            if criterion.get("type") == "command" and not criterion.get("cmd"):
+                fail(f"{where} command criterion missing 'cmd'")
+
+        golden = spec.get("golden")
+        if not isinstance(golden, list) or len(golden) < MIN_GOLDEN_CASES:
+            fail(f"eval spec needs at least {MIN_GOLDEN_CASES} golden cases: {spec_path}")
+        for index, case in enumerate(golden):
+            where = f"{spec_path}: golden[{index}]"
+            if not isinstance(case, dict):
+                fail(f"{where} must be an object")
+            if not case.get("id"):
+                fail(f"{where} missing 'id'")
+            input_path = case.get("input")
+            if not input_path:
+                fail(f"{where} missing 'input'")
+            if input_path and not (evals_dir / input_path).exists():
+                fail(f"{where} input file not found: evals/{input_path}")
+            expected = case.get("expected")
+            if expected is not None and not (evals_dir / expected).exists():
+                fail(f"{where} expected file not found: evals/{expected}")
+            if expected is None and case.get("expected_status") != "pending-first-green":
+                fail(f"{where} null expected must set expected_status='pending-first-green'")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         fail("Usage: validate-skill-package.py <skill-dir>")
@@ -280,6 +363,7 @@ def main() -> None:
     check_hard_gate_specificity(name, text)
     check_template_placement(skill_dir)
     check_feedback_guidance(text)
+    check_eval_spec(skill_dir)
 
     for child in skill_dir.iterdir():
         if child.is_dir() and child.name not in ALLOWED_SUPPORT_DIRS:
