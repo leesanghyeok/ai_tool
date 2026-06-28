@@ -1,7 +1,7 @@
 ---
 name: feedback-ai-logging-v2
 description: AI 또는 agent 출력·workflow 불만족 사건을 raw feedback Markdown으로 남겨야 할 때 사용합니다. 현재/과거 세션, transcript, 파일에서 기대와 실제 차이, 근거, 후보 규칙을 사건 단위로 기록하고 중복·hash·path 검증을 수행합니다.
-version: 2.2.0
+version: 2.3.0
 author: Agent
 license: MIT
 metadata:
@@ -171,6 +171,14 @@ metadata:
 - parent는 source read-back, taxonomy 정규화, 중복 판단, 파일 작성, hash/validator 검증을 직접 수행한다.
 - 작은 현재 세션 feedback 1–3건은 subagent 없이 처리한다.
 
+## Eval 계약
+
+- 이 스킬의 회귀 검증 계약은 `evals/feedback-ai-logging-v2.eval.md`에 둔다.
+- `scripts/run_evals.py --validate`는 eval spec shape, criteria, golden case 존재를 검증한다.
+- `scripts/run_evals.py --rollout --json`은 `scripts/run_pipeline.py --input {input} --output {output}`으로 golden input마다 raw feedback Markdown을 생성한 뒤 command criteria를 실행한다.
+- `scripts/validate-feedback-log.py --content-only`는 rollout temp output처럼 실제 저장 경로가 아닌 파일의 content shape, taxonomy, section, body-only `sha256`을 검증한다.
+- `llm-judge` criterion은 자동 통과로 보고하지 않고 사람이 사건 품질을 확인해야 하는 checklist로만 출력한다.
+
 ## 출력 템플릿
 
 최종 보고는 아래 구조를 따른다.
@@ -220,6 +228,8 @@ OUTPUT_NEXT_ACTIONS: [...]
 - [ ] 생성된 feedback log가 있다면 validator, hash check, read-back이 통과한다.
 - [ ] 처리 여부를 추적해야 한다면 raw log가 아니라 processing ledger를 사용하며, identity가 `sha256 + consumer + filename`이다.
 - [ ] validator가 `references/file-format.md`와 `templates/feedback-log.template.md`의 필수 frontmatter field와 body section을 모두 검증한다.
+- [ ] `evals/feedback-ai-logging-v2.eval.md`가 있고 `python3 scripts/run_evals.py --validate`가 통과한다.
+- [ ] `python3 scripts/run_evals.py --rollout --json`에서 pipeline output command criteria가 통과하고 `llm-judge`는 자동 채점 완료로 보고하지 않는다.
 - [ ] 실패 보고가 필요한 경우 failed command, likely cause, impact, recovery action을 분리한다.
 - [ ] 최종 응답이 `OUTPUT_` 변수와 대응된다.
 

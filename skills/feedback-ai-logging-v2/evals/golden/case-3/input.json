@@ -1,0 +1,27 @@
+{
+  "case_id": "case-3",
+  "source_type": "ai-dissatisfaction",
+  "source_platform": "session-db",
+  "source_ref": "session-search",
+  "session_id": "unknown-session",
+  "ingested": "2026-06-27",
+  "created_at": "2026-06-27T09:10:00+09:00",
+  "task_type": "planning",
+  "agent_or_model": "",
+  "severity": "low",
+  "categories": [
+    "specificity"
+  ],
+  "title": "중복 후보 제외 사건",
+  "situation": "여러 session에서 비슷한 feedback 후보를 수확하는 중 같은 사건이 반복 발견됐다.",
+  "dissatisfaction": "파일명만 보고 중복을 판단하면 의미상 같은 사건을 다시 만들 위험이 있었다.",
+  "expected_behavior": "Situation, Expected Behavior, Evidence, Candidate Agent Rule의 의미를 비교해 중복을 제외해야 했다.",
+  "actual_behavior": "agent가 filename 중심으로만 중복 검사를 수행할 가능성이 있었다.",
+  "evidence": [
+    "같은 session/source에서 같은 expected/actual/rule을 가진 후보가 반복됐다."
+  ],
+  "candidate_agent_rule": "Feedback 중복 검사는 filename이 아니라 source와 사건 의미를 함께 비교한다.",
+  "candidate_checklist_items": [
+    "[ ] 기존 feedback files에서 의미상 같은 incident가 있는지 검색했는가?"
+  ]
+}

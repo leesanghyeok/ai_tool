@@ -11,6 +11,7 @@ Checks are deterministic and intentionally limited to file shape:
 Usage:
   python scripts/validate-feedback-log.py /path/to/raw/feedback/2026-06-01/*.md
   python scripts/validate-feedback-log.py /path/to/skills/foo/feedback/2026-06-01/*.md
+  python scripts/validate-feedback-log.py --content-only /tmp/generated-feedback.md
 """
 from __future__ import annotations
 import argparse, hashlib, json, re, sys
@@ -46,7 +47,7 @@ def parse_frontmatter(text: str):
         data[k.strip()] = v
     return data, body, []
 
-def validate(path: Path):
+def validate(path: Path, *, content_only: bool = False):
     text = path.read_text(encoding='utf-8')
     fm, body, errors = parse_frontmatter(text)
     if fm is None:
@@ -70,17 +71,18 @@ def validate(path: Path):
     actual_hash = hashlib.sha256(body.encode('utf-8')).hexdigest()
     if fm.get('sha256') and fm.get('sha256') != actual_hash:
         errors.append(f"sha256 mismatch expected={fm.get('sha256')} actual={actual_hash}")
-    norm = str(path.resolve()).replace('\\','/')
-    source_type = fm.get('source_type')
-    if source_type == 'skill-dissatisfaction':
-        if not SKILL_LOCAL_PATH_RE.search(norm):
-            errors.append('path convention 불일치: skill-local feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md')
-    elif source_type == 'ai-dissatisfaction':
-        if not GLOBAL_PATH_RE.search(norm):
-            errors.append('path convention 불일치: raw/feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md')
-    else:
-        if not (GLOBAL_PATH_RE.search(norm) or SKILL_LOCAL_PATH_RE.search(norm)):
-            errors.append('path convention 불일치')
+    if not content_only:
+        norm = str(path.resolve()).replace('\\','/')
+        source_type = fm.get('source_type')
+        if source_type == 'skill-dissatisfaction':
+            if not SKILL_LOCAL_PATH_RE.search(norm):
+                errors.append('path convention 불일치: skill-local feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md')
+        elif source_type == 'ai-dissatisfaction':
+            if not GLOBAL_PATH_RE.search(norm):
+                errors.append('path convention 불일치: raw/feedback/YYYY-MM-DD/{HHMMSS}-{session_id}-{short-slug}.md')
+        else:
+            if not (GLOBAL_PATH_RE.search(norm) or SKILL_LOCAL_PATH_RE.search(norm)):
+                errors.append('path convention 불일치')
     for section in REQUIRED_SECTIONS:
         if section not in body:
             errors.append(f"semantic section 누락: {section}")
@@ -92,6 +94,7 @@ def validate(path: Path):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
+    ap.add_argument('--content-only', action='store_true', help='path convention은 건너뛰고 file content shape/hash/taxonomy만 검증한다.')
     ap.add_argument('paths', nargs='+')
     ns = ap.parse_args(argv)
     files=[]
@@ -101,7 +104,7 @@ def main(argv=None):
             files.extend(sorted(p.rglob('*.md')))
         else:
             files.extend(sorted(Path().glob(item)) if any(ch in item for ch in '*?[') else [p])
-    results=[validate(p) for p in files]
+    results=[validate(p, content_only=ns.content_only) for p in files]
     print(json.dumps({"ok": all(r['ok'] for r in results), "files": results}, ensure_ascii=False, indent=2))
     return 0 if all(r['ok'] for r in results) else 1
 if __name__ == '__main__':

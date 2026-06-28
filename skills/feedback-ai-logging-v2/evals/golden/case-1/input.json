@@ -1,0 +1,29 @@
+{
+  "case_id": "case-1",
+  "source_type": "ai-dissatisfaction",
+  "source_platform": "cli",
+  "source_ref": "current-session",
+  "session_id": "unknown-session",
+  "ingested": "2026-06-27",
+  "created_at": "2026-06-27T09:00:00+09:00",
+  "task_type": "review",
+  "agent_or_model": "",
+  "severity": "high",
+  "categories": [
+    "verification",
+    "evidence"
+  ],
+  "title": "검증 없이 완료 보고한 사건",
+  "situation": "사용자가 agent workflow 결과를 완료로 보고받았지만 실제 validator 출력은 제공되지 않았다.",
+  "dissatisfaction": "완료 주장에 필요한 read-back 또는 validator evidence가 없었다.",
+  "expected_behavior": "완료 전 실제 command output, file read-back, 실패 여부를 확인하고 보고해야 했다.",
+  "actual_behavior": "agent가 검증 evidence 없이 완료처럼 요약했다.",
+  "evidence": [
+    "사용자 발화: \"검증 없이 완료라고 하지 마.\"",
+    "확인된 source: current_session excerpt."
+  ],
+  "candidate_agent_rule": "완료를 주장하기 전에 실제 validator 또는 read-back output을 확보하고, 없으면 unverified로 보고한다.",
+  "candidate_checklist_items": [
+    "[ ] 완료 보고 직전에 실제 검증 output이 있는가?"
+  ]
+}

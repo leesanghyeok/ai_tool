@@ -1,0 +1,193 @@
+{
+  "skill_path": "/Users/stark/project/jarvis/ai_tool/skills/feedback-ai-logging-v2",
+  "evaluated_at": "2026-06-28T03:46:36Z",
+  "read_only": false,
+  "rubric_version": "agent-skill-quality-v1",
+  "judging_context": "same_context_exception",
+  "context_contamination_notes": "modify 작업의 release check로 같은 세션에서 평가했다. 점수 산정은 read-back한 SKILL.md/support files, validator/eval output, canonical rubric에 한정했다.",
+  "workflow_mode": "modify",
+  "baseline_passing_score": 90,
+  "minimum_certification_score": 95,
+  "raw_total_score": 100,
+  "certification_score": 100,
+  "max_score": 100,
+  "pass": true,
+  "pass_95": true,
+  "hard_gate_pass": true,
+  "quality_certification": "passed_95",
+  "hard_gates": [
+    {
+      "dimension_id": "D1",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D2",
+      "required_score": 17,
+      "actual_score": 20,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D3",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D4",
+      "required_score": 13,
+      "actual_score": 15,
+      "passed": true,
+      "blocking_issues": []
+    },
+    {
+      "dimension_id": "D5",
+      "required_score": 9,
+      "actual_score": 10,
+      "passed": true,
+      "blocking_issues": []
+    }
+  ],
+  "global_caps_applied": [],
+  "dimension_scores": [
+    {
+      "dimension_id": "D1",
+      "dimension": "Trigger & Scope Precision",
+      "score": 15,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "사용 판단 section이 AI/agent feedback logging trigger, non-scope, near-miss를 한 곳에 둔다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D2",
+      "dimension": "Operational Workflow Explicitness",
+      "score": 20,
+      "max_score": 20,
+      "gate_type": "hard",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "입력/출력/환경 계약과 source 식별, 사건 수집, 중복 검사, 파일 작성, 검증, ledger 분리를 순서대로 설명한다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D3",
+      "dimension": "Safety, Approval & Boundary Alignment",
+      "score": 15,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "파일 쓰기 승인, raw/derived 분리, credential redaction, external/production 비범위를 명시한다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D4",
+      "dimension": "Verification & Evidence Discipline",
+      "score": 15,
+      "max_score": 15,
+      "gate_type": "hard",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "validate-feedback-log.py, body-only sha256, read-back, run_evals.py eval contract를 명시하고 실제 검증했다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D5",
+      "dimension": "Reusability, Generality & Language Fit",
+      "score": 10,
+      "max_score": 10,
+      "gate_type": "hard",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "한국어 우선 prose와 machine identifier 보존이 분리되어 있고 특정 1회성 사건에 과종속되지 않는다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D6",
+      "dimension": "Failure Handling & Recovery",
+      "score": 10,
+      "max_score": 10,
+      "gate_type": "quality",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "Fast Fail, blocked/partial 보고, failed_command/impact/recovery 분리가 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D7",
+      "dimension": "Structure, Consistency & Cognitive Load",
+      "score": 8,
+      "max_score": 8,
+      "gate_type": "quality",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "trigger 중복 없이 SKILL.md는 orchestration 중심이고 skeleton/reference/script/history가 분리되어 있다.",
+      "recommended_fixes": []
+    },
+    {
+      "dimension_id": "D8",
+      "dimension": "Parallelization, Context & Deterministic Automation",
+      "score": 7,
+      "max_score": 7,
+      "gate_type": "quality",
+      "checklist": [],
+      "local_caps_applied": [],
+      "summary": "긴 세션 수확은 shard/subagent 후보로 두고 deterministic hash/path/schema/eval 검증은 scripts로 분리했다.",
+      "recommended_fixes": []
+    }
+  ],
+  "contract_checks": {
+    "input_contract_minimal": true,
+    "output_contract_actionable": true,
+    "env_contract_separated": true,
+    "variable_table_columns_valid": true
+  },
+  "artifact_placement_checks": {
+    "templates_for_skeletons": true,
+    "references_for_judgment_rules": true,
+    "scripts_for_deterministic_work": true,
+    "history_separated": true,
+    "feedback_separated": true
+  },
+  "feedback_logging": {
+    "included": true,
+    "path_policy": "global raw feedback은 raw/feedback/YYYY-MM-DD/, skill-local feedback은 <SKILL_DIR>/feedback/YYYY-MM-DD/",
+    "format_reference": "references/file-format.md + templates/feedback-log.template.md",
+    "dedupe_or_hash_rule": "semantic duplicate check + body-only sha256",
+    "redaction_rule": "secret/token/private URL/credential raw evidence 저장 금지"
+  },
+  "parent_verification": {
+    "score_bounds_checked": true,
+    "hard_gates_checked": true,
+    "caps_checked": true,
+    "schema_parse_checked": true
+  },
+  "counts": {
+    "included_files": 16,
+    "reference_files": 5,
+    "template_files": 1,
+    "script_files": 3,
+    "checklist_items": 18,
+    "deterministic_items": 12,
+    "judge_only_items": 1
+  },
+  "issues": [],
+  "unverified": [
+    {
+      "area": "clean_subagent_judge",
+      "reason": "이번 수정은 same_context_exception으로 평가했다. 별도 clean judge를 실행하지 않았다."
+    },
+    {
+      "area": "llm_judge eval criterion",
+      "reason": "run_evals.py는 llm-judge를 checklist로만 출력하며 자동 채점하지 않는다."
+    }
+  ],
+  "next_actions": []
+}
