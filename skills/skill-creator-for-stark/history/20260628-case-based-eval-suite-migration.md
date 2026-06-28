@@ -41,6 +41,6 @@ modify
 - `python3.11 -m unittest discover -s scripts/tests -v` → 20 tests OK.
 - `git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-for-stark` → 통과.
 
-## 남은 주의
+## 추가 정리
 
-기존 `evals/skill-creator-for-stark.eval.md`와 `evals/golden/` 입력은 삭제하지 않았다. 삭제는 destructive change이므로 별도 승인 후 정리한다.
+사용자 승인 후 기존 legacy Markdown eval manifest와 golden fixture directory를 제거했다. 현재 실행 source of truth는 `evals/skill-creator-for-stark.eval.yaml`과 declared `evals/cases/*/case.yaml`이다.

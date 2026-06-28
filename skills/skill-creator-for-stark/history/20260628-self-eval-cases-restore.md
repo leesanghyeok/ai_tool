@@ -10,10 +10,8 @@ modify
 
 ## 주요 변경
 
-- `evals/skill-creator-for-stark.eval.md`를 추가했다.
-- `evals/golden/create-new-skill/input.json`을 추가했다.
-- `evals/golden/modify-existing-skill/input.json`을 추가했다.
-- `evals/golden/quality-review-only/input.json`을 추가했다.
+- 당시에는 legacy Markdown eval manifest와 golden input fixtures를 추가했다.
+- 이후 case-based eval suite로 전환하면서 legacy manifest와 golden fixtures는 제거했다.
 - `scripts/run_evals.py`를 `scripts/run_evals_template.py` 복사본으로 추가했다.
 - `SKILL.md`에 자체 eval case 운영 절차와 검증 command를 연결했다.
 
@@ -27,5 +25,5 @@ modify
 
 ## 주의사항
 
-- `creator-workflow-contract`는 `llm-judge` criterion이므로 자동 채점 완료로 보고하지 않는다.
-- 현재 golden cases는 `pending-first-green` baseline 상태다. `--promote`는 expected baseline 파일을 쓰므로 별도 승인 전에는 실행하지 않는다.
+- 당시 `creator-workflow-contract`는 `llm-judge` criterion으로 자동 채점 완료로 보고하지 않았다.
+- 이후 case-based eval suite에서는 `llm-judge`를 `run_llm_judge.py` subprocess contract로 검증한다.
