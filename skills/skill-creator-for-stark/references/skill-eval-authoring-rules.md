@@ -2,32 +2,37 @@
 
 ## 목적
 
-생성되는 skill package가 처음부터 regression 가능한 loss function을 갖도록 `agent-skill-creator` eval 모델을 따른다. 이 문서는 `/Users/stark/practice/agent-skill-creator`의 `phase2-eval-assessment.md`, `phase5-orchestration.md`, `scripts/run_evals_template.py` 구조를 Stark용 스킬 생성 절차에 맞춰 정리한 것이다.
+생성되는 skill package가 처음부터 regression 가능한 test suite를 갖도록 case-based eval 모델을 사용한다. 이 모델은 모든 case에 같은 global criteria를 강제하지 않고, `eval.yaml`은 suite manifest와 human-readable test map 역할만 하며, 실제 실행과 검증은 각 `case.yaml`이 독립적으로 가진다.
 
 ## 기본 원칙
 
 - eval generation은 기본값으로 켠다. 사용자가 명시적으로 원하지 않거나 skill이 eval에 부적합할 때만 생략한다.
-- eval은 “더 좋아졌는가” 비교가 아니라 “의도한 대로 동작하는가”를 검증하는 binary contract다.
-- 가능한 criterion은 `command`로 만든다. 의미·톤·판단처럼 command로 확인하기 어려운 항목만 `llm-judge`로 둔다.
-- `llm-judge`는 이번 모델에서 자동 채점하지 않는다. `run_evals.py`가 checklist로 출력하며, 자동 judge adapter는 추후 개선 항목이다.
-- 생성된 skill이 deterministic happy path를 가지면 `scripts/run_pipeline.py`를 single entrypoint로 두고 eval spec의 `run` field에서 호출한다.
+- eval은 “더 좋아졌는가” 비교가 아니라 “의도한 대로 동작하는가”를 검증하는 test contract다.
+- `evals/<skill-name>.eval.yaml`이 실행 source of truth다. `evals/cases/` 아래 case directory가 있어도 `eval.yaml`에 선언되지 않으면 실행하지 않고 validation error로 본다.
+- `eval.yaml`에는 top-level `run.command`, `global_assertions`, `description`을 두지 않는다. `title`, `test_policy`, `cases`만 간결하게 둔다.
+- 각 `case.yaml`은 `id`, `type`, `title`, optional `input`, optional `expected`, optional `run`, `assertions`를 가진다.
+- assertion type은 `command`, `llm-judge` 두 개만 지원한다.
+- `expected`가 있으면 runner가 자동으로 actual output과 byte equality 비교를 수행한다. `expected`가 없으면 비교하지 않는다.
+- `--promote`는 expected 유무와 독립적이다. expected가 없으면 `expected.json`을 생성하고, 있으면 overwrite한다.
+- `llm-judge`는 subprocess 기반 `run_llm_judge.py` contract로 실행한다. checklist/pending으로 남기지 않는다.
 
-## Phase 2 — Eval Criteria Definition
+## Phase 2 — Case-based Eval Definition
 
 SKILL.md를 쓰기 전에 다음을 정한다.
 
-1. 3–6개 binary criteria를 만든다.
-   - yes/no로 판단 가능해야 한다.
-   - output을 읽거나 command를 실행해 관찰 가능해야 한다.
-   - 서로 다른 실패 차원을 검증해야 한다.
-   - 문구를 parroting하는 것만으로 통과할 수 없어야 한다.
-2. 각 criterion의 `type`을 정한다.
-   - `command`: `cmd`를 실행하고 exit code 0이면 pass.
-   - `llm-judge`: 자동 채점하지 않고 checklist로 출력.
-3. golden case를 3개 이상 만든다.
-   - 사용자 제공 artifact가 있으면 그 artifact를 primary golden case로 쓴다.
-   - 없으면 input-only case를 합성하고 `expected: null`, `expected_status: "pending-first-green"`으로 둔다.
-   - first green output을 baseline으로 승격할 때는 `--promote`가 파일을 쓰므로 사용자 승인 또는 승인된 eval workspace가 필요하다.
+1. suite title과 case 목록을 정한다.
+   - `eval.yaml`의 `cases`는 runner가 읽는 유일한 case 목록이다.
+   - 각 case entry는 `id`, `type`, `title`, `path`를 가진다.
+2. case별 실행 방식을 정한다.
+   - non-`llm-judge` case는 `run.command`를 갖고 `{output}` placeholder를 포함해야 한다.
+   - `type: llm-judge` case는 `run.command`를 갖지 않고, `llm-judge` assertion의 `judge.command`만 사용한다.
+3. case별 assertion을 정한다.
+   - deterministic check는 `command`로 작성한다.
+   - 의미·품질 판단은 `llm-judge`로 작성한다.
+   - 각 assertion은 `id`, `title`, `type`을 가진다.
+4. `expected` 필요 여부를 정한다.
+   - 예상 출력이 안정적이면 `expected` 파일을 둔다.
+   - 안정적 baseline이 아직 없으면 `expected`를 생략하고, 필요할 때 `--promote`로 생성한다.
 
 ## Phase 5 — Eval emission
 
@@ -35,34 +40,186 @@ SKILL.md를 쓰기 전에 다음을 정한다.
 
 ```text
 <skill>/
-  scripts/run_pipeline.py        # deterministic happy-path entrypoint, 필요한 경우
+  scripts/run_pipeline.py        # 필요한 case에서만 호출
   scripts/run_evals.py           # scripts/run_evals_template.py 복사본
+  scripts/run_llm_judge.py       # llm-judge assertion이 필요할 때
   evals/
-    <skill-name>.eval.md         # prose + fenced JSON spec
-    golden/
-      case-1/input.*
-      case-1/expected.*          # optional
-      case-2/input.*
-      case-3/input.*
+    <skill-name>.eval.yaml       # suite manifest + human-readable test map
+    cases/
+      <case-id>/
+        case.yaml
+        input.*                  # optional
+        expected.*               # optional
 ```
 
-`evals/<skill-name>.eval.md`는 사람이 읽는 설명과 하나의 fenced `json` block을 포함한다. `input`과 `expected` path는 `evals/` 기준 상대 경로다.
+## `eval.yaml` 형식
+
+```yaml
+version: 1
+skill: example-skill
+title: example-skill eval suite
+
+test_policy:
+  expected_compare: auto
+  llm_judge: required
+  undeclared_cases: error
+  promote: allow-overwrite
+
+cases:
+  - id: create-basic
+    type: happy-path
+    title: 기본 생성 workflow 검증
+    path: cases/create-basic/case.yaml
+  - id: judge-quality
+    type: llm-judge
+    title: 생성물 품질을 LLM judge로 검증
+    path: cases/judge-quality/case.yaml
+```
+
+### `test_policy` 의미
+
+| key | 값 | 의미 |
+|---|---|---|
+| `expected_compare` | `auto` | case에 `expected`가 있으면 runner가 자동으로 actual output과 byte equality 비교를 수행한다. |
+| `llm_judge` | `required` | `llm-judge` assertion은 기본 실행에 포함되며 judge command 실패나 verdict fail은 case fail이다. |
+| `undeclared_cases` | `error` | `evals/cases/*/case.yaml`이 있어도 `eval.yaml`에 없으면 validation error다. |
+| `promote` | `allow-overwrite` | `--promote`가 있으면 expected가 없을 때 생성하고 이미 있으면 overwrite한다. |
+
+## `case.yaml` 형식
+
+```yaml
+id: create-basic
+type: happy-path
+title: 기본 생성 workflow 검증
+
+input: input.json
+expected: expected.json
+
+run:
+  command: python3 scripts/run_pipeline.py --input {input} --output {output}
+  timeout_sec: 120
+
+assertions:
+  - id: valid-json
+    title: 출력이 JSON으로 parse되는지 검증
+    type: command
+    cmd: python3 -m json.tool {output}
+
+  - id: package-shape
+    title: 필수 스킬 패키지 파일이 생성됐는지 검증
+    type: command
+    cmd: python3 scripts/assert_package_shape.py --actual {output}
+```
+
+## Case type
+
+초기 허용값:
+
+- `happy-path`
+- `edge`
+- `regression`
+- `safety`
+- `llm-judge`
+- `integration`
+
+`type`은 case 목적을 사람이 이해하기 위한 단일 분류다. `tags`는 두지 않는다. runner에서 type별 부분 실행 옵션도 제공하지 않는다.
+
+## Expected handling
+
+`expected`는 optional이다.
+
+```yaml
+expected: expected.json
+```
+
+있으면 runner가 자동으로 actual output과 expected file을 byte equality 비교한다. 별도 assertion에서 `{expected}`를 반복해서 넣지 않아도 된다.
+
+없으면 expected 비교를 하지 않는다.
+
+`--promote`는 명시적 파일쓰기 옵션이다.
+
+```bash
+python3 scripts/run_evals.py --promote
+```
+
+동작:
+
+- expected 없음: `cases/<case-id>/expected.json` 생성
+- expected 있음: 해당 파일 overwrite
+- promote 없음: expected 파일을 쓰지 않음
+
+## Assertion types
+
+### `command`
+
+```yaml
+- id: no-placeholder-left
+  title: 템플릿 placeholder가 남아 있지 않은지 검증
+  type: command
+  cmd: python3 -c "import sys; t=open(sys.argv[1]).read(); assert '{{' not in t" {output}
+```
+
+`cmd` exit code가 0이면 pass다. `{input}`, `{output}`, `{expected}` placeholder를 사용할 수 있다. 단, `{expected}`를 쓰는 command는 case에 `expected`가 있어야 한다.
+
+### `llm-judge`
+
+`llm-judge`는 rubric 문자열 하나가 아니라 독립 check list를 가진다. 각 check는 개별 verdict를 받아야 한다.
+
+```yaml
+- id: skill-quality
+  title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
+  type: llm-judge
+  judge:
+    method: aggregate
+    command: python3 scripts/run_llm_judge.py --packet {judge_packet} --output {judge_output}
+    timeout_sec: 300
+  checks:
+    - id: actionable-workflow
+      title: 실행 가능한 workflow가 있는지 검증
+      prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
+    - id: deterministic-verification
+      title: 결정론적 검증 방법이 있는지 검증
+      prompt: 출력에는 command 기반 또는 재현 가능한 검증 방법이 포함되어야 한다.
+```
+
+`judge.method` 허용값:
+
+- `aggregate`: 모든 checks를 하나의 judge call로 평가한다.
+- `subagent`: check별 독립 subprocess/agent call로 평가한다.
+
+`hybrid`는 두지 않는다.
+
+## `type: llm-judge` case
+
+`type: llm-judge` case는 `run.command`를 정의하지 않는다. 이 case는 primary execution이 아니라 judge 검증 자체가 목적이다. 필요한 실행은 `llm-judge` assertion의 `judge.command`가 수행한다.
+
+## `run_llm_judge.py` contract
+
+LLM judge는 subprocess 방식으로 호출한다. Runner는 `{judge_packet}` JSON을 만들고 `judge.command`를 실행해 `{judge_output}` JSON을 기대한다.
+
+Required judge output:
 
 ```json
 {
-  "skill": "example-skill",
-  "run": "python3 scripts/run_pipeline.py --input {input} --output {output}",
-  "criteria": [
-    {"id": "valid-json", "text": "Output parses as JSON", "type": "command", "cmd": "python3 -c 'import json,sys; json.load(open(sys.argv[1]))' {output}"},
-    {"id": "captures-risk", "text": "Output names the key risk", "type": "llm-judge"}
-  ],
-  "golden": [
-    {"id": "case-1", "input": "golden/case-1/input.json", "expected": null, "split": "val", "expected_status": "pending-first-green"},
-    {"id": "case-2", "input": "golden/case-2/input.json", "expected": null, "split": "val", "expected_status": "pending-first-green"},
-    {"id": "case-3", "input": "golden/case-3/input.json", "expected": null, "split": "val", "expected_status": "pending-first-green"}
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "actionable-workflow",
+      "verdict": "pass",
+      "evidence": ["output line 12 includes an executable command"],
+      "reason": "workflow is actionable"
+    }
   ]
 }
 ```
+
+Rules:
+
+- top-level `verdict`는 `pass|fail`.
+- 모든 declared check id가 결과에 있어야 한다.
+- 각 check verdict는 `pass|fail`.
+- 각 check는 non-empty `evidence`를 가져야 한다.
+- `confidence`는 사용하지 않는다.
 
 ## run_evals.py 사용법
 
@@ -71,49 +228,38 @@ SKILL.md를 쓰기 전에 다음을 정한다.
 ```bash
 python3 scripts/run_evals.py --validate
 python3 scripts/run_evals.py
-python3 scripts/run_evals.py --output OUT [--case ID]
-python3 scripts/run_evals.py --rollout [--promote] [--timeout N] [--case ID]
+python3 scripts/run_evals.py --promote
 python3 scripts/run_evals.py --json
 ```
 
-- `--validate`: spec shape와 golden file 존재를 검증한다. delivery gate로 사용한다.
-- default run: golden expected baseline에 대해 `command` criteria를 실행한다.
-- `--output`: 실제 produced output 하나를 criteria로 채점한다.
-- `--rollout`: spec의 `run` command를 golden input별로 실행하고 produced output을 채점한다.
-- `--promote`: pending-first-green output을 expected baseline으로 저장한다.
+- `--validate`: `eval.yaml`과 선언된 `case.yaml` 구조를 검증한다. undeclared case directory도 여기서 잡는다.
+- 기본 실행: `eval.yaml`에 선언된 모든 case를 실행한다. LLM judge assertion도 포함한다.
+- `--promote`: passing case의 output을 expected로 생성 또는 overwrite한다.
+- `--json`: machine-readable result를 출력한다.
 
-Exit code:
+`--no-llm-judge`, `--rollout`, `--output`, `--case`, type 기반 실행 옵션은 사용하지 않는다.
 
-- `0`: 통과 또는 rollout unavailable.
-- `1`: malformed spec, command failure, rollout error.
-- `2`: eval spec 없음.
-
-## run_pipeline.py와 연결
-
-- 2개 이상 script가 고정 순서로 실행되어야 하면 `scripts/run_pipeline.py`를 만든다.
-- SKILL.md에는 happy-path command를 하나만 적는다.
-- step 간 data handoff는 agent prose가 아니라 `run_pipeline.py` code가 수행한다.
-- eval spec의 `run` field는 가능하면 `python3 scripts/run_pipeline.py --input {input} --output {output}` 형태로 둔다.
-- `run`이 있으면 `{output}` placeholder는 필수다.
-
-## 기본 3종 case 적용
+## 기본 case 적용
 
 `skill-creator-for-stark`가 만드는 skill에는 최소 다음 성격의 case를 설계한다.
 
-1. 새 skill 생성: eval spec, `scripts/run_evals.py`, 3개 이상 golden case가 생성되는지 확인한다.
-2. 기존 skill 수정: 기존 eval spec을 보존·갱신하고 새 behavior에 맞춰 criteria/golden case가 변하는지 확인한다.
-3. 다른 skill의 Stark 포맷 업데이트: source workflow를 보존하면서 Stark format과 eval structure를 함께 심는지 확인한다.
+1. 새 skill 생성: eval suite, declared case, runner, quality gate가 포함되는지 확인한다.
+2. 기존 skill 수정: 기존 eval suite를 보존·갱신하고 새 behavior에 맞춰 case/assertion이 변하는지 확인한다.
+3. 다른 skill의 Stark 포맷 업데이트: source workflow를 보존하면서 Stark format과 case-based eval structure를 함께 심는지 확인한다.
 
 ## 검증 체크리스트
 
-- [ ] `evals/<skill-name>.eval.md`가 존재한다.
-- [ ] fenced `json` block이 정확히 하나 이상 있고 parse된다.
-- [ ] `criteria`가 non-empty이며 각 항목에 `id`, `text`, `type`이 있다.
-- [ ] `command` criterion은 `cmd`가 있다.
-- [ ] `golden` case가 3개 이상이다.
-- [ ] golden `input` file이 존재한다.
-- [ ] `expected: null`이면 `expected_status: "pending-first-green"`이 있다.
-- [ ] `run`이 있으면 `{output}` placeholder가 있다.
-- [ ] deterministic happy path가 있으면 `scripts/run_pipeline.py`가 있다.
-- [ ] `python3 scripts/run_evals.py --validate`가 exit 0이다.
-- [ ] 가능하면 `python3 scripts/run_evals.py --rollout --json`까지 실행해 real output을 검증한다.
+- [ ] `evals/<skill-name>.eval.yaml`이 존재한다.
+- [ ] `eval.yaml`에 `skill`, `title`, `cases`가 있다.
+- [ ] `eval.yaml`에 `description`이 없다.
+- [ ] runner는 `eval.yaml`에 선언된 case만 실행한다.
+- [ ] undeclared `evals/cases/*/case.yaml`은 validation error다.
+- [ ] 각 case는 `id`, `type`, `title`, `assertions`를 가진다.
+- [ ] 각 assertion은 `id`, `title`, `type`을 가진다.
+- [ ] assertion type은 `command`, `llm-judge`만 사용한다.
+- [ ] non-`llm-judge` case의 `run.command`에는 `{output}`이 있다.
+- [ ] `type: llm-judge` case에는 `run.command`가 없다.
+- [ ] `llm-judge` assertion은 `judge.method`, `judge.command`, `checks`를 가진다.
+- [ ] `judge.method`는 `aggregate` 또는 `subagent`다.
+- [ ] `expected`가 있으면 자동 equality 비교가 수행된다.
+- [ ] `--promote`는 expected를 생성 또는 overwrite한다.

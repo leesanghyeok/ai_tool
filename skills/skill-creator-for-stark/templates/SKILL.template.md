@@ -70,7 +70,7 @@ metadata:
 2. <source나 기존 state를 read-only로 확인한다.>
 3. <산출물을 만들거나 수정한다.>
 4. <deterministic 검증 또는 read-back을 실행한다.>
-5. <필요하면 `evals/<skill-name>.eval.md`와 `scripts/run_evals.py`를 생성하고 `--validate`를 실행한다.>
+5. <필요하면 `evals/<skill-name>.eval.yaml`, declared `evals/cases/*/case.yaml`, `scripts/run_evals.py`를 생성하고 `--validate`를 실행한다.>
 6. <상태, 파일, 검증 결과, 미확인 항목을 보고한다.>
 
 ## Subagent 병렬화
@@ -102,7 +102,7 @@ metadata:
 - [ ] `Hard Gates`가 이 스킬의 domain-specific gate만 포함한다.
 - [ ] 직접 산출물 skeleton은 `templates/`에 있고 판단 기준은 `references/`에 있다.
 - [ ] deterministic 검증 또는 read-back이 실행됐다.
-- [ ] eval이 필요한 경우 `evals/<skill-name>.eval.md`와 `scripts/run_evals.py --validate` 결과가 있다.
+- [ ] eval이 필요한 경우 `evals/<skill-name>.eval.yaml`, declared `evals/cases/*/case.yaml`, `scripts/run_evals.py --validate` 결과가 있다.
 - [ ] deterministic multi-step workflow가 있으면 `scripts/run_pipeline.py`가 single entrypoint다.
 - [ ] 스킬 사용 불만족을 `feedback/`에 기록하는 절차가 있다.
 

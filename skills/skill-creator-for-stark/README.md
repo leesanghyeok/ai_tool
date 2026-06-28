@@ -42,7 +42,7 @@
 6. 자세한 판단 기준은 `references/`로 분리한다.
 7. skeleton, frontmatter/body 구조, 보고 템플릿은 `templates/`로 분리한다.
 8. deterministic 반복 작업은 `scripts/`로 분리한다.
-9. 생성/수정되는 skill에는 가능한 한 `evals/<skill-name>.eval.md`와 `scripts/run_evals.py`를 포함한다.
+9. 생성/수정되는 skill에는 가능한 한 `evals/<skill-name>.eval.yaml`, declared `evals/cases/*/case.yaml`, `scripts/run_evals.py`를 포함한다.
 10. validator, eval, tests, `git diff --check`, read-back으로 검증한다.
 11. 의미 있는 변경은 `history/`에 짧게 남긴다.
 12. 최종 보고에는 산출물 경로, 검증 결과, 미검증 항목, commit 여부를 분리해 적는다.
@@ -59,8 +59,8 @@
   templates/
   scripts/
   evals/
-    <skill-name>.eval.md
-    golden/
+    <skill-name>.eval.yaml
+    cases/
   history/
   feedback/
 ```
@@ -83,29 +83,24 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 주의:
 
 - `/usr/bin/python3`는 Python 3.9일 수 있어 `Path | None` syntax가 있는 test/helper 실행에 부적합하다. 가져온 regression tests는 `python3.11`로 실행한다.
-- `creator-workflow-contract`는 `llm-judge` criterion이다. `run_evals.py`가 checklist로 출력할 뿐 자동 채점 완료로 보지 않는다.
-- 현재 creator 자체 golden cases는 `pending-first-green` 상태다.
-- `--promote`는 expected baseline 파일을 쓰므로 별도 승인 전에는 실행하지 않는다.
+- `llm-judge` assertion은 `run_llm_judge.py` subprocess contract의 JSON verdict/evidence 검증을 거친 경우에만 통과로 본다.
+- `--promote`는 expected 파일을 생성하거나 overwrite하므로 별도 승인 전에는 실행하지 않는다.
 
 ## 자체 eval case
 
-`evals/skill-creator-for-stark.eval.md`는 creator 자체의 regression contract다.
+`evals/skill-creator-for-stark.eval.yaml`는 creator 자체의 case-based regression contract다.
 
-현재 golden cases:
+현재 declared cases:
 
-- `create-new-skill`: 새 skill package 생성 시 eval spec, runner, quality gate가 포함되는지 확인한다.
-- `modify-existing-skill`: 기존 skill 수정 시 eval 보존/갱신과 검증 절차가 유지되는지 확인한다.
-- `quality-review-only`: read-only 품질 검토에서 파일을 쓰지 않고 scorecard/검증 가능성만 보고하는지 확인한다.
+- `validate-package`: skill package validator가 통과하는지 확인한다.
+- `runner-regression`: case-based `run_evals.py` regression tests가 통과하는지 확인한다.
+- `eval-contract-docs`: case-based eval reference/template가 새 계약을 설명하는지 확인한다.
 
-현재 command criteria:
+현재 command assertions:
 
 - `package-validator-pass`
-- `eval-runner-validate-pass`
 - `upstream-regression-tests-pass`
-
-현재 checklist criterion:
-
-- `creator-workflow-contract` (`llm-judge`)
+- `case-based-contract-docs-present`
 
 ## 가져온 regression tests
 
@@ -170,11 +165,11 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 
 - `SKILL.md`: agent가 load하는 orchestration 문서.
 - `references/skill-authoring-rules.md`: skill 작성 세부 규칙.
-- `references/skill-eval-authoring-rules.md`: eval spec 작성 규칙.
+- `references/skill-eval-authoring-rules.md`: case-based eval suite 작성 규칙.
 - `references/skill-quality-rubric-evaluation.md`: 품질 루브릭 평가 절차.
 - `references/skill-feedback-logging-rules.md`: feedback logging 절차.
 - `templates/SKILL.template.md`: 새 skill skeleton.
-- `templates/eval-spec.template.md`: eval spec skeleton.
+- `templates/eval-spec.template.md`: case-based eval suite skeleton.
 - `scripts/validate-skill-package.py`: package 구조 validator.
 - `scripts/run_evals.py`: creator 자체 eval runner.
 - `scripts/run_evals_template.py`: 생성되는 skill에 복사할 eval runner template.

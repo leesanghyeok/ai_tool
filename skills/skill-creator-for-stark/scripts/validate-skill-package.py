@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -235,17 +236,6 @@ def check_feedback_guidance(text: str) -> None:
         fail("skill feedback logging guidance must identify dissatisfaction incidents")
 
 
-def _parse_eval_spec(spec_path: Path) -> dict:
-    text = spec_path.read_text(encoding="utf-8")
-    match = _JSON_BLOCK.search(text)
-    if not match:
-        fail(f"eval spec has no fenced json block: {spec_path}")
-    try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError as exc:
-        fail(f"eval spec JSON does not parse: {spec_path}: {exc}")
-
-
 def check_eval_spec(skill_dir: Path) -> None:
     evals_dir = skill_dir / "evals"
     if not evals_dir.exists():
@@ -253,58 +243,20 @@ def check_eval_spec(skill_dir: Path) -> None:
     if not evals_dir.is_dir():
         fail("evals exists but is not a directory")
 
-    specs = sorted(evals_dir.glob("*.eval.md"))
+    specs = sorted(evals_dir.glob("*.eval.yaml")) + sorted(evals_dir.glob("*.eval.yml"))
     if not specs:
-        fail("evals/ exists but no evals/*.eval.md spec was found")
-    if not (skill_dir / "scripts" / "run_evals.py").exists():
+        fail("evals/ exists but no evals/*.eval.yaml suite manifest was found")
+    runner = skill_dir / "scripts" / "run_evals.py"
+    if not runner.exists():
         fail("evals/ exists but scripts/run_evals.py is missing")
-
-    for spec_path in specs:
-        spec = _parse_eval_spec(spec_path)
-        if not spec.get("skill"):
-            fail(f"eval spec missing 'skill': {spec_path}")
-
-        run_cmd = spec.get("run")
-        if run_cmd is not None:
-            if not isinstance(run_cmd, str) or not run_cmd.strip():
-                fail(f"eval spec 'run' must be a non-empty string: {spec_path}")
-            if OUTPUT_PLACEHOLDER not in run_cmd:
-                fail(f"eval spec 'run' must contain {OUTPUT_PLACEHOLDER}: {spec_path}")
-
-        criteria = spec.get("criteria")
-        if not isinstance(criteria, list) or not criteria:
-            fail(f"eval spec 'criteria' must be a non-empty list: {spec_path}")
-        for index, criterion in enumerate(criteria):
-            where = f"{spec_path}: criteria[{index}]"
-            if not isinstance(criterion, dict):
-                fail(f"{where} must be an object")
-            for key in ("id", "text", "type"):
-                if not criterion.get(key):
-                    fail(f"{where} missing '{key}'")
-            if criterion.get("type") not in VALID_EVAL_TYPES:
-                fail(f"{where} type must be command or llm-judge")
-            if criterion.get("type") == "command" and not criterion.get("cmd"):
-                fail(f"{where} command criterion missing 'cmd'")
-
-        golden = spec.get("golden")
-        if not isinstance(golden, list) or len(golden) < MIN_GOLDEN_CASES:
-            fail(f"eval spec needs at least {MIN_GOLDEN_CASES} golden cases: {spec_path}")
-        for index, case in enumerate(golden):
-            where = f"{spec_path}: golden[{index}]"
-            if not isinstance(case, dict):
-                fail(f"{where} must be an object")
-            if not case.get("id"):
-                fail(f"{where} missing 'id'")
-            input_path = case.get("input")
-            if not input_path:
-                fail(f"{where} missing 'input'")
-            if input_path and not (evals_dir / input_path).exists():
-                fail(f"{where} input file not found: evals/{input_path}")
-            expected = case.get("expected")
-            if expected is not None and not (evals_dir / expected).exists():
-                fail(f"{where} expected file not found: evals/{expected}")
-            if expected is None and case.get("expected_status") != "pending-first-green":
-                fail(f"{where} null expected must set expected_status='pending-first-green'")
+    proc = subprocess.run(
+        [sys.executable, str(runner), str(skill_dir), "--validate"],
+        cwd=str(skill_dir),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        fail("case-based eval suite validation failed: " + (proc.stdout + proc.stderr).strip())
 
 
 def main() -> None:

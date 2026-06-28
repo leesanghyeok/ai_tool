@@ -70,14 +70,16 @@
 python3 scripts/check_pipeline.py <skill-dir>
 ```
 
-`check_pipeline.py`는 `scripts/`와 `shared/` 아래 Python compile, third-party import 선언, 2개 이상 runnable step이 있을 때 `scripts/run_pipeline.py` 존재 여부를 확인한다. orchestrator wiring의 실제 정합성은 `run_evals.py --rollout`으로 검증한다.
+`check_pipeline.py`는 `scripts/`와 `shared/` 아래 Python compile, third-party import 선언, 2개 이상 runnable step이 있을 때 `scripts/run_pipeline.py` 존재 여부를 확인한다. orchestrator wiring의 실제 정합성은 case-based eval suite의 각 `case.yaml`에서 `run.command`로 검증한다.
 
 ## Eval 연결
 
-생성되는 skill이 deterministic happy path를 가지면 eval spec의 `run` field에서 `scripts/run_pipeline.py`를 호출한다.
+생성되는 skill이 deterministic happy path를 가지면 해당 eval case의 `run.command`에서 `scripts/run_pipeline.py`를 호출한다.
 
-```json
-"run": "python3 scripts/run_pipeline.py --input {input} --output {output}"
+```yaml
+run:
+  command: python3 scripts/run_pipeline.py --input {input} --output {output}
+  timeout_sec: 120
 ```
 
-그 다음 `python3 scripts/run_evals.py --rollout --json`으로 golden input마다 pipeline을 실행하고 produced output을 `command` criteria로 채점한다. `llm-judge` criteria는 현재 자동 채점하지 않고 checklist로 출력한다.
+그 다음 `python3 scripts/run_evals.py --json`으로 `eval.yaml`에 declared된 case를 실행하고 produced output을 `command`/`llm-judge` assertion으로 채점한다. `llm-judge`는 `run_llm_judge.py` subprocess contract의 JSON verdict/evidence를 검증한다.

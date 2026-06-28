@@ -1,360 +1,605 @@
 #!/usr/bin/env python3
 """
-생성되는 각 skill 안에 `scripts/run_evals.py`로 포함되는 eval runner다.
+Case-based eval runner shipped inside generated skills as scripts/run_evals.py.
 
-생성된 skill은 `evals/<skill>.eval.md`에 자기 loss function을 가진다.
-구성은 shell command로 채점되는 binary check, `llm-judge` checklist,
-그리고 몇 개의 golden case다. 이 runner는 그 spec을 deterministic regression gate,
-형식 검증기, 그리고 spec에 `run` command가 있을 때 end-to-end rollout harness로
-사용한다. 단, `llm-judge` check는 자동 채점하지 않는다. agent나
-autoresearch-universal이 볼 checklist로 출력만 한다.
+Spec model:
+  evals/<skill>.eval.yaml          # suite manifest + human-readable case map
+  evals/cases/<case-id>/case.yaml  # independent test case definition
 
-모드:
-    python3 scripts/run_evals.py                 # golden baseline에 대해 command check 실행.
-                                                 # 하나라도 실패하면 non-zero exit.
-    python3 scripts/run_evals.py --validate      # spec 형식이 올바른지만 확인.
-    python3 scripts/run_evals.py --output OUT [--case ID]
-                                                 # 실제 produced output을 채점.
-    python3 scripts/run_evals.py --rollout [--promote] [--timeout N] [--case ID]
-                                                 # spec의 `run` command로 golden input마다
-                                                 # skill을 실행한 뒤 produced output을 채점.
-                                                 # --promote는 pending-first-green case의
-                                                 # 첫 passing output을 baseline으로 저장.
-    python3 scripts/run_evals.py --json          # machine-readable JSON 출력.
+The suite manifest is the source of truth: only cases listed in eval.yaml run.
+Case directories that exist on disk but are not declared are validation errors.
 
-spec의 optional `run` field는 {input}(golden case input path)과
-{output}(produced output path)을 binding하는 command template이다. 예:
-    "run": "python3 scripts/run_pipeline.py --input {input} --output {output}"
+Each case owns its own run command and assertions. There are no global
+assertions and no top-level run command. Supported assertion types are:
+  - command: shell command exits 0
+  - llm-judge: subprocess judge command returns structured JSON verdicts
 
-Exit code:
-    0 - 모든 check 통과. 또는 --validate error 없음. 또는 spec에 `run` command가 없어
-        --rollout에서 실행할 것이 없음.
-    1 - check 실패, rollout case error, 또는 malformed spec.
-    2 - eval spec 없음.
+Expected handling is automatic: when a case declares `expected`, produced output
+is byte-compared to that file unless --promote is set. With --promote, passing
+case output creates or overwrites the expected file.
+
+Usage:
+  python3 scripts/run_evals.py [skill_dir] [--validate] [--promote] [--json]
+
+Exit codes:
+  0 - valid / all selected suite cases passed
+  1 - malformed spec, failed command, failed judge, or failed expected compare
+  2 - eval suite not found
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
-VALID_TYPES = ("command", "llm-judge")
-MIN_GOLDEN_CASES = 3
-OUTPUT_PLACEHOLDER = "{output}"
+VALID_ASSERTION_TYPES = ("command", "llm-judge")
+VALID_CASE_TYPES = ("happy-path", "edge", "regression", "safety", "llm-judge", "integration")
+VALID_JUDGE_METHODS = ("aggregate", "subagent")
+DEFAULT_TIMEOUT = 120
 INPUT_PLACEHOLDER = "{input}"
-DEFAULT_ROLLOUT_TIMEOUT = 120
+OUTPUT_PLACEHOLDER = "{output}"
+EXPECTED_PLACEHOLDER = "{expected}"
+JUDGE_PACKET_PLACEHOLDER = "{judge_packet}"
+JUDGE_OUTPUT_PLACEHOLDER = "{judge_output}"
 
-_JSON_BLOCK = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+
+class SimpleYamlError(ValueError):
+    pass
+
+
+def _strip_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            return line[:i].rstrip()
+    return line.rstrip()
+
+
+def _parse_scalar(value: str) -> Any:
+    value = value.strip()
+    if value == "":
+        return ""
+    if value in ("null", "~"):
+        return None
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        return value[1:-1]
+    if value.startswith("[") or value.startswith("{"):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            pass
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
+
+def _logical_lines(text: str) -> list[tuple[int, str]]:
+    raw = text.splitlines()
+    out: list[tuple[int, str]] = []
+    i = 0
+    while i < len(raw):
+        stripped_comment = _strip_comment(raw[i])
+        if not stripped_comment.strip():
+            i += 1
+            continue
+        indent = len(stripped_comment) - len(stripped_comment.lstrip(" "))
+        content = stripped_comment.strip()
+        if content.endswith(": |") or content.endswith(": >") or content in ("|", ">"):
+            if content in ("|", ">"):
+                key_prefix = content
+            else:
+                key_prefix = content[:-2].rstrip() + ":"
+            block_indent = None
+            block_lines: list[str] = []
+            i += 1
+            while i < len(raw):
+                nxt = raw[i]
+                if not nxt.strip():
+                    block_lines.append("")
+                    i += 1
+                    continue
+                nindent = len(nxt) - len(nxt.lstrip(" "))
+                if nindent <= indent:
+                    break
+                if block_indent is None:
+                    block_indent = nindent
+                block_lines.append(nxt[block_indent:])
+                i += 1
+            joined = "\n".join(block_lines).rstrip("\n")
+            out.append((indent, f"{key_prefix} {json.dumps(joined, ensure_ascii=False)}"))
+            continue
+        out.append((indent, content))
+        i += 1
+    return out
+
+
+def parse_yaml_subset(path: Path) -> Any:
+    """Parse the small YAML subset used by eval.yaml/case.yaml.
+
+    Supports nested mappings, lists of mappings/scalars, quoted/unquoted scalars,
+    ints/bools/null, inline JSON arrays/objects, and literal/folded blocks.
+    It is intentionally not a general YAML parser; generated specs should stay in
+    this constrained shape to avoid a PyYAML dependency in generated skills.
+    """
+    lines = _logical_lines(path.read_text(encoding="utf-8"))
+    if not lines:
+        return {}
+
+    def parse_block(index: int, indent: int) -> tuple[Any, int]:
+        if index >= len(lines):
+            return {}, index
+        if lines[index][0] < indent:
+            return {}, index
+        is_list = lines[index][1].startswith("- ")
+        if is_list:
+            arr: list[Any] = []
+            while index < len(lines) and lines[index][0] == indent and lines[index][1].startswith("- "):
+                item_text = lines[index][1][2:].strip()
+                index += 1
+                if not item_text:
+                    val, index = parse_block(index, indent + 2)
+                    arr.append(val)
+                    continue
+                if ":" in item_text:
+                    key, raw_val = item_text.split(":", 1)
+                    item: dict[str, Any] = {}
+                    if raw_val.strip():
+                        item[key.strip()] = _parse_scalar(raw_val)
+                    else:
+                        val, index = parse_block(index, indent + 2)
+                        item[key.strip()] = val
+                    while index < len(lines) and lines[index][0] > indent:
+                        child_indent, child_text = lines[index]
+                        if child_indent < indent + 2:
+                            break
+                        if child_text.startswith("- "):
+                            break
+                        ckey, cval, index = parse_key_value(index, child_indent)
+                        item[ckey] = cval
+                    arr.append(item)
+                else:
+                    arr.append(_parse_scalar(item_text))
+            return arr, index
+
+        mapping: dict[str, Any] = {}
+        while index < len(lines) and lines[index][0] == indent and not lines[index][1].startswith("- "):
+            key, val, index = parse_key_value(index, indent)
+            mapping[key] = val
+        return mapping, index
+
+    def parse_key_value(index: int, indent: int) -> tuple[str, Any, int]:
+        cur_indent, text = lines[index]
+        if cur_indent != indent:
+            raise SimpleYamlError(f"{path}: unexpected indent at logical line {index + 1}")
+        if ":" not in text:
+            raise SimpleYamlError(f"{path}: expected key: value at logical line {index + 1}")
+        key, raw_val = text.split(":", 1)
+        key = key.strip()
+        raw_val = raw_val.strip()
+        index += 1
+        if raw_val:
+            return key, _parse_scalar(raw_val), index
+        if index < len(lines) and lines[index][0] > indent:
+            val, index = parse_block(index, lines[index][0])
+            return key, val, index
+        return key, None, index
+
+    parsed, end = parse_block(0, lines[0][0])
+    if end != len(lines):
+        raise SimpleYamlError(f"{path}: could not parse all lines")
+    return parsed
 
 
 def find_spec(skill_dir: Path) -> Path | None:
-    """skill_dir 아래 첫 번째 evals/*.eval.md를 반환한다. 없으면 None을 반환한다."""
     evals_dir = skill_dir / "evals"
     if not evals_dir.is_dir():
         return None
-    specs = sorted(evals_dir.glob("*.eval.md"))
-    return specs[0] if specs else None
+    preferred = sorted(evals_dir.glob("*.eval.yaml")) + sorted(evals_dir.glob("*.eval.yml"))
+    return preferred[0] if preferred else None
 
 
 def parse_spec(spec_path: Path) -> dict:
-    """eval spec에서 첫 번째 fenced ```json block을 추출해 parse한다.
-
-    Raises:
-        ValueError: JSON block이 없거나 parse되지 않을 때.
-    """
-    text = spec_path.read_text(encoding="utf-8")
-    match = _JSON_BLOCK.search(text)
-    if not match:
-        raise ValueError(f"{spec_path}: no ```json block found")
     try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{spec_path}: malformed JSON block: {exc}") from exc
+        spec = parse_yaml_subset(spec_path)
+    except Exception as exc:
+        raise ValueError(f"{spec_path}: malformed eval yaml: {exc}") from exc
+    if not isinstance(spec, dict):
+        raise ValueError(f"{spec_path}: eval spec must be a mapping")
+    return spec
+
+
+def _case_path(skill_dir: Path, case_entry: dict) -> Path:
+    return (skill_dir / "evals" / str(case_entry.get("path", ""))).resolve()
+
+
+def load_cases(spec: dict, skill_dir: Path) -> list[dict]:
+    cases: list[dict] = []
+    for entry in spec.get("cases", []) or []:
+        path = _case_path(skill_dir, entry)
+        case = parse_yaml_subset(path)
+        if not isinstance(case, dict):
+            raise ValueError(f"{path}: case spec must be a mapping")
+        case["__path"] = str(path)
+        case["__dir"] = str(path.parent)
+        cases.append(case)
+    return cases
 
 
 def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
-    """spec 형식 error 목록을 반환한다. 빈 list면 valid라는 뜻이다."""
     errors: list[str] = []
-
     if not spec.get("skill"):
-        errors.append("missing 'skill' name")
+        errors.append("eval.yaml: missing 'skill'")
+    if not spec.get("title"):
+        errors.append("eval.yaml: missing 'title'")
+    if "description" in spec:
+        errors.append("eval.yaml: 'description' is not allowed; keep only 'title'")
 
-    # 선택 항목인 `run` command는 --rollout을 가능하게 한다. 없어도 valid하다.
-    # 단, 있으면 produced output을 어디에 쓸지 알 수 있는 non-empty string이어야 한다.
-    if "run" in spec:
-        run_cmd = spec.get("run")
-        if not isinstance(run_cmd, str) or not run_cmd.strip():
-            errors.append("'run' must be a non-empty string when present")
-        elif OUTPUT_PLACEHOLDER not in run_cmd:
-            errors.append(f"'run' must contain the {OUTPUT_PLACEHOLDER} placeholder")
+    policy = spec.get("test_policy", {}) or {}
+    if not isinstance(policy, dict):
+        errors.append("eval.yaml: 'test_policy' must be a mapping when present")
 
-    criteria = spec.get("criteria")
-    if not isinstance(criteria, list) or not criteria:
-        errors.append("'criteria' must be a non-empty list")
-        criteria = []
-    for i, crit in enumerate(criteria):
-        where = f"criteria[{i}]"
-        if not crit.get("id"):
-            errors.append(f"{where}: missing 'id'")
-        if not crit.get("text"):
-            errors.append(f"{where}: missing 'text'")
-        ctype = crit.get("type")
-        if ctype not in VALID_TYPES:
-            errors.append(f"{where}: 'type' must be one of {VALID_TYPES}, got {ctype!r}")
-        if ctype == "command" and not crit.get("cmd"):
-            errors.append(f"{where}: command criterion needs a non-empty 'cmd'")
+    case_entries = spec.get("cases")
+    if not isinstance(case_entries, list) or not case_entries:
+        errors.append("eval.yaml: 'cases' must be a non-empty list")
+        case_entries = []
 
-    golden = spec.get("golden")
-    if not isinstance(golden, list):
-        errors.append("'golden' must be a list")
-        golden = []
-    if len(golden) < MIN_GOLDEN_CASES:
-        errors.append(f"need at least {MIN_GOLDEN_CASES} golden cases, found {len(golden)}")
-    for i, case in enumerate(golden):
-        where = f"golden[{i}]"
-        if not case.get("id"):
-            errors.append(f"{where}: missing 'id'")
-        inp = case.get("input")
-        if not inp:
-            errors.append(f"{where}: missing 'input'")
-        elif not (skill_dir / "evals" / inp).exists():
-            errors.append(f"{where}: input file not found: evals/{inp}")
-        expected = case.get("expected")
-        if expected is not None and not (skill_dir / "evals" / expected).exists():
-            errors.append(f"{where}: expected file not found: evals/{expected}")
-        if expected is None and case.get("expected_status") != "pending-first-green":
-            errors.append(
-                f"{where}: null 'expected' must be marked expected_status='pending-first-green'"
-            )
+    declared_paths: set[Path] = set()
+    declared_ids: set[str] = set()
+    for i, entry in enumerate(case_entries):
+        where = f"eval.yaml cases[{i}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{where}: must be a mapping")
+            continue
+        for field in ("id", "type", "title", "path"):
+            if not entry.get(field):
+                errors.append(f"{where}: missing '{field}'")
+        if entry.get("type") and entry["type"] not in VALID_CASE_TYPES:
+            errors.append(f"{where}: unsupported type {entry['type']!r}")
+        entry_id = entry.get("id")
+        if isinstance(entry_id, str) and entry_id in declared_ids:
+            errors.append(f"{where}: duplicate id {entry['id']!r}")
+        if isinstance(entry_id, str):
+            declared_ids.add(entry_id)
+        if entry.get("path"):
+            cpath = _case_path(skill_dir, entry)
+            declared_paths.add(cpath)
+            if not cpath.exists():
+                errors.append(f"{where}: case file not found: {entry['path']}")
+                continue
+            try:
+                case = parse_yaml_subset(cpath)
+            except Exception as exc:
+                errors.append(f"{where}: malformed case yaml: {exc}")
+                continue
+            errors.extend(validate_case(case, cpath, entry))
 
-    if golden and all(
-        case.get("expected_status") == "pending-first-green" for case in golden
-    ):
-        print(
-            "WARNING: every golden case is pending-first-green; the first rollout "
-            "validates nothing until baselines are promoted with --promote",
-            file=sys.stderr,
-        )
-
+    cases_dir = skill_dir / "evals" / "cases"
+    if cases_dir.is_dir():
+        for case_file in sorted(cases_dir.glob("*/case.yaml")):
+            if case_file.resolve() not in declared_paths:
+                errors.append(f"eval.yaml: undeclared case directory is present: {case_file.parent.name}")
     return errors
 
 
-def _run_one(cmd: str, output_path: Path | None) -> bool:
-    """command check 하나를 실행한다. {output}은 output_path에 binding된다.
+def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
+    errors: list[str] = []
+    prefix = f"{cpath.relative_to(cpath.parents[2]) if len(cpath.parents) > 2 else cpath}"
+    for field in ("id", "type", "title"):
+        if not case.get(field):
+            errors.append(f"{prefix}: missing '{field}'")
+    if case.get("id") != entry.get("id"):
+        errors.append(f"{prefix}: id does not match eval.yaml entry")
+    if case.get("type") != entry.get("type"):
+        errors.append(f"{prefix}: type does not match eval.yaml entry")
+    if case.get("title") != entry.get("title"):
+        errors.append(f"{prefix}: title does not match eval.yaml entry")
 
-    exit code 0이면 True를 반환한다. 실패하면 한 번 재시도한다.
-    autoresearch command-eval semantics와 맞춘 동작이다.
-    """
-    if OUTPUT_PLACEHOLDER in cmd:
-        if output_path is None:
-            return False
-        bound = cmd.replace(OUTPUT_PLACEHOLDER, shlex.quote(str(output_path)))
+    ctype = case.get("type")
+    run = case.get("run")
+    if ctype == "llm-judge":
+        if run is not None:
+            errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use llm-judge judge.command")
     else:
-        bound = cmd
-    for _ in range(2):
-        proc = subprocess.run(bound, shell=True, capture_output=True)  # noqa: S602
-        if proc.returncode == 0:
-            return True
-    return False
+        if not isinstance(run, dict) or not run.get("command"):
+            errors.append(f"{prefix}: non-llm-judge case must define run.command")
+        elif OUTPUT_PLACEHOLDER not in run["command"]:
+            errors.append(f"{prefix}: run.command must contain {OUTPUT_PLACEHOLDER}")
 
+    if case.get("input") and not (cpath.parent / case["input"]).exists():
+        errors.append(f"{prefix}: input file not found: {case['input']}")
+    if case.get("expected") and not (cpath.parent / case["expected"]).exists():
+        errors.append(f"{prefix}: expected file not found: {case['expected']}")
 
-def run_command_checks(
-    spec: dict,
-    skill_dir: Path,
-    output: Path | None = None,
-    only_case: str | None = None,
-) -> dict:
-    """적용 가능한 각 golden case에 대해 모든 command criterion을 실행한다.
-
-    기본값에서는 {output}이 각 case의 `expected` baseline file에 binding된다.
-    `output` 인자가 주어지면 그 path에 binding되어 실제 run 결과를 채점한다.
-    `only_case`를 사용하면 특정 case 하나만 채점한다.
-
-    passed/failed count와 check별 detail을 담은 result dict를 반환한다.
-    """
-    evals_dir = skill_dir / "evals"
-    command_criteria = [c for c in spec.get("criteria", []) if c.get("type") == "command"]
-    results: list[dict] = []
-    passed = failed = skipped = 0
-
-    for case in spec.get("golden", []):
-        case_id = case.get("id", "?")
-        if only_case and case_id != only_case:
+    assertions = case.get("assertions")
+    if not isinstance(assertions, list) or not assertions:
+        errors.append(f"{prefix}: assertions must be a non-empty list")
+        assertions = []
+    for i, assertion in enumerate(assertions):
+        awhere = f"{prefix} assertions[{i}]"
+        if not isinstance(assertion, dict):
+            errors.append(f"{awhere}: must be a mapping")
             continue
-        if output is not None:
-            bound_output: Path | None = output
-        elif case.get("expected"):
-            bound_output = evals_dir / case["expected"]
-        else:
-            bound_output = None  # pending-first-green: 아직 baseline이 없다.
+        for field in ("id", "title", "type"):
+            if not assertion.get(field):
+                errors.append(f"{awhere}: missing '{field}'")
+        atype = assertion.get("type")
+        if atype not in VALID_ASSERTION_TYPES:
+            errors.append(f"{awhere}: type must be one of {VALID_ASSERTION_TYPES}, got {atype!r}")
+        if atype == "command" and not assertion.get("cmd"):
+            errors.append(f"{awhere}: command assertion needs 'cmd'")
+        if atype == "llm-judge":
+            judge = assertion.get("judge")
+            if not isinstance(judge, dict):
+                errors.append(f"{awhere}: llm-judge assertion needs 'judge' mapping")
+            else:
+                if judge.get("method") not in VALID_JUDGE_METHODS:
+                    errors.append(f"{awhere}: judge.method must be one of {VALID_JUDGE_METHODS}")
+                command = judge.get("command")
+                if not command:
+                    errors.append(f"{awhere}: judge.command is required")
+                elif JUDGE_PACKET_PLACEHOLDER not in command or JUDGE_OUTPUT_PLACEHOLDER not in command:
+                    errors.append(
+                        f"{awhere}: judge.command must contain {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
+                    )
+            checks = assertion.get("checks")
+            if not isinstance(checks, list) or not checks:
+                errors.append(f"{awhere}: llm-judge assertion needs non-empty 'checks' list")
+            else:
+                for j, check in enumerate(checks):
+                    cwhere = f"{awhere} checks[{j}]"
+                    if not isinstance(check, dict):
+                        errors.append(f"{cwhere}: must be a mapping")
+                        continue
+                    for field in ("id", "title", "prompt"):
+                        if not check.get(field):
+                            errors.append(f"{cwhere}: missing '{field}'")
+    return errors
 
-        for crit in command_criteria:
-            needs_output = OUTPUT_PLACEHOLDER in crit["cmd"]
-            if needs_output and bound_output is None:
-                skipped += 1
-                results.append({"case": case_id, "criterion": crit["id"], "status": "skipped"})
-                continue
-            ok = _run_one(crit["cmd"], bound_output)
-            passed += ok
-            failed += not ok
-            results.append(
-                {"case": case_id, "criterion": crit["id"], "status": "pass" if ok else "fail"}
-            )
 
-    return {"passed": passed, "failed": failed, "skipped": skipped, "checks": results}
-
-
-def _expected_baseline_path(evals_dir: Path, case: dict) -> Path:
-    """promote된 baseline을 어디에 쓸지 결정한다.
-
-    case에 `expected` path가 있으면 그 path를 사용한다. 없으면 관례적으로
-    golden/<case-id>/expected.json을 사용한다.
-    """
-    expected = case.get("expected")
-    if expected:
-        return evals_dir / expected
-    return evals_dir / "golden" / case.get("id", "case") / "expected.json"
+def _bind_placeholders(cmd: str, *, input_path: Path | None, output_path: Path | None,
+                       expected_path: Path | None, judge_packet: Path | None = None,
+                       judge_output: Path | None = None) -> str:
+    replacements = {
+        INPUT_PLACEHOLDER: input_path,
+        OUTPUT_PLACEHOLDER: output_path,
+        EXPECTED_PLACEHOLDER: expected_path,
+        JUDGE_PACKET_PLACEHOLDER: judge_packet,
+        JUDGE_OUTPUT_PLACEHOLDER: judge_output,
+    }
+    bound = cmd
+    for placeholder, path in replacements.items():
+        if placeholder in bound:
+            if path is None:
+                raise ValueError(f"placeholder {placeholder} has no bound path")
+            bound = bound.replace(placeholder, shlex.quote(str(path)))
+    return bound
 
 
-def _run_skill(run_cmd: str, input_path: Path | None, output_path: Path, skill_dir: Path, timeout: int) -> bool:
-    """case 하나에 대해 skill의 `run` command를 실행한다.
-
-    {input}/{output} placeholder를 binding하고 skill root에서 실행한다.
-    timeout 안에 exit code 0으로 끝날 때만 True를 반환한다. _run_one과 같은 shell
-    실행 형태를 사용하고, 다른 script의 timeout 관례를 따른다.
-    """
-    bound = run_cmd.replace(OUTPUT_PLACEHOLDER, shlex.quote(str(output_path)))
-    if INPUT_PLACEHOLDER in bound:
-        if input_path is None:
-            return False
-        bound = bound.replace(INPUT_PLACEHOLDER, shlex.quote(str(input_path)))
+def _run_shell(cmd: str, cwd: Path, timeout: int) -> tuple[int, str, str]:
     try:
-        proc = subprocess.run(  # noqa: S602
-            bound, shell=True, cwd=str(skill_dir), capture_output=True, timeout=timeout
-        )
-    except subprocess.TimeoutExpired:
-        return False
-    return proc.returncode == 0
+        proc = subprocess.run(cmd, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)  # noqa: S602
+        return proc.returncode, proc.stdout, proc.stderr
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "timeout")
+        return 124, stdout, stderr
 
 
-def run_rollout(
-    spec: dict,
-    skill_dir: Path,
-    *,
-    promote: bool = False,
-    only_case: str | None = None,
-    timeout: int = DEFAULT_ROLLOUT_TIMEOUT,
-) -> dict:
-    """각 golden input으로 skill을 end-to-end 실행한 뒤 실제 output을 채점한다.
+def _expected_path(case: dict) -> Path | None:
+    if case.get("expected"):
+        return Path(case["__dir"]) / case["expected"]
+    return None
 
-    각 golden case마다 spec의 `run` command가 temp file에 output을 만든다.
-    그 output은 run_command_checks와 같은 command criteria로 채점된다.
-    `promote`가 켜져 있으면 pending-first-green case 중 run과 check가 모두 통과한
-    produced output을 `expected` baseline으로 저장한다.
 
-    {passed, failed, errors, promoted, checks}를 반환한다. `errors`는 `run` command
-    자체가 실패하거나 timeout된 case 수다. 그런 case의 check는 채점하지 않는다.
-    """
-    evals_dir = skill_dir / "evals"
-    run_cmd = spec.get("run")
-    passed = failed = errors = 0
-    promoted: list[str] = []
-    checks: list[dict] = []
+def _input_path(case: dict) -> Path | None:
+    if case.get("input"):
+        return Path(case["__dir"]) / case["input"]
+    return None
 
-    for case in spec.get("golden", []):
-        case_id = case.get("id", "?")
-        if only_case and case_id != only_case:
-            continue
 
-        inp = case.get("input")
-        input_path = (evals_dir / inp) if inp else None
+def _promote_path(case: dict, output_path: Path) -> Path:
+    expected = _expected_path(case)
+    if expected is not None:
+        return expected
+    return Path(case["__dir"]) / "expected.json"
 
-        with tempfile.TemporaryDirectory() as td:
-            produced = Path(td) / "output"
-            ok = _run_skill(run_cmd, input_path, produced, skill_dir, timeout)
-            if not ok or not produced.exists():
-                errors += 1
-                checks.append({"case": case_id, "criterion": "<run>", "status": "error"})
-                continue
 
-            scored = run_command_checks(spec, skill_dir, output=produced, only_case=case_id)
-            passed += scored["passed"]
-            failed += scored["failed"]
-            checks.extend(scored["checks"])
+def _compare_expected(case: dict, output_path: Path) -> dict | None:
+    expected = _expected_path(case)
+    if expected is None:
+        return None
+    ok = expected.read_bytes() == output_path.read_bytes()
+    return {"id": "expected-equality", "title": "expected와 실제 출력이 동일한지 자동 검증", "type": "expected", "status": "pass" if ok else "fail"}
 
-            is_pending = case.get("expected") is None and (
-                case.get("expected_status") == "pending-first-green"
-            )
-            if promote and is_pending and scored["failed"] == 0 and scored["passed"] > 0:
-                dest = _expected_baseline_path(evals_dir, case)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(produced, dest)
-                promoted.append(case_id)
 
+def _run_command_assertion(assertion: dict, case: dict, output_path: Path, cwd: Path) -> dict:
+    expected = _expected_path(case)
+    cmd = _bind_placeholders(assertion["cmd"], input_path=_input_path(case), output_path=output_path, expected_path=expected)
+    rc, stdout, stderr = _run_shell(cmd, cwd, int(assertion.get("timeout_sec") or DEFAULT_TIMEOUT))
     return {
-        "passed": passed,
-        "failed": failed,
-        "errors": errors,
-        "promoted": promoted,
-        "checks": checks,
+        "id": assertion["id"],
+        "title": assertion["title"],
+        "type": "command",
+        "status": "pass" if rc == 0 else "fail",
+        "exit_code": rc,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
     }
 
 
-def llm_judge_criteria(spec: dict) -> list[dict]:
-    """LLM judge가 필요한 criteria를 반환한다. 이 script는 이를 실행하지 않는다."""
-    return [c for c in spec.get("criteria", []) if c.get("type") == "llm-judge"]
+def _judge_packet(case: dict, assertion: dict, output_path: Path) -> dict:
+    packet = {
+        "case": {"id": case["id"], "type": case["type"], "title": case["title"]},
+        "assertion": {"id": assertion["id"], "title": assertion["title"]},
+        "method": assertion["judge"]["method"],
+        "input_path": str(_input_path(case)) if _input_path(case) else None,
+        "output_path": str(output_path),
+        "expected_path": str(_expected_path(case)) if _expected_path(case) else None,
+        "checks": assertion["checks"],
+        "required_response_schema": {
+            "verdict": "pass|fail",
+            "checks": [{"id": "string", "verdict": "pass|fail", "evidence": ["string"], "reason": "string"}],
+        },
+    }
+    return packet
+
+
+def _validate_judge_result(result: Any, assertion: dict) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "judge result must be a JSON object"
+    if result.get("verdict") not in ("pass", "fail"):
+        return False, "judge result verdict must be pass or fail"
+    checks = result.get("checks")
+    if not isinstance(checks, list):
+        return False, "judge result checks must be a list"
+    expected_ids = {c["id"] for c in assertion.get("checks", [])}
+    seen: set[str] = set()
+    for check in checks:
+        if not isinstance(check, dict):
+            return False, "each judge check result must be an object"
+        cid = check.get("id")
+        if cid not in expected_ids:
+            return False, f"unknown judge check id: {cid}"
+        if isinstance(cid, str):
+            seen.add(cid)
+        if check.get("verdict") not in ("pass", "fail"):
+            return False, f"judge check {cid} verdict must be pass or fail"
+        if not check.get("evidence"):
+            return False, f"judge check {cid} must include evidence"
+    missing = expected_ids - seen
+    if missing:
+        return False, f"judge result missing checks: {', '.join(sorted(missing))}"
+    return True, ""
+
+
+def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd: Path) -> dict:
+    judge = assertion["judge"]
+    with tempfile.TemporaryDirectory() as td:
+        packet_path = Path(td) / "judge-packet.json"
+        judge_output = Path(td) / "judge-output.json"
+        packet_path.write_text(json.dumps(_judge_packet(case, assertion, output_path), indent=2, ensure_ascii=False), encoding="utf-8")
+        cmd = _bind_placeholders(
+            judge["command"],
+            input_path=_input_path(case),
+            output_path=output_path,
+            expected_path=_expected_path(case),
+            judge_packet=packet_path,
+            judge_output=judge_output,
+        )
+        rc, stdout, stderr = _run_shell(cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
+        if rc != 0 or not judge_output.exists():
+            return {
+                "id": assertion["id"], "title": assertion["title"], "type": "llm-judge",
+                "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:],
+                "error": "judge command failed or did not create judge_output",
+            }
+        try:
+            result = json.loads(judge_output.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": f"judge output is not JSON: {exc}"}
+        valid, error = _validate_judge_result(result, assertion)
+        if not valid:
+            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": error, "judge_result": result}
+        return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "pass" if result["verdict"] == "pass" else "fail", "judge_result": result}
+
+
+def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
+    output_suffix = ".json" if (case.get("expected") or "").endswith(".json") else ".out"
+    with tempfile.TemporaryDirectory() as td:
+        output_path = Path(td) / f"output{output_suffix}"
+        checks: list[dict] = []
+        run_status = "pass"
+        if case.get("type") == "llm-judge":
+            # Judge-only cases evaluate input directly unless assertions create their own output.
+            inp = _input_path(case)
+            if inp is not None:
+                shutil.copyfile(inp, output_path)
+            else:
+                output_path.write_text("", encoding="utf-8")
+        else:
+            run = case["run"]
+            try:
+                cmd = _bind_placeholders(run["command"], input_path=_input_path(case), output_path=output_path, expected_path=_expected_path(case))
+                rc, stdout, stderr = _run_shell(cmd, skill_dir, int(run.get("timeout_sec") or DEFAULT_TIMEOUT))
+            except ValueError as exc:
+                rc, stdout, stderr = 1, "", str(exc)
+            if rc != 0 or not output_path.exists():
+                run_status = "fail"
+                checks.append({"id": "run.command", "title": "case run.command 실행", "type": "run", "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:]})
+
+        if run_status == "pass" and not promote:
+            expected_check = _compare_expected(case, output_path)
+            if expected_check:
+                checks.append(expected_check)
+
+        if run_status == "pass":
+            for assertion in case.get("assertions", []):
+                if assertion["type"] == "command":
+                    checks.append(_run_command_assertion(assertion, case, output_path, skill_dir))
+                elif assertion["type"] == "llm-judge":
+                    checks.append(_run_llm_judge_assertion(assertion, case, output_path, skill_dir))
+
+        failed = any(c["status"] != "pass" for c in checks)
+        promoted = None
+        if promote and not failed and run_status == "pass":
+            dest = _promote_path(case, output_path)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(output_path, dest)
+            promoted = str(dest)
+
+        return {
+            "id": case["id"],
+            "type": case["type"],
+            "title": case["title"],
+            "status": "fail" if failed or run_status == "fail" else "pass",
+            "checks": checks,
+            "promoted": promoted,
+        }
+
+
+def run_suite(spec: dict, skill_dir: Path, promote: bool = False) -> dict:
+    cases = load_cases(spec, skill_dir)
+    case_results = [run_case(case, skill_dir, promote=promote) for case in cases]
+    passed = sum(1 for c in case_results if c["status"] == "pass")
+    failed = sum(1 for c in case_results if c["status"] != "pass")
+    return {"skill": spec.get("skill"), "title": spec.get("title"), "passed": passed, "failed": failed, "cases": case_results}
 
 
 def _default_skill_dir() -> Path:
-    """이 파일이 있는 scripts/ directory의 parent를 skill root로 본다."""
     return Path(__file__).resolve().parent.parent
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="skill에 포함된 eval spec을 실행한다.")
-    parser.add_argument(
-        "skill_dir",
-        nargs="?",
-        default=None,
-        help="Skill root. 기본값은 이 script directory의 parent다.",
-    )
-    parser.add_argument("--validate", action="store_true", help="spec 형식이 올바른지만 확인한다.")
-    parser.add_argument("--output", default=None, help="채점할 produced output 경로. {output}에 binding된다.")
-    parser.add_argument("--case", default=None, help="이 golden case id만 채점한다.")
-    parser.add_argument(
-        "--rollout",
-        action="store_true",
-        help="각 golden input에 대해 spec의 run command로 skill을 실행한 뒤 output을 채점한다.",
-    )
-    parser.add_argument(
-        "--promote",
-        action="store_true",
-        help="--rollout과 함께 사용한다. pending-first-green case의 첫 passing output을 baseline으로 저장한다.",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=DEFAULT_ROLLOUT_TIMEOUT,
-        help=f"--rollout에서 case별 실행 timeout 초 단위. 기본값 {DEFAULT_ROLLOUT_TIMEOUT}.",
-    )
-    parser.add_argument("--json", action="store_true", help="machine-readable JSON을 출력한다.")
+    parser = argparse.ArgumentParser(description="Run a skill's case-based eval suite.")
+    parser.add_argument("skill_dir", nargs="?", default=None, help="Skill root (default: parent of scripts/).")
+    parser.add_argument("--validate", action="store_true", help="Only validate eval.yaml and declared case.yaml files.")
+    parser.add_argument("--promote", action="store_true", help="Create or overwrite expected files for passing cases.")
+    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     args = parser.parse_args(argv)
 
     skill_dir = Path(args.skill_dir).resolve() if args.skill_dir else _default_skill_dir()
-
     spec_path = find_spec(skill_dir)
     if spec_path is None:
-        msg = f"no evals/*.eval.md found under {skill_dir}"
+        msg = f"no evals/*.eval.yaml found under {skill_dir}"
         print(json.dumps({"error": msg}) if args.json else f"ERROR: {msg}", file=sys.stderr)
         return 2
-
     try:
         spec = parse_spec(spec_path)
     except ValueError as exc:
@@ -364,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = validate_spec(spec, skill_dir)
     if args.validate:
         if args.json:
-            print(json.dumps({"valid": not errors, "errors": errors}, indent=2))
+            print(json.dumps({"valid": not errors, "errors": errors}, indent=2, ensure_ascii=False))
         elif errors:
             print(f"INVALID {spec_path.name}:")
             for err in errors:
@@ -372,57 +617,21 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"VALID {spec_path.name}")
         return 1 if errors else 0
-
     if errors:
-        # malformed spec은 정직하게 실행할 수 없으므로 먼저 --validate를 요구한다.
-        head = f"ERROR: {spec_path.name} is malformed; run --validate"
-        print(json.dumps({"error": head, "errors": errors}) if args.json else head, file=sys.stderr)
+        print(json.dumps({"error": "eval suite is malformed", "errors": errors}, ensure_ascii=False) if args.json else "ERROR: eval suite is malformed; run --validate", file=sys.stderr)
         return 1
 
-    judges = llm_judge_criteria(spec)
-
-    if args.rollout:
-        if not spec.get("run"):
-            msg = "rollout unavailable: spec has no 'run' command"
-            print(json.dumps({"rollout": "unavailable", "reason": msg}) if args.json else msg)
-            return 0
-        result = run_rollout(
-            spec, skill_dir, promote=args.promote, only_case=args.case, timeout=args.timeout
-        )
-        if args.json:
-            print(json.dumps({**result, "llm_judge": [c["id"] for c in judges]}, indent=2))
-        else:
-            for check in result["checks"]:
-                print(f"  [{check['status']:>7}] {check['case']} :: {check['criterion']}")
-            print(
-                f"\nrollout: {result['passed']} passed, {result['failed']} failed, "
-                f"{result['errors']} errored"
-            )
-            if result["promoted"]:
-                print(f"promoted baselines: {', '.join(result['promoted'])}")
-            if judges:
-                print("\nllm-judge checks (evaluate manually or via /autoresearch-universal):")
-                for crit in judges:
-                    print(f"  - {crit['id']}: {crit['text']}")
-        return 1 if (result["failed"] or result["errors"]) else 0
-
-    output = Path(args.output).resolve() if args.output else None
-    result = run_command_checks(spec, skill_dir, output=output, only_case=args.case)
-
+    result = run_suite(spec, skill_dir, promote=args.promote)
     if args.json:
-        print(json.dumps({**result, "llm_judge": [c["id"] for c in judges]}, indent=2))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        for check in result["checks"]:
-            print(f"  [{check['status']:>7}] {check['case']} :: {check['criterion']}")
-        print(
-            f"\ncommand checks: {result['passed']} passed, "
-            f"{result['failed']} failed, {result['skipped']} skipped"
-        )
-        if judges:
-            print("\nllm-judge checks (evaluate manually or via /autoresearch-universal):")
-            for crit in judges:
-                print(f"  - {crit['id']}: {crit['text']}")
-
+        for case in result["cases"]:
+            print(f"[{case['status']}] {case['id']} — {case['title']}")
+            for check in case["checks"]:
+                print(f"  [{check['status']}] {check['id']} — {check['title']}")
+            if case.get("promoted"):
+                print(f"  promoted: {case['promoted']}")
+        print(f"\nsummary: {result['passed']} passed, {result['failed']} failed")
     return 1 if result["failed"] else 0
 
 

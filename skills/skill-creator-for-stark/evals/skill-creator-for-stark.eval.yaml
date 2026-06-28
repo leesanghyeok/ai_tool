@@ -1,0 +1,23 @@
+version: 1
+skill: skill-creator-for-stark
+title: skill-creator-for-stark eval suite
+
+test_policy:
+  expected_compare: auto
+  llm_judge: required
+  undeclared_cases: error
+  promote: allow-overwrite
+
+cases:
+  - id: validate-package
+    type: regression
+    title: 스킬 패키지 구조 validator 통과 여부 검증
+    path: cases/validate-package/case.yaml
+  - id: runner-regression
+    type: regression
+    title: case-based eval runner regression test 통과 여부 검증
+    path: cases/runner-regression/case.yaml
+  - id: eval-contract-docs
+    type: regression
+    title: case-based eval 계약 문서와 템플릿 정합성 검증
+    path: cases/eval-contract-docs/case.yaml
