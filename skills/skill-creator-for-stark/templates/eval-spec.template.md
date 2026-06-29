@@ -42,17 +42,27 @@ assertions:
     type: command
     cmd: python3 -m json.tool {output}
 
-  - id: semantic-quality
-    title: 출력이 요구사항을 의미적으로 만족하는지 검증
+```
+
+`type: llm-judge` case 예시:
+
+```yaml
+id: semantic-quality
+type: llm-judge
+title: 출력이 요구사항을 의미적으로 만족하는지 검증
+
+input: input.json
+
+judge:
+  method: aggregate
+  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  timeout_sec: 300
+
+assertions:
+  - id: actionable-workflow
+    title: 실행 가능한 workflow가 있는지 검증
     type: llm-judge
-    judge:
-      method: aggregate
-      command: python3 scripts/run_llm_judge.py --packet {judge_packet} --output {judge_output}
-      timeout_sec: 300
-    checks:
-      - id: actionable-workflow
-        title: 실행 가능한 workflow가 있는지 검증
-        prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
+    prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
 ```
 
 ## 작성 규칙
@@ -64,3 +74,4 @@ assertions:
 - `--promote`는 expected를 생성하거나 overwrite한다.
 - assertion type은 `command`, `llm-judge`만 사용한다.
 - `type: llm-judge` case에는 `run.command`를 두지 않는다.
+- `type: llm-judge` case의 `judge.command`는 top-level에 두고, assertion에는 `prompt`를 직접 둔다.

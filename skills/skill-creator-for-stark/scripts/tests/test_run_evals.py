@@ -42,20 +42,18 @@ PIPELINE_WRONG = (
 JUDGE_PASS = (
     "import argparse, json, pathlib\n"
     "ap = argparse.ArgumentParser()\n"
-    "ap.add_argument('--packet'); ap.add_argument('--output', required=True)\n"
+    "ap.add_argument('--input', required=True); ap.add_argument('--output', required=True)\n"
     "a = ap.parse_args()\n"
-    "p=json.load(open(a.packet))\n"
-    "checks=[{'id': c['id'], 'verdict': 'pass', 'evidence': ['checked']} for c in p['checks']]\n"
-    "pathlib.Path(a.output).write_text(json.dumps({'verdict':'pass','checks':checks}))\n"
+    "p=json.load(open(a.input))\n"
+    "assert p['prompt']\n"
+    "pathlib.Path(a.output).write_text('상태: pass\\n판단: ' + p['prompt'][:20])\n"
 )
 JUDGE_FAIL = (
-    "import argparse, json, pathlib\n"
+    "import argparse, pathlib\n"
     "ap = argparse.ArgumentParser()\n"
-    "ap.add_argument('--packet'); ap.add_argument('--output', required=True)\n"
+    "ap.add_argument('--input', required=True); ap.add_argument('--output', required=True)\n"
     "a = ap.parse_args()\n"
-    "p=json.load(open(a.packet))\n"
-    "checks=[{'id': c['id'], 'verdict': 'fail', 'evidence': ['checked'], 'reason': 'no'} for c in p['checks']]\n"
-    "pathlib.Path(a.output).write_text(json.dumps({'verdict':'fail','checks':checks}))\n"
+    "pathlib.Path(a.output).write_text('')\n"
 )
 
 
@@ -87,27 +85,30 @@ def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PA
         )
         input_line = "input: input.json\n"
 
+    if case_type == "llm-judge":
+        assertions = """judge:
+  method: aggregate
+  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  timeout_sec: 30
+assertions:
+  - id: semantic-quality
+    title: 의미 품질 검증
+    type: llm-judge
+    prompt: 출력이 실행 가능한 절차를 포함한다.
+"""
+    else:
+        assertions = """assertions:
+  - id: valid-json
+    title: 출력이 JSON인지 검증
+    type: command
+    cmd: python3 -m json.tool {output}
+"""
+
     (case_dir / "case.yaml").write_text(
         f"""id: case-1
 type: {case_type}
 title: 기본 케이스
-{input_line}{expected_line}{run_block}assertions:
-  - id: valid-json
-    title: 출력이 JSON인지 검증
-    type: command
-    cmd: python3 -m json.tool {{output}}
-  - id: semantic-quality
-    title: 의미 품질 검증
-    type: llm-judge
-    judge:
-      method: aggregate
-      command: python3 scripts/run_llm_judge.py --packet {{judge_packet}} --output {{judge_output}}
-      timeout_sec: 30
-    checks:
-      - id: actionable
-        title: 실행 가능한지 검증
-        prompt: 출력이 실행 가능한 절차를 포함한다.
-""",
+{input_line}{expected_line}{run_block}{assertions}""",
         encoding="utf-8",
     )
     (skill / "evals" / "demo-skill.eval.yaml").write_text(
@@ -187,7 +188,7 @@ class CaseBasedEvalRunnerTest(unittest.TestCase):
         self.assertEqual((skill / "evals" / "cases" / "case-1" / "expected.json").read_text(), '{"ok": false}\n')
 
     def test_llm_judge_failure_fails_case(self) -> None:
-        skill = _make_skill(self.tmp, judge=JUDGE_FAIL)
+        skill = _make_skill(self.tmp, judge=JUDGE_FAIL, case_type="llm-judge")
         result = run_suite(parse_spec(_spec_path(skill)), skill)
         self.assertEqual(result["failed"], 1)
         self.assertTrue(any(c["type"] == "llm-judge" and c["status"] == "fail" for c in result["cases"][0]["checks"]))

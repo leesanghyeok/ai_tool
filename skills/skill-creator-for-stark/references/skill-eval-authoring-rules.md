@@ -163,23 +163,29 @@ python3 scripts/run_evals.py --promote
 
 ### `llm-judge`
 
-`llm-judge`는 rubric 문자열 하나가 아니라 독립 check list를 가진다. 각 check는 개별 verdict를 받아야 한다.
+`llm-judge`는 `type: llm-judge` case에서만 사용한다. `judge.command`는 case top-level에 두고, 각 assertion은 검증할 자연어 `prompt`를 직접 가진다.
 
 ```yaml
-- id: skill-quality
-  title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
-  type: llm-judge
-  judge:
-    method: aggregate
-    command: python3 scripts/run_llm_judge.py --packet {judge_packet} --output {judge_output}
-    timeout_sec: 300
-  checks:
-    - id: actionable-workflow
-      title: 실행 가능한 workflow가 있는지 검증
-      prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
-    - id: deterministic-verification
-      title: 결정론적 검증 방법이 있는지 검증
-      prompt: 출력에는 command 기반 또는 재현 가능한 검증 방법이 포함되어야 한다.
+id: skill-quality
+type: llm-judge
+title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
+
+input: input.json
+
+judge:
+  method: aggregate
+  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  timeout_sec: 300
+
+assertions:
+  - id: actionable-workflow
+    title: 실행 가능한 workflow가 있는지 검증
+    type: llm-judge
+    prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
+  - id: deterministic-verification
+    title: 결정론적 검증 방법이 있는지 검증
+    type: llm-judge
+    prompt: 출력에는 command 기반 또는 재현 가능한 검증 방법이 포함되어야 한다.
 ```
 
 `judge.method` 허용값:
@@ -191,35 +197,18 @@ python3 scripts/run_evals.py --promote
 
 ## `type: llm-judge` case
 
-`type: llm-judge` case는 `run.command`를 정의하지 않는다. 이 case는 primary execution이 아니라 judge 검증 자체가 목적이다. 필요한 실행은 `llm-judge` assertion의 `judge.command`가 수행한다.
+`type: llm-judge` case는 `run.command`를 정의하지 않는다. 이 case는 primary execution이 아니라 judge 검증 자체가 목적이다. 필요한 실행은 top-level `judge.command`가 수행한다.
 
 ## `run_llm_judge.py` contract
 
-LLM judge는 subprocess 방식으로 호출한다. Runner는 `{judge_packet}` JSON을 만들고 `judge.command`를 실행해 `{judge_output}` JSON을 기대한다.
+LLM judge는 subprocess 방식으로 호출한다. Runner는 assertion-level `prompt`를 `{judge_packet}` JSON의 `prompt` 필드에 넣고, top-level `judge.command`를 실행해 `{judge_output}` text를 기대한다.
 
-Required judge output:
+Required judge behavior:
 
-```json
-{
-  "verdict": "pass",
-  "checks": [
-    {
-      "id": "actionable-workflow",
-      "verdict": "pass",
-      "evidence": ["output line 12 includes an executable command"],
-      "reason": "workflow is actionable"
-    }
-  ]
-}
-```
-
-Rules:
-
-- top-level `verdict`는 `pass|fail`.
-- 모든 declared check id가 결과에 있어야 한다.
-- 각 check verdict는 `pass|fail`.
-- 각 check는 non-empty `evidence`를 가져야 한다.
-- `confidence`는 사용하지 않는다.
+- `run_llm_judge.py`에는 `--input {judge_packet}`을 넘긴다.
+- `{judge_packet}` JSON의 public payload는 `prompt` 필드 하나다.
+- `{judge_output}`은 skill에 정의된 자연어 응답이며 고정 JSON verdict/evidence schema가 아니다.
+- command exit code가 0이고 `{judge_output}`이 non-empty이면 runner-level 실행은 통과로 볼 수 있다. 자연어 판단 내용의 정책 결정은 review 단계에서 다룬다.
 
 ## run_evals.py 사용법
 
@@ -259,7 +248,8 @@ python3 scripts/run_evals.py --json
 - [ ] assertion type은 `command`, `llm-judge`만 사용한다.
 - [ ] non-`llm-judge` case의 `run.command`에는 `{output}`이 있다.
 - [ ] `type: llm-judge` case에는 `run.command`가 없다.
-- [ ] `llm-judge` assertion은 `judge.method`, `judge.command`, `checks`를 가진다.
+- [ ] `type: llm-judge` case는 top-level `judge.method`, `judge.command`를 가진다.
+- [ ] `llm-judge` assertion은 `prompt`를 직접 가진다.
 - [ ] `judge.method`는 `aggregate` 또는 `subagent`다.
 - [ ] `expected`가 있으면 자동 equality 비교가 수행된다.
 - [ ] `--promote`는 expected를 생성 또는 overwrite한다.

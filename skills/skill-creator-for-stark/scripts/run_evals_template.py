@@ -9,10 +9,11 @@ Spec model:
 The suite manifest is the source of truth: only cases listed in eval.yaml run.
 Case directories that exist on disk but are not declared are validation errors.
 
-Each case owns its own run command and assertions. There are no global
-assertions and no top-level run command. Supported assertion types are:
+Each non-llm-judge case owns its own run command and assertions. llm-judge
+cases own a top-level judge command and assertion-level prompts. There are no
+global assertions and no top-level suite run command. Supported assertion types are:
   - command: shell command exits 0
-  - llm-judge: subprocess judge command returns structured JSON verdicts
+  - llm-judge: subprocess judge command returns a non-empty natural-language response
 
 Expected handling is automatic: when a case declares `expected`, produced output
 is byte-compared to that file unless --promote is set. With --promote, passing
@@ -313,10 +314,25 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
 
     ctype = case.get("type")
     run = case.get("run")
+    judge = case.get("judge")
     if ctype == "llm-judge":
         if run is not None:
-            errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use llm-judge judge.command")
+            errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use top-level judge.command")
+        if not isinstance(judge, dict):
+            errors.append(f"{prefix}: type 'llm-judge' must define top-level judge mapping")
+        else:
+            if judge.get("method") not in VALID_JUDGE_METHODS:
+                errors.append(f"{prefix}: judge.method must be one of {VALID_JUDGE_METHODS}")
+            command = judge.get("command")
+            if not command:
+                errors.append(f"{prefix}: judge.command is required")
+            elif JUDGE_PACKET_PLACEHOLDER not in command or JUDGE_OUTPUT_PLACEHOLDER not in command:
+                errors.append(
+                    f"{prefix}: judge.command must contain {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
+                )
     else:
+        if judge is not None:
+            errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
         if not isinstance(run, dict) or not run.get("command"):
             errors.append(f"{prefix}: non-llm-judge case must define run.command")
         elif OUTPUT_PLACEHOLDER not in run["command"]:
@@ -345,31 +361,14 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
         if atype == "command" and not assertion.get("cmd"):
             errors.append(f"{awhere}: command assertion needs 'cmd'")
         if atype == "llm-judge":
-            judge = assertion.get("judge")
-            if not isinstance(judge, dict):
-                errors.append(f"{awhere}: llm-judge assertion needs 'judge' mapping")
-            else:
-                if judge.get("method") not in VALID_JUDGE_METHODS:
-                    errors.append(f"{awhere}: judge.method must be one of {VALID_JUDGE_METHODS}")
-                command = judge.get("command")
-                if not command:
-                    errors.append(f"{awhere}: judge.command is required")
-                elif JUDGE_PACKET_PLACEHOLDER not in command or JUDGE_OUTPUT_PLACEHOLDER not in command:
-                    errors.append(
-                        f"{awhere}: judge.command must contain {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
-                    )
-            checks = assertion.get("checks")
-            if not isinstance(checks, list) or not checks:
-                errors.append(f"{awhere}: llm-judge assertion needs non-empty 'checks' list")
-            else:
-                for j, check in enumerate(checks):
-                    cwhere = f"{awhere} checks[{j}]"
-                    if not isinstance(check, dict):
-                        errors.append(f"{cwhere}: must be a mapping")
-                        continue
-                    for field in ("id", "title", "prompt"):
-                        if not check.get(field):
-                            errors.append(f"{cwhere}: missing '{field}'")
+            if ctype != "llm-judge":
+                errors.append(f"{awhere}: llm-judge assertion is only allowed in type 'llm-judge' cases")
+            if assertion.get("judge") is not None:
+                errors.append(f"{awhere}: llm-judge assertion must not define judge; use top-level judge")
+            if assertion.get("checks") is not None:
+                errors.append(f"{awhere}: llm-judge assertion must not define checks; put the prompt on the assertion")
+            if not assertion.get("prompt"):
+                errors.append(f"{awhere}: llm-judge assertion needs 'prompt'")
     return errors
 
 
@@ -445,55 +444,14 @@ def _run_command_assertion(assertion: dict, case: dict, output_path: Path, cwd: 
 
 
 def _judge_packet(case: dict, assertion: dict, output_path: Path) -> dict:
-    packet = {
-        "case": {"id": case["id"], "type": case["type"], "title": case["title"]},
-        "assertion": {"id": assertion["id"], "title": assertion["title"]},
-        "method": assertion["judge"]["method"],
-        "input_path": str(_input_path(case)) if _input_path(case) else None,
-        "output_path": str(output_path),
-        "expected_path": str(_expected_path(case)) if _expected_path(case) else None,
-        "checks": assertion["checks"],
-        "required_response_schema": {
-            "verdict": "pass|fail",
-            "checks": [{"id": "string", "verdict": "pass|fail", "evidence": ["string"], "reason": "string"}],
-        },
-    }
-    return packet
-
-
-def _validate_judge_result(result: Any, assertion: dict) -> tuple[bool, str]:
-    if not isinstance(result, dict):
-        return False, "judge result must be a JSON object"
-    if result.get("verdict") not in ("pass", "fail"):
-        return False, "judge result verdict must be pass or fail"
-    checks = result.get("checks")
-    if not isinstance(checks, list):
-        return False, "judge result checks must be a list"
-    expected_ids = {c["id"] for c in assertion.get("checks", [])}
-    seen: set[str] = set()
-    for check in checks:
-        if not isinstance(check, dict):
-            return False, "each judge check result must be an object"
-        cid = check.get("id")
-        if cid not in expected_ids:
-            return False, f"unknown judge check id: {cid}"
-        if isinstance(cid, str):
-            seen.add(cid)
-        if check.get("verdict") not in ("pass", "fail"):
-            return False, f"judge check {cid} verdict must be pass or fail"
-        if not check.get("evidence"):
-            return False, f"judge check {cid} must include evidence"
-    missing = expected_ids - seen
-    if missing:
-        return False, f"judge result missing checks: {', '.join(sorted(missing))}"
-    return True, ""
+    return {"prompt": assertion["prompt"]}
 
 
 def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd: Path) -> dict:
-    judge = assertion["judge"]
+    judge = case["judge"]
     with tempfile.TemporaryDirectory() as td:
         packet_path = Path(td) / "judge-packet.json"
-        judge_output = Path(td) / "judge-output.json"
+        judge_output = Path(td) / "judge-output.txt"
         packet_path.write_text(json.dumps(_judge_packet(case, assertion, output_path), indent=2, ensure_ascii=False), encoding="utf-8")
         cmd = _bind_placeholders(
             judge["command"],
@@ -510,14 +468,10 @@ def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd
                 "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:],
                 "error": "judge command failed or did not create judge_output",
             }
-        try:
-            result = json.loads(judge_output.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": f"judge output is not JSON: {exc}"}
-        valid, error = _validate_judge_result(result, assertion)
-        if not valid:
-            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": error, "judge_result": result}
-        return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "pass" if result["verdict"] == "pass" else "fail", "judge_result": result}
+        judge_text = judge_output.read_text(encoding="utf-8")
+        if not judge_text.strip():
+            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": "judge output is empty"}
+        return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "pass", "judge_output": judge_text[-2000:]}
 
 
 def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:

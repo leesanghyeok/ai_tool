@@ -83,7 +83,7 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 주의:
 
 - `/usr/bin/python3`는 Python 3.9일 수 있어 `Path | None` syntax가 있는 test/helper 실행에 부적합하다. 가져온 regression tests는 `python3.11`로 실행한다.
-- `llm-judge` assertion은 `run_llm_judge.py` subprocess contract의 JSON verdict/evidence 검증을 거친 경우에만 통과로 본다.
+- `llm-judge` case는 top-level `judge.command`가 `run_llm_judge.py --input {judge_packet} --output {judge_output}`을 실행하고 `{judge_packet}` JSON의 `prompt` 필드를 agent에 전달해 non-empty 자연어 output을 만든 경우에 통과로 본다.
 - `--promote`는 expected 파일을 생성하거나 overwrite하므로 별도 승인 전에는 실행하지 않는다.
 
 ## `scripts/run_evals.py`로 할 수 있는 작업
@@ -126,7 +126,7 @@ python3 scripts/run_evals.py [skill_dir] [--validate] [--json] [--promote]
 - 옵션 이름은 `--validate`다. `--validation`은 지원하지 않는다.
 - `--validate` 통과는 eval spec 구조 통과이지, skill 산출물 품질 통과가 아니다.
 - `--json` 기본 실행에서 case가 `expected`를 선언하면 runner가 actual output과 expected 파일을 byte-compare한다.
-- `llm-judge` case/assertion은 `run_llm_judge.py` 같은 subprocess가 `{judge_output}` JSON을 실제로 써야 통과한다.
+- `llm-judge` case/assertion은 `run_llm_judge.py` 같은 subprocess가 non-empty `{judge_output}` text를 실제로 써야 통과한다.
 - exit code는 `0` 통과, `1` malformed spec 또는 failed case/assertion, `2` eval suite 없음이다.
 
 ## 자체 eval case
