@@ -86,6 +86,49 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 - `llm-judge` assertion은 `run_llm_judge.py` subprocess contract의 JSON verdict/evidence 검증을 거친 경우에만 통과로 본다.
 - `--promote`는 expected 파일을 생성하거나 overwrite하므로 별도 승인 전에는 실행하지 않는다.
 
+## `scripts/run_evals.py`로 할 수 있는 작업
+
+`scripts/run_evals.py`는 agent runtime이나 skill 생성기가 아니라, `evals/<skill>.eval.yaml`과 declared `evals/cases/*/case.yaml`을 읽어 case-based eval suite를 검증·실행하는 runner다.
+
+기본 형태:
+
+```bash
+cd /Users/stark/project/jarvis/ai_tool/skills/skill-creator-for-stark
+python3 scripts/run_evals.py [skill_dir] [--validate] [--json] [--promote]
+```
+
+주요 사용법:
+
+- `python3 scripts/run_evals.py --validate`
+  - eval suite 구조만 검증한다.
+  - `eval.yaml`의 `skill`, `title`, declared `cases`와 각 `case.yaml`의 `id`, `type`, `title`, `run.command`, `assertions` shape를 확인한다.
+  - undeclared `evals/cases/*/case.yaml`도 오류로 잡는다.
+  - 산출물 생성이나 case 실행은 하지 않는다.
+- `python3 scripts/run_evals.py --json`
+  - declared case를 실제 실행하고 machine-readable JSON 결과를 출력한다.
+  - 각 case의 `run.command`를 실행한 뒤 expected byte equality, `command` assertion, `llm-judge` assertion 결과를 `cases[].checks[]`에 담는다.
+  - CI나 ad-hoc parser에서 pass/fail을 읽기 좋다.
+- `python3 scripts/run_evals.py`
+  - declared case를 실행하고 사람이 읽기 쉬운 text summary를 출력한다.
+  - 빠른 로컬 확인에는 좋지만, 자동 검증 evidence로는 `--json`이 더 명확하다.
+- `python3 scripts/run_evals.py --validate --json`
+  - 구조 검증 결과만 JSON으로 출력한다.
+  - 출력 shape는 `{"valid": true|false, "errors": [...]}`다.
+- `python3 scripts/run_evals.py <skill_dir>`
+  - 현재 runner 위치가 아니라 인자로 받은 skill root의 `evals/*.eval.yaml`을 실행한다.
+  - generated skill package를 외부에서 검증할 때 사용한다.
+- `python3 scripts/run_evals.py --promote`
+  - passing case의 실제 output을 `expected` 파일로 생성하거나 overwrite한다.
+  - 파일을 쓰는 옵션이므로 사용자가 expected baseline 갱신을 명시 승인한 경우에만 실행한다.
+
+주의:
+
+- 옵션 이름은 `--validate`다. `--validation`은 지원하지 않는다.
+- `--validate` 통과는 eval spec 구조 통과이지, skill 산출물 품질 통과가 아니다.
+- `--json` 기본 실행에서 case가 `expected`를 선언하면 runner가 actual output과 expected 파일을 byte-compare한다.
+- `llm-judge` case/assertion은 `run_llm_judge.py` 같은 subprocess가 `{judge_output}` JSON을 실제로 써야 통과한다.
+- exit code는 `0` 통과, `1` malformed spec 또는 failed case/assertion, `2` eval suite 없음이다.
+
 ## 자체 eval case
 
 `evals/skill-creator-for-stark.eval.yaml`는 creator 자체의 case-based regression contract다.
