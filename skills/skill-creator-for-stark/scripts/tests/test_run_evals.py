@@ -45,6 +45,7 @@ JUDGE_PASS = (
     "ap.add_argument('--input', required=True); ap.add_argument('--output', required=True)\n"
     "a = ap.parse_args()\n"
     "p=json.load(open(a.input))\n"
+    "assert p['schema_version'] == 1\n"
     "assert p['prompt']\n"
     "pathlib.Path(a.output).write_text('상태: pass\\n판단: ' + p['prompt'][:20])\n"
 )
@@ -87,7 +88,7 @@ def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PA
 
     if case_type == "llm-judge":
         assertions = """judge:
-  method: aggregate
+  method: subagent
   command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
   timeout_sec: 30
 assertions:

@@ -173,7 +173,7 @@ title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
 input: input.json
 
 judge:
-  method: aggregate
+  method: subagent
   command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
   timeout_sec: 300
 
@@ -190,8 +190,8 @@ assertions:
 
 `judge.method` 허용값:
 
-- `aggregate`: 모든 checks를 하나의 judge call로 평가한다.
 - `subagent`: check별 독립 subprocess/agent call로 평가한다.
+- `aggregate`: 기존 fixture 호환용 허용값이지만 신규 case에서는 쓰지 않는다.
 
 `hybrid`는 두지 않는다.
 
@@ -206,7 +206,7 @@ LLM judge는 subprocess 방식으로 호출한다. Runner는 assertion-level `pr
 Required judge behavior:
 
 - `run_llm_judge.py`에는 `--input {judge_packet}`을 넘긴다.
-- `{judge_packet}` JSON의 public payload는 `prompt` 필드 하나다.
+- `{judge_packet}` JSON의 public payload는 `schema_version`과 `prompt` 필드다.
 - `{judge_output}`은 skill에 정의된 자연어 응답이며 고정 JSON verdict/evidence schema가 아니다.
 - command exit code가 0이고 `{judge_output}`이 non-empty이면 runner-level 실행은 통과로 볼 수 있다. 자연어 판단 내용의 정책 결정은 review 단계에서 다룬다.
 

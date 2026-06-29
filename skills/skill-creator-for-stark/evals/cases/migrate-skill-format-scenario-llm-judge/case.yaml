@@ -1,0 +1,24 @@
+id: migrate-skill-format-scenario-llm-judge
+type: llm-judge
+title: migration output의 원본 보존 subagent judge 검증
+
+input: input.json
+
+judge:
+  method: subagent
+  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  timeout_sec: 300
+
+assertions:
+  - id: source-intent-preserved
+    title: 원본 trigger와 workflow 보존 여부 검증
+    type: llm-judge
+    prompt: output은 source artifact에 있는 trigger, workflow, required command를 보존해야 하며 source에 없는 기능을 만들어내지 않아야 한다.
+  - id: create-path-equivalence
+    title: migration이 create와 같은 생성 판단 경로를 타는지 검증
+    type: llm-judge
+    prompt: output은 기존 스킬 문맥을 읽어 새 Stark 스킬을 생성하는 방식으로 설명되어야 하며 deterministic renderer 결과를 품질 근거로 삼지 않아야 한다.
+  - id: uncertainty-handling
+    title: 불충분한 source를 추정으로 채우지 않는지 검증
+    type: llm-judge
+    prompt: output은 source에 없는 credential, API, command, path를 invented item으로 만들지 않고 open_questions 또는 blocker로 분리해야 한다.

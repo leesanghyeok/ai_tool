@@ -444,7 +444,7 @@ def _run_command_assertion(assertion: dict, case: dict, output_path: Path, cwd: 
 
 
 def _judge_packet(case: dict, assertion: dict, output_path: Path) -> dict:
-    return {"prompt": assertion["prompt"]}
+    return {"schema_version": 1, "prompt": assertion["prompt"]}
 
 
 def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd: Path) -> dict:

@@ -54,7 +54,7 @@ title: 출력이 요구사항을 의미적으로 만족하는지 검증
 input: input.json
 
 judge:
-  method: aggregate
+  method: subagent
   command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
   timeout_sec: 300
 

@@ -1,0 +1,4 @@
+{
+  "schema_version": 1,
+  "prompt": "기존 for-test-youtube-content 스킬에 사용 중 불만족 feedback을 feedback/ raw Markdown으로 남기는 절차와 eval case를 최소 변경으로 추가해줘. 기존 transcript 요약 workflow와 eval manifest는 보존해줘"
+}

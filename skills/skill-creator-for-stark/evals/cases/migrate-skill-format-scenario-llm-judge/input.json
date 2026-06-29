@@ -1,0 +1,4 @@
+{
+  "schema_version": 1,
+  "prompt": "/create-skill-for-stark /Users/stark/project/jarvis/docs/skill-creator-eval-expansion/references/mock-skill-fixtures.md#for-test-legacy-release-notes에 있는 legacy release notes workflow를 읽어서 Stark 포맷 테스트용 스킬로 이전해줘. 원본 trigger, workflow, required command를 보존하고 source에 없는 publish action이나 API는 만들지 마"
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "mode": "modify",
+  "target": {
+    "skill_root": "/tmp/hermes-skill-creator-for-stark-evals",
+    "skill_name": "for-test-youtube-content"
+  },
+  "template_inputs": [
+    {
+      "path": "SKILL.md",
+      "template": "templates/SKILL.template.md",
+      "data": {
+        "skill_name": "for-test-youtube-content",
+        "skill_title": "for-test youtube content",
+        "description": "YouTube transcript 요약 workflow에 feedback logging 절차를 보강하는 테스트용 스킬",
+        "skill_goal": "기존 transcript 요약 workflow를 보존하면서 feedback logging 절차를 추가",
+        "trigger_conditions": ["사용자가 YouTube transcript 요약을 요청한다"],
+        "change_summary": "사용 중 불만족 feedback을 feedback/에 남기는 절차 추가"
+      }
+    },
+    {
+      "path": "templates/feedback-log.template.md",
+      "template": "templates/feedback-log.template.md",
+      "data": {"log_format": "raw feedback markdown"}
+    },
+    {
+      "path": "evals/for-test-youtube-content.eval.yaml",
+      "template": "templates/eval-spec.template.md",
+      "data": {"skill_name": "for-test-youtube-content", "case_id": "feedback-logging"}
+    }
+  ]
+}

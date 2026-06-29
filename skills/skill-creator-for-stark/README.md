@@ -83,7 +83,7 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 주의:
 
 - `/usr/bin/python3`는 Python 3.9일 수 있어 `Path | None` syntax가 있는 test/helper 실행에 부적합하다. 가져온 regression tests는 `python3.11`로 실행한다.
-- `llm-judge` case는 top-level `judge.command`가 `run_llm_judge.py --input {judge_packet} --output {judge_output}`을 실행하고 `{judge_packet}` JSON의 `prompt` 필드를 agent에 전달해 non-empty 자연어 output을 만든 경우에 통과로 본다.
+- `llm-judge` case는 top-level `judge.command`가 `run_llm_judge.py --input {judge_packet} --output {judge_output}`을 실행하고 `{judge_packet}` JSON의 `schema_version`과 `prompt` 필드를 검증해 non-empty 자연어 output을 만든 경우에 통과로 본다.
 - `--promote`는 expected 파일을 생성하거나 overwrite하므로 별도 승인 전에는 실행하지 않는다.
 
 ## `scripts/run_evals.py`로 할 수 있는 작업
@@ -138,6 +138,11 @@ python3 scripts/run_evals.py [skill_dir] [--validate] [--json] [--promote]
 - `validate-package`: skill package validator가 통과하는지 확인한다.
 - `runner-regression`: case-based `run_evals.py` regression tests가 통과하는지 확인한다.
 - `eval-contract-docs`: case-based eval reference/template가 새 계약을 설명하는지 확인한다.
+- `create-skill-scenario`: 새 skill 생성 사용자 시나리오에서 `scripts/run_pipeline.py --input {input} --output {output}`가 Stark package skeleton을 생성하는지 확인한다.
+- `create-skill-scenario-llm-judge`: 새 skill 생성 output의 contract minimalism, approval boundary, no-invention 기준을 `llm-judge` subprocess adapter로 확인한다.
+- `modify-skill-scenario`: 기존 skill 수정 사용자 시나리오에서 feedback logging 보강 파일과 eval manifest가 생성되는지 확인한다.
+- `modify-skill-scenario-llm-judge`: 기존 skill 수정 output이 기존 contract 보존과 최소 변경 기준을 만족하는지 확인한다.
+- `migrate-skill-format-scenario-llm-judge`: migration output이 원본 trigger/workflow 보존, create-path equivalence, uncertainty handling 기준을 만족하는지 확인한다.
 
 현재 command assertions:
 
@@ -214,6 +219,8 @@ python3 scripts/run_evals.py [skill_dir] [--validate] [--json] [--promote]
 - `templates/SKILL.template.md`: 새 skill skeleton.
 - `templates/eval-spec.template.md`: case-based eval suite skeleton.
 - `scripts/validate-skill-package.py`: package 구조 validator.
+- `scripts/run_pipeline.py`: creator 사용자 시나리오 command case의 deterministic template rendering entrypoint.
+- `scripts/run_llm_judge.py`: `llm-judge` case의 `schema_version` + `prompt` packet을 검증하고 자연어 output을 쓰는 subprocess adapter.
 - `scripts/run_evals.py`: creator 자체 eval runner.
 - `scripts/run_evals_template.py`: 생성되는 skill에 복사할 eval runner template.
 - `scripts/check_pipeline.py`: generated skill pipeline verifier.

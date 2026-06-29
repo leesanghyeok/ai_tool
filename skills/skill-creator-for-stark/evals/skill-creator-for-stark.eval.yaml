@@ -21,3 +21,23 @@ cases:
     type: regression
     title: case-based eval 계약 문서와 템플릿 정합성 검증
     path: cases/eval-contract-docs/case.yaml
+  - id: create-skill-scenario
+    type: happy-path
+    title: 새 스킬 생성 사용자 시나리오 검증
+    path: cases/create-skill-scenario/case.yaml
+  - id: create-skill-scenario-llm-judge
+    type: llm-judge
+    title: 새 스킬 생성 output의 의미 품질 subagent judge 검증
+    path: cases/create-skill-scenario-llm-judge/case.yaml
+  - id: modify-skill-scenario
+    type: integration
+    title: 기존 스킬 수정 사용자 시나리오 검증
+    path: cases/modify-skill-scenario/case.yaml
+  - id: modify-skill-scenario-llm-judge
+    type: llm-judge
+    title: 기존 스킬 수정 output의 최소 변경 subagent judge 검증
+    path: cases/modify-skill-scenario-llm-judge/case.yaml
+  - id: migrate-skill-format-scenario-llm-judge
+    type: llm-judge
+    title: migration output의 원본 보존 subagent judge 검증
+    path: cases/migrate-skill-format-scenario-llm-judge/case.yaml
