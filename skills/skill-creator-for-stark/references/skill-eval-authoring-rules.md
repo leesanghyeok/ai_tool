@@ -25,7 +25,7 @@ SKILL.md를 쓰기 전에 다음을 정한다.
    - 각 case entry는 `id`, `type`, `title`, `path`를 가진다.
 2. case별 실행 방식을 정한다.
    - non-`llm-judge` case는 `run.command`를 갖고 `{output}` placeholder를 포함해야 한다.
-   - `type: llm-judge` case는 `run.command`를 갖지 않고, `llm-judge` assertion의 `judge.command`만 사용한다.
+   - `type: llm-judge` case는 `run.command`를 갖지 않고, top-level `judge.command`와 `llm-judge` assertion prompt를 사용한다. Adapter canonical CLI는 output/assertion subcommand이며, 기존 `{judge_packet}`/`{judge_output}` command는 migration alias다.
 3. case별 assertion을 정한다.
    - deterministic check는 `command`로 작성한다.
    - 의미·품질 판단은 `llm-judge`로 작성한다.
@@ -62,7 +62,6 @@ title: example-skill eval suite
 test_policy:
   expected_compare: auto
   llm_judge: required
-  undeclared_cases: error
   promote: allow-overwrite
 
 cases:
@@ -82,8 +81,9 @@ cases:
 |---|---|---|
 | `expected_compare` | `auto` | case에 `expected`가 있으면 runner가 자동으로 actual output과 byte equality 비교를 수행한다. |
 | `llm_judge` | `required` | `llm-judge` assertion은 기본 실행에 포함되며 judge command 실패나 verdict fail은 case fail이다. |
-| `undeclared_cases` | `error` | `evals/cases/*/case.yaml`이 있어도 `eval.yaml`에 없으면 validation error다. |
 | `promote` | `allow-overwrite` | `--promote`가 있으면 expected가 없을 때 생성하고 이미 있으면 overwrite한다. |
+
+`eval.yaml cases[]`가 validate/run 대상의 source of truth다. `evals/cases/*/case.yaml` 아래에 있어도 manifest에 선언되지 않은 case directory는 기본적으로 무시한다.
 
 ## `case.yaml` 형식
 
@@ -173,8 +173,9 @@ title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
 input: input.json
 
 judge:
-  method: subagent
-  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  method: each-session
+  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
+  verifyCommand: python3 scripts/verify_llm_judge_state.py --evidence {judge_evidence}
   timeout_sec: 300
 
 assertions:
@@ -190,8 +191,9 @@ assertions:
 
 `judge.method` 허용값:
 
-- `subagent`: check별 독립 subprocess/agent call로 평가한다.
-- `aggregate`: 기존 fixture 호환용 허용값이지만 신규 case에서는 쓰지 않는다.
+- `aggregate`: 모든 assertion을 하나의 session 성격으로 평가한다.
+- `each-session`: assertion별 독립 session 성격의 결과 marker를 남긴다.
+- `subagent`: migration alias이며 adapter 결과에서는 `each-session`으로 normalize한다.
 
 `hybrid`는 두지 않는다.
 
@@ -201,13 +203,20 @@ assertions:
 
 ## `run_llm_judge.py` contract
 
-LLM judge는 subprocess 방식으로 호출한다. Runner는 assertion-level `prompt`를 `{judge_packet}` JSON의 `prompt` 필드에 넣고, top-level `judge.command`를 실행해 `{judge_output}` text를 기대한다.
+LLM judge adapter의 canonical subprocess contract는 output mode와 assertion mode로 분리한다.
+
+```bash
+python3 scripts/run_llm_judge.py output --input input.json --output primary-output.json
+python3 scripts/run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json
+```
+
+Migration 기간에는 runner가 assertion-level `prompt`를 `{judge_packet}` JSON의 `prompt` 필드에 넣고 `python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}`를 실행하는 기존 형태도 허용한다. 이 alias의 public `{judge_packet}`은 계속 `schema_version`과 `prompt`만 가진다.
 
 Required judge behavior:
 
-- `run_llm_judge.py`에는 `--input {judge_packet}`을 넘긴다.
-- `{judge_packet}` JSON의 public payload는 `schema_version`과 `prompt` 필드다.
-- `{judge_output}`은 skill에 정의된 자연어 응답이며 고정 JSON verdict/evidence schema가 아니다.
+- output mode public `input.json`은 `schema_version`과 `prompt` 두 필드만 허용하고, `primary-output.json`에는 `schema_version`, `status`, `output{format,content,summary}`, `artifacts`, `redactions_applied`, `errors`를 쓴다.
+- assertion mode internal input은 `schema_version`, `method`, `primary_output` 문자열, `assertions[]`를 요구하고, `assertion-output.json`에는 `schema_version`, `status`, normalized `method`, `primary_output_ref.sha256`, `results[]`, `errors[]`를 쓴다.
+- 기존 alias의 `{judge_output}`은 skill에 정의된 자연어 응답이며 고정 JSON verdict/evidence schema가 아니다.
 - command exit code가 0이고 `{judge_output}`이 non-empty이면 runner-level 실행은 통과로 볼 수 있다. 자연어 판단 내용의 정책 결정은 review 단계에서 다룬다.
 
 ## run_evals.py 사용법

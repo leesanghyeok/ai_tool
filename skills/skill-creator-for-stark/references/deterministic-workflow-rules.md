@@ -82,4 +82,4 @@ run:
   timeout_sec: 120
 ```
 
-그 다음 `python3 scripts/run_evals.py --json`으로 `eval.yaml`에 declared된 case를 실행하고 produced output을 `command`/`llm-judge` assertion으로 채점한다. `llm-judge` case는 top-level `judge.command`를 실행하고, `run_llm_judge.py --input {judge_packet}` JSON의 `prompt` 필드를 agent에 전달해 자연어 `judge_output`을 생성한다.
+그 다음 `python3 scripts/run_evals.py --json`으로 `eval.yaml`에 declared된 case를 실행하고 produced output을 `command`/`llm-judge` assertion으로 채점한다. `llm-judge` adapter의 canonical CLI는 `run_llm_judge.py output --input input.json --output primary-output.json`와 `run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json`다. 기존 runner가 top-level `judge.command`로 실행하는 `run_llm_judge.py --input {judge_packet}` 경로는 migration alias이며, `{judge_packet}` public JSON은 `schema_version`과 `prompt`만 가진다.

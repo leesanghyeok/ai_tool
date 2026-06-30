@@ -40,20 +40,30 @@ PIPELINE_WRONG = (
     "pathlib.Path(a.output).write_text('{\"ok\": false}\\n')\n"
 )
 JUDGE_PASS = (
-    "import argparse, json, pathlib\n"
+    "import argparse, json, pathlib, sys\n"
+    "argv=sys.argv[1:]\n"
+    "mode=argv.pop(0) if argv and argv[0] in {'output','assertion'} else 'legacy'\n"
     "ap = argparse.ArgumentParser()\n"
     "ap.add_argument('--input', required=True); ap.add_argument('--output', required=True)\n"
-    "a = ap.parse_args()\n"
+    "a = ap.parse_args(argv)\n"
     "p=json.load(open(a.input))\n"
     "assert p['schema_version'] == 1\n"
-    "assert p['prompt']\n"
-    "pathlib.Path(a.output).write_text('상태: pass\\n판단: ' + p['prompt'][:20])\n"
+    "if mode == 'output':\n"
+    "    content='primary: '+p['prompt'][:40]\n"
+    "    pathlib.Path(a.output).write_text(json.dumps({'schema_version':1,'status':'success','output':{'format':'text','content':content,'summary':content},'artifacts':[],'redactions_applied':[],'errors':[]}, ensure_ascii=False))\n"
+    "elif mode == 'assertion':\n"
+    "    results=[{'assertion_id': x['id'], 'status':'pass', 'judge_output':'ok', 'session_id':'test'} for x in p['assertions']]\n"
+    "    pathlib.Path(a.output).write_text(json.dumps({'schema_version':1,'status':'success','method':p['method'],'primary_output_ref':{'sha256':'x'},'results':results,'errors':[]}, ensure_ascii=False))\n"
+    "else:\n"
+    "    pathlib.Path(a.output).write_text('상태: pass\\n판단: ' + p['prompt'][:20])\n"
 )
 JUDGE_FAIL = (
-    "import argparse, pathlib\n"
+    "import argparse, pathlib, sys\n"
+    "argv=sys.argv[1:]\n"
+    "if argv and argv[0] in {'output','assertion'}: argv.pop(0)\n"
     "ap = argparse.ArgumentParser()\n"
     "ap.add_argument('--input', required=True); ap.add_argument('--output', required=True)\n"
-    "a = ap.parse_args()\n"
+    "a = ap.parse_args(argv)\n"
     "pathlib.Path(a.output).write_text('')\n"
 )
 
@@ -69,7 +79,8 @@ def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PA
 
     case_dir = skill / "evals" / "cases" / "case-1"
     case_dir.mkdir(parents=True)
-    (case_dir / "input.json").write_text('{"request":"make skill"}\n', encoding="utf-8")
+    input_text = '{"schema_version":1,"prompt":"make skill"}\n' if case_type == "llm-judge" else '{"request":"make skill"}\n'
+    (case_dir / "input.json").write_text(input_text, encoding="utf-8")
     if include_expected:
         (case_dir / "expected.json").write_text('{"ok": true}\n', encoding="utf-8")
 
@@ -88,8 +99,8 @@ def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PA
 
     if case_type == "llm-judge":
         assertions = """judge:
-  method: subagent
-  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  method: each-session
+  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
   timeout_sec: 30
 assertions:
   - id: semantic-quality
@@ -119,7 +130,6 @@ title: 데모 스킬 eval suite
 test_policy:
   expected_compare: auto
   llm_judge: required
-  undeclared_cases: error
   promote: allow-overwrite
 cases:
   - id: case-1
@@ -153,7 +163,14 @@ class CaseBasedEvalRunnerTest(unittest.TestCase):
     def test_eval_yaml_is_source_of_truth_for_cases(self) -> None:
         skill = _make_skill(self.tmp, undeclared=True)
         spec = parse_spec(_spec_path(skill))
-        self.assertTrue(any("undeclared case" in e for e in validate_spec(spec, skill)))
+        self.assertEqual(validate_spec(spec, skill), [])
+        self.assertEqual([case["id"] for case in load_cases(spec, skill)], ["case-1"])
+
+    def test_declared_missing_case_file_is_validation_error(self) -> None:
+        skill = _make_skill(self.tmp)
+        (skill / "evals" / "cases" / "case-1" / "case.yaml").unlink()
+        spec = parse_spec(_spec_path(skill))
+        self.assertTrue(any("case file not found" in e for e in validate_spec(spec, skill)))
 
     def test_eval_yaml_description_is_rejected(self) -> None:
         skill = _make_skill(self.tmp)

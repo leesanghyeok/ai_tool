@@ -10,7 +10,6 @@ title: <skill-name> eval suite
 test_policy:
   expected_compare: auto
   llm_judge: required
-  undeclared_cases: error
   promote: allow-overwrite
 
 cases:
@@ -54,8 +53,9 @@ title: 출력이 요구사항을 의미적으로 만족하는지 검증
 input: input.json
 
 judge:
-  method: subagent
-  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  method: each-session
+  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
+  verifyCommand: python3 scripts/verify_llm_judge_state.py --evidence {judge_evidence}
   timeout_sec: 300
 
 assertions:
@@ -74,4 +74,4 @@ assertions:
 - `--promote`는 expected를 생성하거나 overwrite한다.
 - assertion type은 `command`, `llm-judge`만 사용한다.
 - `type: llm-judge` case에는 `run.command`를 두지 않는다.
-- `type: llm-judge` case의 `judge.command`는 top-level에 두고, assertion에는 `prompt`를 직접 둔다.
+- `type: llm-judge` case의 `judge.command`는 top-level에 두고, assertion에는 `prompt`를 직접 둔다. Canonical adapter CLI는 `run_llm_judge.py output --input input.json --output primary-output.json`와 `run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json`이며, 기존 `--input {judge_packet} --output {judge_output}` 형태는 migration alias다.

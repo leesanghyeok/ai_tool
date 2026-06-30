@@ -1,4 +1,4 @@
-id: validate-package
+id: 07-validate-package
 type: regression
 title: 스킬 패키지 구조 validator 통과 여부 검증
 

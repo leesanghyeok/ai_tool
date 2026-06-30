@@ -1,12 +1,13 @@
-id: migrate-skill-format-scenario-llm-judge
+id: 05-migrate-skill-judge
 type: llm-judge
 title: migration output의 원본 보존 subagent judge 검증
 
 input: input.json
 
 judge:
-  method: subagent
-  command: python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}
+  method: each-session
+  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
+  verifyCommand: python3 scripts/verify_llm_judge_state.py --evidence {judge_evidence}
   timeout_sec: 300
 
 assertions:

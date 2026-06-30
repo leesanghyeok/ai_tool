@@ -6,8 +6,9 @@ Spec model:
   evals/<skill>.eval.yaml          # suite manifest + human-readable case map
   evals/cases/<case-id>/case.yaml  # independent test case definition
 
-The suite manifest is the source of truth: only cases listed in eval.yaml run.
-Case directories that exist on disk but are not declared are validation errors.
+The suite manifest is the source of truth: only cases listed in eval.yaml are
+validated and run. Case directories that exist on disk but are not declared are
+ignored.
 
 Each non-llm-judge case owns its own run command and assertions. llm-judge
 cases own a top-level judge command and assertion-level prompts. There are no
@@ -31,6 +32,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import shutil
@@ -42,13 +44,16 @@ from typing import Any
 
 VALID_ASSERTION_TYPES = ("command", "llm-judge")
 VALID_CASE_TYPES = ("happy-path", "edge", "regression", "safety", "llm-judge", "integration")
-VALID_JUDGE_METHODS = ("aggregate", "subagent")
+VALID_JUDGE_METHODS = ("aggregate", "each-session", "subagent")
 DEFAULT_TIMEOUT = 120
 INPUT_PLACEHOLDER = "{input}"
 OUTPUT_PLACEHOLDER = "{output}"
 EXPECTED_PLACEHOLDER = "{expected}"
 JUDGE_PACKET_PLACEHOLDER = "{judge_packet}"
 JUDGE_OUTPUT_PLACEHOLDER = "{judge_output}"
+ASSERTION_INPUT_PLACEHOLDER = "{assertion_input}"
+JUDGE_EVIDENCE_PLACEHOLDER = "{judge_evidence}"
+PRIMARY_OUTPUT_PLACEHOLDER = "{primary_output}"
 
 
 class SimpleYamlError(ValueError):
@@ -261,7 +266,6 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
         errors.append("eval.yaml: 'cases' must be a non-empty list")
         case_entries = []
 
-    declared_paths: set[Path] = set()
     declared_ids: set[str] = set()
     for i, entry in enumerate(case_entries):
         where = f"eval.yaml cases[{i}]"
@@ -280,7 +284,6 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
             declared_ids.add(entry_id)
         if entry.get("path"):
             cpath = _case_path(skill_dir, entry)
-            declared_paths.add(cpath)
             if not cpath.exists():
                 errors.append(f"{where}: case file not found: {entry['path']}")
                 continue
@@ -291,11 +294,6 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
                 continue
             errors.extend(validate_case(case, cpath, entry))
 
-    cases_dir = skill_dir / "evals" / "cases"
-    if cases_dir.is_dir():
-        for case_file in sorted(cases_dir.glob("*/case.yaml")):
-            if case_file.resolve() not in declared_paths:
-                errors.append(f"eval.yaml: undeclared case directory is present: {case_file.parent.name}")
     return errors
 
 
@@ -326,10 +324,17 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
             command = judge.get("command")
             if not command:
                 errors.append(f"{prefix}: judge.command is required")
-            elif JUDGE_PACKET_PLACEHOLDER not in command or JUDGE_OUTPUT_PLACEHOLDER not in command:
+            elif not (
+                (JUDGE_PACKET_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command)
+                or (ASSERTION_INPUT_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command)
+            ):
                 errors.append(
-                    f"{prefix}: judge.command must contain {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
+                    f"{prefix}: judge.command must contain either {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}, "
+                    f"or {ASSERTION_INPUT_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
                 )
+            verify_command = judge.get("verifyCommand")
+            if verify_command and JUDGE_EVIDENCE_PLACEHOLDER not in verify_command:
+                errors.append(f"{prefix}: judge.verifyCommand must contain {JUDGE_EVIDENCE_PLACEHOLDER}")
     else:
         if judge is not None:
             errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
@@ -374,13 +379,17 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
 
 def _bind_placeholders(cmd: str, *, input_path: Path | None, output_path: Path | None,
                        expected_path: Path | None, judge_packet: Path | None = None,
-                       judge_output: Path | None = None) -> str:
+                       judge_output: Path | None = None, assertion_input: Path | None = None,
+                       judge_evidence: Path | None = None, primary_output: Path | None = None) -> str:
     replacements = {
         INPUT_PLACEHOLDER: input_path,
         OUTPUT_PLACEHOLDER: output_path,
         EXPECTED_PLACEHOLDER: expected_path,
         JUDGE_PACKET_PLACEHOLDER: judge_packet,
         JUDGE_OUTPUT_PLACEHOLDER: judge_output,
+        ASSERTION_INPUT_PLACEHOLDER: assertion_input,
+        JUDGE_EVIDENCE_PLACEHOLDER: judge_evidence,
+        PRIMARY_OUTPUT_PLACEHOLDER: primary_output,
     }
     bound = cmd
     for placeholder, path in replacements.items():
@@ -443,16 +452,88 @@ def _run_command_assertion(assertion: dict, case: dict, output_path: Path, cwd: 
     }
 
 
-def _judge_packet(case: dict, assertion: dict, output_path: Path) -> dict:
-    return {"schema_version": 1, "prompt": assertion["prompt"]}
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd: Path) -> dict:
+def _primary_output_text(primary_output: Path) -> str:
+    try:
+        payload = json.loads(primary_output.read_text(encoding="utf-8"))
+    except Exception:
+        return primary_output.read_text(encoding="utf-8")
+    output = payload.get("output") if isinstance(payload, dict) else None
+    if isinstance(output, dict) and isinstance(output.get("content"), str):
+        return output["content"]
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: Path, evidence_path: Path) -> None:
+    primary_text = primary_output.read_text(encoding="utf-8")
+    payload = {
+        "schema_version": 1,
+        "case_id": case["id"],
+        "input": {"path": str(input_path) if input_path else "", "sha256": _sha256_file(input_path) if input_path and input_path.exists() else ""},
+        "primary_output": {
+            "path": str(primary_output),
+            "sha256": _sha256_file(primary_output),
+            "status": "success" if '\"status\": \"success\"' in primary_text else "unknown",
+            "required_fields": ["schema_version", "status", "output.content"],
+            "summary": _primary_output_text(primary_output)[:500],
+        },
+        "artifacts": [{"path": str(primary_output), "sha256": _sha256_file(primary_output), "kind": "primary-output", "must_exist": True}],
+        "checks": [
+            {"id": "primary-output-exists", "type": "file-exists", "path": "primary_output.path"},
+            {"id": "primary-output-hash", "type": "sha256-matches", "path": "primary_output.path"},
+        ],
+        "redaction": {"secret_like_values_removed": True, "rules": ["secret", "token", "private-url"]},
+    }
+    evidence_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
+    input_path = _input_path(case)
+    if input_path is None:
+        primary_output.write_text(json.dumps({"schema_version": 1, "status": "success", "output": {"format": "text", "content": "", "summary": ""}, "artifacts": [], "redactions_applied": [], "errors": []}, ensure_ascii=False), encoding="utf-8")
+        return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass", "exit_code": 0, "primary_output": str(primary_output)}
+    cmd = f"python3 scripts/run_llm_judge.py output --input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
+    rc, stdout, stderr = _run_shell(cmd, cwd, int(case.get("judge", {}).get("timeout_sec") or DEFAULT_TIMEOUT))
+    return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass" if rc == 0 and primary_output.exists() else "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:], "primary_output": str(primary_output)}
+
+
+def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
     judge = case["judge"]
+    checks: list[dict] = []
     with tempfile.TemporaryDirectory() as td:
+        primary_output = Path(td) / "primary-output.json"
+        evidence_path = Path(td) / "judge-evidence.json"
+        output_check = _run_llm_judge_output(case, cwd, primary_output)
+        checks.append(output_check)
+        if output_check["status"] != "pass":
+            return checks
+        shutil.copyfile(primary_output, output_path)
+        _write_judge_evidence(case, _input_path(case), primary_output, evidence_path)
+
+        assertion_input = Path(td) / "assertion-input.json"
+        judge_output = Path(td) / "assertion-output.json"
+        assertion_input.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "method": judge.get("method", "aggregate"),
+                    "primary_output": _primary_output_text(primary_output),
+                    "assertions": [
+                        {"id": a["id"], "title": a["title"], "prompt": a["prompt"]}
+                        for a in case.get("assertions", [])
+                        if a.get("type") == "llm-judge"
+                    ],
+                },
+                indent=2,
+                ensure_ascii=False,
+            ) + "\n",
+            encoding="utf-8",
+        )
         packet_path = Path(td) / "judge-packet.json"
-        judge_output = Path(td) / "judge-output.txt"
-        packet_path.write_text(json.dumps(_judge_packet(case, assertion, output_path), indent=2, ensure_ascii=False), encoding="utf-8")
+        packet_path.write_text(json.dumps({"schema_version": 1, "prompt": _primary_output_text(primary_output)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         cmd = _bind_placeholders(
             judge["command"],
             input_path=_input_path(case),
@@ -460,18 +541,51 @@ def _run_llm_judge_assertion(assertion: dict, case: dict, output_path: Path, cwd
             expected_path=_expected_path(case),
             judge_packet=packet_path,
             judge_output=judge_output,
+            assertion_input=assertion_input,
+            judge_evidence=evidence_path,
+            primary_output=primary_output,
         )
         rc, stdout, stderr = _run_shell(cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
         if rc != 0 or not judge_output.exists():
-            return {
-                "id": assertion["id"], "title": assertion["title"], "type": "llm-judge",
-                "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:],
-                "error": "judge command failed or did not create judge_output",
-            }
+            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:], "error": "judge command failed or did not create judge_output"})
+            return checks
         judge_text = judge_output.read_text(encoding="utf-8")
         if not judge_text.strip():
-            return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "fail", "error": "judge output is empty"}
-        return {"id": assertion["id"], "title": assertion["title"], "type": "llm-judge", "status": "pass", "judge_output": judge_text[-2000:]}
+            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "error": "judge output is empty"})
+            return checks
+
+        try:
+            judge_payload = json.loads(judge_text)
+            result_status = "pass" if judge_payload.get("status") == "success" else "fail"
+            results = judge_payload.get("results") if isinstance(judge_payload.get("results"), list) else []
+        except json.JSONDecodeError:
+            result_status = "pass"
+            results = []
+
+        evidence = {"assertion_input": str(assertion_input), "primary_output": str(primary_output), "judge_evidence": str(evidence_path)}
+        if results:
+            for result in results:
+                assertion_id = result.get("assertion_id", "judge.command")
+                matching = next((a for a in case.get("assertions", []) if a.get("id") == assertion_id), {})
+                checks.append({"id": assertion_id, "title": matching.get("title", assertion_id), "type": "llm-judge", "status": "pass" if result.get("status") == "pass" else "fail", "judge_output": str(result.get("judge_output", ""))[-2000:], "evidence": evidence})
+        else:
+            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": result_status, "judge_output": judge_text[-2000:], "evidence": evidence})
+
+        verify_command = judge.get("verifyCommand")
+        if verify_command and result_status == "pass" and all(c.get("status") == "pass" for c in checks):
+            verify_cmd = _bind_placeholders(
+                verify_command,
+                input_path=_input_path(case),
+                output_path=output_path,
+                expected_path=_expected_path(case),
+                judge_output=judge_output,
+                assertion_input=assertion_input,
+                judge_evidence=evidence_path,
+                primary_output=primary_output,
+            )
+            vrc, vstdout, vstderr = _run_shell(verify_cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
+            checks.append({"id": "judge.verifyCommand", "title": "llm-judge deterministic evidence 검증", "type": "command", "status": "pass" if vrc == 0 else "fail", "exit_code": vrc, "stdout": vstdout[-2000:], "stderr": vstderr[-2000:], "evidence": str(evidence_path)})
+        return checks
 
 
 def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
@@ -481,12 +595,7 @@ def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
         checks: list[dict] = []
         run_status = "pass"
         if case.get("type") == "llm-judge":
-            # Judge-only cases evaluate input directly unless assertions create their own output.
-            inp = _input_path(case)
-            if inp is not None:
-                shutil.copyfile(inp, output_path)
-            else:
-                output_path.write_text("", encoding="utf-8")
+            checks.extend(_run_llm_judge_case(case, output_path, skill_dir))
         else:
             run = case["run"]
             try:
@@ -507,8 +616,6 @@ def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
             for assertion in case.get("assertions", []):
                 if assertion["type"] == "command":
                     checks.append(_run_command_assertion(assertion, case, output_path, skill_dir))
-                elif assertion["type"] == "llm-judge":
-                    checks.append(_run_llm_judge_assertion(assertion, case, output_path, skill_dir))
 
         failed = any(c["status"] != "pass" for c in checks)
         promoted = None

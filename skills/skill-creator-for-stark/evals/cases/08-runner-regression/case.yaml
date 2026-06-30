@@ -1,4 +1,4 @@
-id: runner-regression
+id: 08-runner-regression
 type: regression
 title: case-based eval runner regression test 통과 여부 검증
 
