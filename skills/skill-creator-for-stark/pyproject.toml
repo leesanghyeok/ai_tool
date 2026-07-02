@@ -7,6 +7,8 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "complexipy>=6.0.0",
+    "lizard>=1.23.0",
     "ruff>=0.15.20",
 ]
 
@@ -18,8 +20,10 @@ line-length = 160
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C901"]
-ignore = ["E501"]
+select = ["E", "F", "W", "C901", "PLR0915"]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 30
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-statements = 15

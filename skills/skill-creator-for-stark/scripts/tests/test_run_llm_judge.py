@@ -15,6 +15,7 @@ from run_llm_judge import main  # noqa: E402
 
 class RunLlmJudgeTestBase(unittest.TestCase):
     """run_llm_judge adapter 테스트가 공유하는 임시 파일 helper를 제공한다."""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -26,9 +27,9 @@ class RunLlmJudgeTestBase(unittest.TestCase):
         path = self.tmp / name
         path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return path
+
     def _read_json(self, path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
-
 
 
 class RunLlmJudgeOutputModeTest(RunLlmJudgeTestBase):
@@ -50,7 +51,6 @@ class RunLlmJudgeOutputModeTest(RunLlmJudgeTestBase):
         self.assertEqual(payload["redactions_applied"], [])
         self.assertEqual(payload["errors"], [])
 
-
     def test_output_mode_rejects_non_public_schema_fields(self) -> None:
         """output mode public schema가 schema_version과 prompt 외 필드를 거부하는지 검증한다."""
         inp = self._write_json("input.json", {"schema_version": 1, "prompt": "x", "case_id": "leak"})
@@ -61,7 +61,6 @@ class RunLlmJudgeOutputModeTest(RunLlmJudgeTestBase):
 
         self.assertEqual(payload["status"], "failed")
         self.assertIn("allows only schema_version and prompt", payload["errors"][0])
-
 
 
 class RunLlmJudgeAssertionModeTest(RunLlmJudgeTestBase):
@@ -94,7 +93,6 @@ class RunLlmJudgeAssertionModeTest(RunLlmJudgeTestBase):
         self.assertEqual({r["session_id"] for r in payload["results"]}, {"aggregate"})
         self.assertTrue(all(r["status"] == "pass" for r in payload["results"]))
 
-
     def test_assertion_mode_each_session_uses_deterministic_independent_markers(self) -> None:
         """each-session mode가 assertion별 deterministic session marker를 부여하는지 검증한다."""
         inp = self._write_json(
@@ -120,7 +118,6 @@ class RunLlmJudgeAssertionModeTest(RunLlmJudgeTestBase):
             ["each-session:1:first", "each-session:2:second"],
         )
 
-
     def test_assertion_mode_normalizes_subagent_alias(self) -> None:
         """legacy subagent method alias가 each-session으로 normalize되는지 검증한다."""
         inp = self._write_json(
@@ -140,7 +137,6 @@ class RunLlmJudgeAssertionModeTest(RunLlmJudgeTestBase):
         self.assertEqual(payload["method"], "each-session")
         self.assertEqual(payload["results"][0]["session_id"], "each-session:1:a")
 
-
     def test_assertion_mode_rejects_invalid_internal_schema(self) -> None:
         """assertion mode internal schema에서 필수 primary_output 누락을 실패로 처리하는지 검증한다."""
         inp = self._write_json(
@@ -154,7 +150,6 @@ class RunLlmJudgeAssertionModeTest(RunLlmJudgeTestBase):
 
         self.assertEqual(payload["status"], "failed")
         self.assertTrue(payload["errors"])
-
 
 
 class RunLlmJudgeLegacyAliasTest(RunLlmJudgeTestBase):

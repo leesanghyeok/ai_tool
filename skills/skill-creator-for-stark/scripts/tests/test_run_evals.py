@@ -77,9 +77,16 @@ JUDGE_FAIL = (
 )
 
 
-def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PASS,
-                include_expected: bool = True, case_type: str = "happy-path",
-                undeclared: bool = False, llm_setup: bool = False) -> Path:
+def _make_skill(
+    tmp: Path,
+    *,
+    pipeline: str = PIPELINE_OK,
+    judge: str = JUDGE_PASS,
+    include_expected: bool = True,
+    case_type: str = "happy-path",
+    undeclared: bool = False,
+    llm_setup: bool = False,
+) -> Path:
     skill = tmp / "demo-skill"
     scripts = skill / "scripts"
     scripts.mkdir(parents=True)
@@ -99,18 +106,18 @@ def _make_skill(tmp: Path, *, pipeline: str = PIPELINE_OK, judge: str = JUDGE_PA
         expected_line = ""
     else:
         expected_line = "expected: expected.json\n" if include_expected else ""
-        run_block = (
-            "run:\n"
-            "  command: {python} scripts/run_pipeline.py --input {input} --output {output}\n"
-            "  timeout_sec: 30\n"
-        )
+        run_block = "run:\n  command: {python} scripts/run_pipeline.py --input {input} --output {output}\n  timeout_sec: 30\n"
         input_line = "input: input.json\n"
 
     if case_type == "llm-judge":
-        setup_block = "" if not llm_setup else """setup:
+        setup_block = (
+            ""
+            if not llm_setup
+            else """setup:
   command: {python} scripts/run_pipeline.py --input {input} --output {pipeline_output}
   timeout_sec: 30
 """
+        )
         assertions = f"""{setup_block}judge:
   method: each-session
   command: {{python}} scripts/run_llm_judge.py assertion --input {{assertion_input}} --output {{judge_output}}
@@ -161,15 +168,17 @@ cases:
 
 class EvalRunnerTestBase(unittest.TestCase):
     """run_evals_template runner 테스트가 공유하는 임시 skill fixture lifecycle을 제공한다."""
+
     """각 테스트 호출 전"""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
 
     """각 테스트 호출 후"""
+
     def tearDown(self) -> None:
         self._tmp.cleanup()
-
 
 
 class EvalManifestDiscoveryTest(EvalRunnerTestBase):
@@ -182,14 +191,12 @@ class EvalManifestDiscoveryTest(EvalRunnerTestBase):
         self.assertEqual(validate_spec(spec, skill), [])
         self.assertEqual(len(load_cases(spec, skill)), 1)
 
-
     def test_eval_yaml_is_source_of_truth_for_cases(self) -> None:
         """manifest에 선언된 case만 실행 대상이 되고, 디렉터리에 남은 미선언 case는 무시되는지 검증한다."""
         skill = _make_skill(self.tmp, undeclared=True)
         spec = parse_spec(_spec_path(skill))
         self.assertEqual(validate_spec(spec, skill), [])
         self.assertEqual([case["id"] for case in load_cases(spec, skill)], ["case-1"])
-
 
     def test_declared_missing_case_file_is_validation_error(self) -> None:
         """manifest가 선언한 case.yaml 파일이 없으면 validation error로 잡는지 검증한다."""
@@ -198,7 +205,6 @@ class EvalManifestDiscoveryTest(EvalRunnerTestBase):
         spec = parse_spec(_spec_path(skill))
         self.assertTrue(any("case file not found" in e for e in validate_spec(spec, skill)))
 
-
     def test_eval_yaml_description_is_rejected(self) -> None:
         """eval manifest top-level description 필드를 금지하는 계약을 검증한다."""
         skill = _make_skill(self.tmp)
@@ -206,7 +212,6 @@ class EvalManifestDiscoveryTest(EvalRunnerTestBase):
         spec_path.write_text(spec_path.read_text() + "description: no\n", encoding="utf-8")
         spec = parse_spec(spec_path)
         self.assertTrue(any("description" in e for e in validate_spec(spec, skill)))
-
 
 
 class EvalExpectedPromotionTest(EvalRunnerTestBase):
@@ -220,7 +225,6 @@ class EvalExpectedPromotionTest(EvalRunnerTestBase):
         checks = result["cases"][0]["checks"]
         self.assertTrue(any(c["id"] == "expected-equality" and c["status"] == "pass" for c in checks))
 
-
     def test_expected_file_triggers_automatic_equality_failure(self) -> None:
         """expected.json과 실제 output이 다르면 자동 equality 비교가 실패로 기록되는지 검증한다."""
         skill = _make_skill(self.tmp, pipeline=PIPELINE_WRONG)
@@ -229,7 +233,6 @@ class EvalExpectedPromotionTest(EvalRunnerTestBase):
         checks = result["cases"][0]["checks"]
         self.assertTrue(any(c["id"] == "expected-equality" and c["status"] == "fail" for c in checks))
 
-
     def test_promote_creates_expected_when_missing(self) -> None:
         """--promote 실행 시 누락된 expected.json을 현재 output으로 생성하는지 검증한다."""
         skill = _make_skill(self.tmp, include_expected=False)
@@ -237,14 +240,12 @@ class EvalExpectedPromotionTest(EvalRunnerTestBase):
         self.assertEqual(result["failed"], 0)
         self.assertTrue((skill / "evals" / "cases" / "case-1" / "expected.json").exists())
 
-
     def test_promote_overwrites_existing_expected(self) -> None:
         """--promote 실행 시 기존 expected.json을 현재 output으로 덮어쓰는지 검증한다."""
         skill = _make_skill(self.tmp, pipeline=PIPELINE_WRONG)
         result = run_suite(parse_spec(_spec_path(skill)), skill, promote=True)
         self.assertEqual(result["failed"], 0)
         self.assertEqual((skill / "evals" / "cases" / "case-1" / "expected.json").read_text(), '{"ok": false}\n')
-
 
 
 class EvalLlmJudgeProvenanceTest(EvalRunnerTestBase):
@@ -257,7 +258,6 @@ class EvalLlmJudgeProvenanceTest(EvalRunnerTestBase):
         self.assertEqual(result["failed"], 1)
         self.assertTrue(any(c["type"] == "llm-judge" and c["status"] == "fail" for c in result["cases"][0]["checks"]))
 
-
     def test_llm_judge_case_must_not_define_run_command(self) -> None:
         """llm-judge case가 run.command를 직접 정의하면 안 된다는 boundary를 검증한다."""
         skill = _make_skill(self.tmp, case_type="llm-judge")
@@ -269,7 +269,6 @@ class EvalLlmJudgeProvenanceTest(EvalRunnerTestBase):
         cpath = skill / "evals" / "cases" / "case-1" / "case.yaml"
         cpath.write_text(cpath.read_text() + "run:\n  command: echo bad > {output}\n", encoding="utf-8")
         self.assertTrue(any("must not define run.command" in e for e in validate_spec(spec, skill)))
-
 
     def test_llm_judge_setup_provenance_uses_pipeline_output(self) -> None:
         """llm-judge setup.command 결과와 pipeline_output provenance가 judge evidence에 연결되는지 검증한다."""
@@ -286,7 +285,6 @@ class EvalLlmJudgeProvenanceTest(EvalRunnerTestBase):
         self.assertEqual(evidence["setup"]["pipeline_output_status"], "success")
         self.assertEqual(evidence["primary_output"]["kind"], "pipeline-output")
         self.assertTrue(evidence["files_written_read_back"][0]["exists"])
-
 
 
 class EvalEntriesFlattenMigrationTest(EvalRunnerTestBase):
@@ -349,7 +347,6 @@ entries:
         result = run_suite(spec, skill)
         self.assertEqual(result["failed"], 0)
 
-
     def test_new_cases_shape_requires_assertion_id(self) -> None:
         """새 cases[] shape에서 assertion.id 누락을 validation error로 잡는지 검증한다."""
         skill = _make_skill(self.tmp)
@@ -384,7 +381,6 @@ entries:
         )
         errors = validate_spec(parse_spec(_spec_path(skill)), skill)
         self.assertTrue(any("missing 'id'" in e for e in errors))
-
 
 
 class EvalCliExitBehaviorTest(EvalRunnerTestBase):

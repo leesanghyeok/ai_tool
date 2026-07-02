@@ -451,11 +451,19 @@ def _validate_executable_case(case: dict, cpath: Path, entry: dict, prefix: str,
     return errors
 
 
-def _bind_placeholders(cmd: str, *, input_path: Path | None, output_path: Path | None,
-                       expected_path: Path | None, judge_packet: Path | None = None,
-                       judge_output: Path | None = None, assertion_input: Path | None = None,
-                       judge_evidence: Path | None = None, primary_output: Path | None = None,
-                       pipeline_output: Path | None = None) -> str:
+def _bind_placeholders(
+    cmd: str,
+    *,
+    input_path: Path | None,
+    output_path: Path | None,
+    expected_path: Path | None,
+    judge_packet: Path | None = None,
+    judge_output: Path | None = None,
+    assertion_input: Path | None = None,
+    judge_evidence: Path | None = None,
+    primary_output: Path | None = None,
+    pipeline_output: Path | None = None,
+) -> str:
     replacements = {
         PYTHON_PLACEHOLDER: Path(sys.executable),
         INPUT_PLACEHOLDER: input_path,
@@ -569,12 +577,14 @@ def _files_written_read_back(path: Path) -> list[dict[str, Any]]:
             continue
         fpath = Path(item["path"])
         exists = fpath.exists()
-        out.append({
-            "path": str(fpath),
-            "exists": exists,
-            "sha256": _sha256_file(fpath) if exists and fpath.is_file() else "",
-            "excerpt": _excerpt(fpath, 500) if exists and fpath.is_file() else "",
-        })
+        out.append(
+            {
+                "path": str(fpath),
+                "exists": exists,
+                "sha256": _sha256_file(fpath) if exists and fpath.is_file() else "",
+                "excerpt": _excerpt(fpath, 500) if exists and fpath.is_file() else "",
+            }
+        )
     return out
 
 
@@ -619,12 +629,7 @@ def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: P
 
 
 def _evidence_prompt(primary_output: Path, evidence_path: Path) -> str:
-    return (
-        "Primary output:\n"
-        + _primary_output_text(primary_output)
-        + "\n\nCase-local provenance evidence:\n"
-        + _excerpt(evidence_path, 1800)
-    )
+    return "Primary output:\n" + _primary_output_text(primary_output) + "\n\nCase-local provenance evidence:\n" + _excerpt(evidence_path, 1800)
 
 
 def _run_llm_judge_setup(case: dict, cwd: Path, temp_dir: Path) -> tuple[dict | None, Path | None]:
@@ -663,11 +668,40 @@ def _run_llm_judge_setup(case: dict, cwd: Path, temp_dir: Path) -> tuple[dict | 
 def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
     input_path = _input_path(case)
     if input_path is None:
-        primary_output.write_text(json.dumps({"schema_version": 1, "status": "success", "output": {"format": "text", "content": "", "summary": ""}, "artifacts": [], "redactions_applied": [], "errors": []}, ensure_ascii=False), encoding="utf-8")
-        return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass", "exit_code": 0, "primary_output": str(primary_output)}
+        primary_output.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "success",
+                    "output": {"format": "text", "content": "", "summary": ""},
+                    "artifacts": [],
+                    "redactions_applied": [],
+                    "errors": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "id": "judge.output",
+            "title": "llm-judge primary output 생성",
+            "type": "run",
+            "status": "pass",
+            "exit_code": 0,
+            "primary_output": str(primary_output),
+        }
     cmd = f"{shlex.quote(sys.executable)} scripts/run_llm_judge.py output --input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
     rc, stdout, stderr = _run_shell(cmd, cwd, int(case.get("judge", {}).get("timeout_sec") or DEFAULT_TIMEOUT))
-    return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass" if rc == 0 and primary_output.exists() else "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:], "primary_output": str(primary_output)}
+    return {
+        "id": "judge.output",
+        "title": "llm-judge primary output 생성",
+        "type": "run",
+        "status": "pass" if rc == 0 and primary_output.exists() else "fail",
+        "exit_code": rc,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+        "primary_output": str(primary_output),
+    }
 
 
 def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
@@ -700,18 +734,19 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
                     "method": judge.get("method", "aggregate"),
                     "primary_output": _evidence_prompt(primary_output, evidence_path),
                     "assertions": [
-                        {"id": a["id"], "title": a["title"], "prompt": a["prompt"]}
-                        for a in case.get("assertions", [])
-                        if a.get("type") == "llm-judge"
+                        {"id": a["id"], "title": a["title"], "prompt": a["prompt"]} for a in case.get("assertions", []) if a.get("type") == "llm-judge"
                     ],
                 },
                 indent=2,
                 ensure_ascii=False,
-            ) + "\n",
+            )
+            + "\n",
             encoding="utf-8",
         )
         packet_path = Path(td) / "judge-packet.json"
-        packet_path.write_text(json.dumps({"schema_version": 1, "prompt": _evidence_prompt(primary_output, evidence_path)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        packet_path.write_text(
+            json.dumps({"schema_version": 1, "prompt": _evidence_prompt(primary_output, evidence_path)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         cmd = _bind_placeholders(
             judge["command"],
             input_path=_input_path(case),
@@ -725,11 +760,24 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
         )
         rc, stdout, stderr = _run_shell(cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
         if rc != 0 or not judge_output.exists():
-            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:], "error": "judge command failed or did not create judge_output"})
+            checks.append(
+                {
+                    "id": "judge.command",
+                    "title": "llm-judge assertion mode 실행",
+                    "type": "llm-judge",
+                    "status": "fail",
+                    "exit_code": rc,
+                    "stdout": stdout[-2000:],
+                    "stderr": stderr[-2000:],
+                    "error": "judge command failed or did not create judge_output",
+                }
+            )
             return checks
         judge_text = judge_output.read_text(encoding="utf-8")
         if not judge_text.strip():
-            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "error": "judge output is empty"})
+            checks.append(
+                {"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "error": "judge output is empty"}
+            )
             return checks
 
         try:
@@ -741,14 +789,37 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
             results = []
 
         evidence_payload = json.loads(evidence_path.read_text(encoding="utf-8"))
-        evidence = {"assertion_input": str(assertion_input), "primary_output": str(primary_output), "judge_evidence": str(evidence_path), "provenance": evidence_payload}
+        evidence = {
+            "assertion_input": str(assertion_input),
+            "primary_output": str(primary_output),
+            "judge_evidence": str(evidence_path),
+            "provenance": evidence_payload,
+        }
         if results:
             for result in results:
                 assertion_id = result.get("assertion_id", "judge.command")
                 matching = next((a for a in case.get("assertions", []) if a.get("id") == assertion_id), {})
-                checks.append({"id": assertion_id, "title": matching.get("title", assertion_id), "type": "llm-judge", "status": "pass" if result.get("status") == "pass" else "fail", "judge_output": str(result.get("judge_output", ""))[-2000:], "evidence": evidence})
+                checks.append(
+                    {
+                        "id": assertion_id,
+                        "title": matching.get("title", assertion_id),
+                        "type": "llm-judge",
+                        "status": "pass" if result.get("status") == "pass" else "fail",
+                        "judge_output": str(result.get("judge_output", ""))[-2000:],
+                        "evidence": evidence,
+                    }
+                )
         else:
-            checks.append({"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": result_status, "judge_output": judge_text[-2000:], "evidence": evidence})
+            checks.append(
+                {
+                    "id": "judge.command",
+                    "title": "llm-judge assertion mode 실행",
+                    "type": "llm-judge",
+                    "status": result_status,
+                    "judge_output": judge_text[-2000:],
+                    "evidence": evidence,
+                }
+            )
 
         verify_command = judge.get("verifyCommand")
         if verify_command and result_status == "pass" and all(c.get("status") == "pass" for c in checks):
@@ -763,7 +834,18 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
                 primary_output=primary_output,
             )
             vrc, vstdout, vstderr = _run_shell(verify_cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
-            checks.append({"id": "judge.verifyCommand", "title": "llm-judge deterministic evidence 검증", "type": "command", "status": "pass" if vrc == 0 else "fail", "exit_code": vrc, "stdout": vstdout[-2000:], "stderr": vstderr[-2000:], "evidence": str(evidence_path)})
+            checks.append(
+                {
+                    "id": "judge.verifyCommand",
+                    "title": "llm-judge deterministic evidence 검증",
+                    "type": "command",
+                    "status": "pass" if vrc == 0 else "fail",
+                    "exit_code": vrc,
+                    "stdout": vstdout[-2000:],
+                    "stderr": vstderr[-2000:],
+                    "evidence": str(evidence_path),
+                }
+            )
         return checks
 
 
@@ -784,7 +866,17 @@ def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
                 rc, stdout, stderr = 1, "", str(exc)
             if rc != 0 or not output_path.exists():
                 run_status = "fail"
-                checks.append({"id": "run.command", "title": "case run.command 실행", "type": "run", "status": "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:]})
+                checks.append(
+                    {
+                        "id": "run.command",
+                        "title": "case run.command 실행",
+                        "type": "run",
+                        "status": "fail",
+                        "exit_code": rc,
+                        "stdout": stdout[-2000:],
+                        "stderr": stderr[-2000:],
+                    }
+                )
 
         if run_status == "pass" and not promote:
             expected_check = _compare_expected(case, output_path)
@@ -860,7 +952,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"VALID {spec_path.name}")
         return 1 if errors else 0
     if errors:
-        print(json.dumps({"error": "eval suite is malformed", "errors": errors}, ensure_ascii=False) if args.json else "ERROR: eval suite is malformed; run --validate", file=sys.stderr)
+        print(
+            json.dumps({"error": "eval suite is malformed", "errors": errors}, ensure_ascii=False)
+            if args.json
+            else "ERROR: eval suite is malformed; run --validate",
+            file=sys.stderr,
+        )
         return 1
 
     result = run_suite(spec, skill_dir, promote=args.promote)

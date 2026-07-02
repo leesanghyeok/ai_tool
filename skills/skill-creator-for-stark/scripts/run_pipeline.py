@@ -5,6 +5,7 @@ This script intentionally renders only file-specific template bindings supplied 
 input JSON. It does not interpret user intent, call external services, promote
 expected files, commit, publish, or use credentials.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -236,11 +237,13 @@ def run(input_path: Path, output_path: Path) -> int:
                 if template_copy.exists():
                     shutil.copyfile(template_copy, dest)
                     dest.chmod(0o755)
-            result["files_written"].append({
-                "path": str(dest),
-                "action": action,
-                "source_template": item["template"],
-            })
+            result["files_written"].append(
+                {
+                    "path": str(dest),
+                    "action": action,
+                    "source_template": item["template"],
+                }
+            )
 
         result["status"] = "success"
     except Exception as exc:  # noqa: BLE001 - write structured failure for eval read-back.

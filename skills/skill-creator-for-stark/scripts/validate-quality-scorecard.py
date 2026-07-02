@@ -66,10 +66,7 @@ def main() -> None:
         fail("contract_checks must be an object")
     actual_contract_keys = set(contract_checks)
     if actual_contract_keys != CONTRACT_CHECK_KEYS:
-        fail(
-            "contract_checks must contain exactly "
-            f"{sorted(CONTRACT_CHECK_KEYS)}: {sorted(actual_contract_keys)}"
-        )
+        fail(f"contract_checks must contain exactly {sorted(CONTRACT_CHECK_KEYS)}: {sorted(actual_contract_keys)}")
     for key, value in contract_checks.items():
         if not isinstance(value, bool):
             fail(f"contract_checks.{key} must be boolean")

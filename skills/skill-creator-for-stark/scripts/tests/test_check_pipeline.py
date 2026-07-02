@@ -28,6 +28,7 @@ def _skill(tmp: Path, files: dict[str, str], requirements: str | None = None) ->
 
 class CompileCheckTest(unittest.TestCase):
     """script compile/syntax validation 경계를 검증하기 위해 분리한 class다."""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -51,6 +52,7 @@ class CompileCheckTest(unittest.TestCase):
 
 class DependencyCheckTest(unittest.TestCase):
     """stdlib/local/third-party dependency detection 경계를 검증하기 위해 분리한 class다."""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -92,6 +94,7 @@ class DependencyCheckTest(unittest.TestCase):
 
 class EntrypointWarningTest(unittest.TestCase):
     """multi-step script와 run_pipeline.py entrypoint warning 경계를 검증하기 위해 분리한 class다."""
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -127,6 +130,7 @@ class EntrypointWarningTest(unittest.TestCase):
 
 class MainExitTest(unittest.TestCase):
     """CLI main exit code behavior를 검증하기 위해 분리한 class다."""
+
     def test_missing_dir_exits_two(self) -> None:
         """존재하지 않는 skill directory 입력은 CLI exit code 2로 처리되는지 검증한다."""
         self.assertEqual(main(["/no/such/skill/dir/xyz"]), 2)

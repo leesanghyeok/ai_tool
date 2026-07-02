@@ -4,6 +4,7 @@
 Usage:
   python3 skills/skill-creator-for-stark/scripts/validate-skill-package.py skills/<skill-name>
 """
+
 from __future__ import annotations
 
 import re
