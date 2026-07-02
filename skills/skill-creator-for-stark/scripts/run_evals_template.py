@@ -9,13 +9,15 @@ Spec model:
 eval.yaml manifest가 source of truth다. eval.yaml에 선언된 case만 validate/run하며,
 disk에 남아 있지만 선언되지 않은 case directory는 무시한다.
 
-non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는 top-level judge command와
-assertion-level prompts를 가진다. global assertions와 top-level suite run command는 없다. 지원 assertion type은 다음 두 가지다.
+non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는
+top-level judge command와 assertion-level prompts를 가진다. global assertions와
+top-level suite run command는 없다. 지원 assertion type은 다음 두 가지다.
   - command: shell command exits 0
   - llm-judge: subprocess judge command가 non-empty natural-language response를 반환
 
-Expected 처리는 자동이다. case가 `expected`를 선언하면 --promote가 없을 때 produced output을 해당 file과
-byte-compare한다. --promote를 쓰면 passing case output으로 expected file을 생성하거나 overwrite한다.
+Expected 처리는 자동이다. case가 `expected`를 선언하면 --promote가 없을 때
+produced output을 해당 file과 byte-compare한다. --promote를 쓰면 passing case
+output으로 expected file을 생성하거나 overwrite한다.
 
 Usage:
   uv run python scripts/run_evals.py [skill_dir] [--validate] [--promote] [--json]
@@ -95,40 +97,47 @@ def _parse_scalar(value: str) -> Any:
         return value
 
 
-def _block_scalar_header(content: str) -> str | None:
-    if content in ("|", ">"):
-        return content
-    if content.endswith(": |") or content.endswith(": >"):
-        return content[:-2].rstrip() + ":"
-    return None
+def _is_block_scalar(content: str) -> bool:
+    return content.endswith(": |") or content.endswith(": >") or content in ("|", ">")
 
 
-def _line_indent(text: str) -> int:
-    return len(text) - len(text.lstrip(" "))
+def _block_key_prefix(content: str) -> str:
+    return content if content in ("|", ">") else content[:-2].rstrip() + ":"
 
 
-def _collect_block_lines(raw: list[str], index: int, indent: int) -> tuple[list[str], int]:
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _collect_literal_block(raw: list[str], index: int, indent: int) -> tuple[str, int]:
     block_indent = None
     block_lines: list[str] = []
+    index += 1
     while index < len(raw):
         line = raw[index]
         if not line.strip():
             block_lines.append("")
             index += 1
             continue
-        nindent = _line_indent(line)
+        nindent = _indent_of(line)
         if nindent <= indent:
             break
         block_indent = nindent if block_indent is None else block_indent
         block_lines.append(line[block_indent:])
         index += 1
-    return block_lines, index
+    return "\n".join(block_lines).rstrip("\n"), index
 
 
-def _logical_block_line(raw: list[str], index: int, indent: int, header: str) -> tuple[tuple[int, str], int]:
-    block_lines, next_index = _collect_block_lines(raw, index + 1, indent)
-    joined = "\n".join(block_lines).rstrip("\n")
-    return (indent, f"{header} {json.dumps(joined, ensure_ascii=False)}"), next_index
+def _next_logical_line(raw: list[str], index: int) -> tuple[tuple[int, str] | None, int]:
+    stripped_comment = _strip_comment(raw[index])
+    if not stripped_comment.strip():
+        return None, index + 1
+    indent = _indent_of(stripped_comment)
+    content = stripped_comment.strip()
+    if not _is_block_scalar(content):
+        return (indent, content), index + 1
+    joined, index = _collect_literal_block(raw, index, indent)
+    return (indent, f"{_block_key_prefix(content)} {json.dumps(joined, ensure_ascii=False)}"), index
 
 
 def _logical_lines(text: str) -> list[tuple[int, str]]:
@@ -136,121 +145,116 @@ def _logical_lines(text: str) -> list[tuple[int, str]]:
     out: list[tuple[int, str]] = []
     i = 0
     while i < len(raw):
-        stripped_comment = _strip_comment(raw[i])
-        if not stripped_comment.strip():
-            i += 1
-            continue
-        indent = _line_indent(stripped_comment)
-        content = stripped_comment.strip()
-        header = _block_scalar_header(content)
-        if header is not None:
-            logical, i = _logical_block_line(raw, i, indent, header)
+        logical, i = _next_logical_line(raw, i)
+        if logical is not None:
             out.append(logical)
-        else:
-            out.append((indent, content))
-            i += 1
     return out
 
+def _parse_yaml_key_value(
+    lines: list[tuple[int, str]],
+    path: Path,
+    index: int,
+    indent: int,
+) -> tuple[str, Any, int]:
+    cur_indent, text = lines[index]
+    if cur_indent != indent:
+        raise SimpleYamlError(f"{path}: unexpected indent at logical line {index + 1}")
+    if ":" not in text:
+        raise SimpleYamlError(f"{path}: expected key: value at logical line {index + 1}")
 
-class YamlSubsetParser:
-    def __init__(self, path: Path, lines: list[tuple[int, str]]) -> None:
-        self.path = path
-        self.lines = lines
+    key, raw_val = text.split(":", 1)
+    index += 1
+    if raw_val.strip():
+        return key.strip(), _parse_scalar(raw_val), index
+    if index < len(lines) and lines[index][0] > indent:
+        val, index = _parse_yaml_block(lines, path, index, lines[index][0])
+        return key.strip(), val, index
+    return key.strip(), None, index
 
-    def parse(self) -> Any:
-        if not self.lines:
-            return {}
-        parsed, end = self.parse_block(0, self.lines[0][0])
-        if end != len(self.lines):
-            raise SimpleYamlError(f"{self.path}: could not parse all lines")
-        return parsed
 
-    def parse_block(self, index: int, indent: int) -> tuple[Any, int]:
-        if index >= len(self.lines) or self.lines[index][0] < indent:
-            return {}, index
-        if self.lines[index][1].startswith("- "):
-            return self.parse_list(index, indent)
-        return self.parse_mapping(index, indent)
-
-    def parse_list(self, index: int, indent: int) -> tuple[list[Any], int]:
-        items: list[Any] = []
-        while self._is_list_item(index, indent):
-            value, index = self.parse_list_item(index, indent)
-            items.append(value)
-        return items, index
-
-    def parse_list_item(self, index: int, indent: int) -> tuple[Any, int]:
-        item_text = self.lines[index][1][2:].strip()
+def _parse_yaml_list(
+    lines: list[tuple[int, str]],
+    path: Path,
+    index: int,
+    indent: int,
+) -> tuple[list[Any], int]:
+    arr: list[Any] = []
+    while index < len(lines) and lines[index][0] == indent and lines[index][1].startswith("- "):
+        item_text = lines[index][1][2:].strip()
         index += 1
         if not item_text:
-            return self.parse_block(index, indent + 2)
-        if ":" not in item_text:
-            return _parse_scalar(item_text), index
-        item, index = self.parse_inline_mapping_item(item_text, index, indent)
-        return item, index
-
-    def parse_inline_mapping_item(self, item_text: str, index: int, indent: int) -> tuple[dict[str, Any], int]:
-        key, raw_val = item_text.split(":", 1)
-        item: dict[str, Any] = {}
-        if raw_val.strip():
-            item[key.strip()] = _parse_scalar(raw_val)
+            val, index = _parse_yaml_block(lines, path, index, indent + 2)
+            arr.append(val)
+        elif ":" in item_text:
+            item, index = _parse_yaml_list_mapping_item(lines, path, item_text, index, indent)
+            arr.append(item)
         else:
-            item[key.strip()], index = self.parse_block(index, indent + 2)
-        return self.parse_child_mapping(item, index, indent)
+            arr.append(_parse_scalar(item_text))
+    return arr, index
 
-    def parse_child_mapping(self, item: dict[str, Any], index: int, indent: int) -> tuple[dict[str, Any], int]:
-        while index < len(self.lines) and self.lines[index][0] > indent:
-            child_indent, child_text = self.lines[index]
-            if child_indent < indent + 2 or child_text.startswith("- "):
-                break
-            key, value, index = self.parse_key_value(index, child_indent)
-            item[key] = value
-        return item, index
 
-    def parse_mapping(self, index: int, indent: int) -> tuple[dict[str, Any], int]:
-        mapping: dict[str, Any] = {}
-        while self._is_mapping_item(index, indent):
-            key, val, index = self.parse_key_value(index, indent)
-            mapping[key] = val
-        return mapping, index
+def _parse_yaml_list_mapping_item(
+    lines: list[tuple[int, str]],
+    path: Path,
+    item_text: str,
+    index: int,
+    indent: int,
+) -> tuple[dict[str, Any], int]:
+    key, raw_val = item_text.split(":", 1)
+    item: dict[str, Any] = {}
+    if raw_val.strip():
+        item[key.strip()] = _parse_scalar(raw_val)
+    else:
+        val, index = _parse_yaml_block(lines, path, index, indent + 2)
+        item[key.strip()] = val
 
-    def parse_key_value(self, index: int, indent: int) -> tuple[str, Any, int]:
-        text = self._line_at_indent(index, indent)
-        if ":" not in text:
-            raise SimpleYamlError(f"{self.path}: expected key: value at logical line {index + 1}")
-        key, raw_val = text.split(":", 1)
-        return self.parse_value(key.strip(), raw_val.strip(), index + 1, indent)
+    while index < len(lines) and lines[index][0] > indent:
+        child_indent, child_text = lines[index]
+        if child_indent < indent + 2 or child_text.startswith("- "):
+            break
+        ckey, cval, index = _parse_yaml_key_value(lines, path, index, child_indent)
+        item[ckey] = cval
+    return item, index
 
-    def parse_value(self, key: str, raw_val: str, index: int, indent: int) -> tuple[str, Any, int]:
-        if raw_val:
-            return key, _parse_scalar(raw_val), index
-        if index < len(self.lines) and self.lines[index][0] > indent:
-            value, index = self.parse_block(index, self.lines[index][0])
-            return key, value, index
-        return key, None, index
 
-    def _is_list_item(self, index: int, indent: int) -> bool:
-        return index < len(self.lines) and self.lines[index][0] == indent and self.lines[index][1].startswith("- ")
+def _parse_yaml_mapping(
+    lines: list[tuple[int, str]],
+    path: Path,
+    index: int,
+    indent: int,
+) -> tuple[dict[str, Any], int]:
+    mapping: dict[str, Any] = {}
+    while index < len(lines) and lines[index][0] == indent and not lines[index][1].startswith("- "):
+        key, val, index = _parse_yaml_key_value(lines, path, index, indent)
+        mapping[key] = val
+    return mapping, index
 
-    def _is_mapping_item(self, index: int, indent: int) -> bool:
-        return index < len(self.lines) and self.lines[index][0] == indent and not self.lines[index][1].startswith("- ")
 
-    def _line_at_indent(self, index: int, indent: int) -> str:
-        cur_indent, text = self.lines[index]
-        if cur_indent != indent:
-            raise SimpleYamlError(f"{self.path}: unexpected indent at logical line {index + 1}")
-        return text
+def _parse_yaml_block(lines: list[tuple[int, str]], path: Path, index: int, indent: int) -> tuple[Any, int]:
+    if index >= len(lines) or lines[index][0] < indent:
+        return {}, index
+    if lines[index][1].startswith("- "):
+        return _parse_yaml_list(lines, path, index, indent)
+    return _parse_yaml_mapping(lines, path, index, indent)
 
 
 def parse_yaml_subset(path: Path) -> Any:
     """eval.yaml/case.yaml에서 사용하는 작은 YAML 부분집합을 파싱한다.
 
-    Nested mappings, mappings/scalars list, quoted/unquoted scalars, ints/bools/null,
-    inline JSON arrays/objects, literal/folded blocks를 지원한다.
-    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에 PyYAML dependency를
-    추가하지 않도록 이 제한된 shape를 유지해야 한다.
+    Nested mappings, mappings/scalars list, quoted/unquoted scalars,
+    ints/bools/null, inline JSON arrays/objects, literal/folded blocks를 지원한다.
+    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에
+    PyYAML dependency를 추가하지 않도록 이 제한된 shape를 유지해야 한다.
     """
-    return YamlSubsetParser(path, _logical_lines(path.read_text(encoding="utf-8"))).parse()
+    lines = _logical_lines(path.read_text(encoding="utf-8"))
+    if not lines:
+        return {}
+
+    parsed, end = _parse_yaml_block(lines, path, 0, lines[0][0])
+    if end != len(lines):
+        raise SimpleYamlError(f"{path}: could not parse all lines")
+    return parsed
+
 
 def find_spec(skill_dir: Path) -> Path | None:
     evals_dir = skill_dir / "evals"
@@ -287,28 +291,39 @@ def _stable_slug(index: int, case_id: str) -> str:
     return f"{index:02d}-{digest}"
 
 
+def _case_base(case_group: dict, path: Path, entry: dict) -> dict:
+    return {
+        "__path": str(path),
+        "__dir": str(path.parent),
+        "__case_group_id": case_group.get("id", entry.get("id")),
+        "__entry_id": entry.get("id"),
+    }
+
+
+def _expanded_subcase(case_group: dict, entry: dict, base: dict, item: dict, index: int) -> dict:
+    case = dict(item)
+    case.setdefault("type", case_group.get("type") or entry.get("type"))
+    case.setdefault("title", case.get("id", "case"))
+    case.update(base)
+    case["__case_index"] = index
+    case["__artifact_slug"] = _stable_slug(index, str(case.get("id", f"case-{index}")))
+    return case
+
+
 def _expand_case_group(case_group: dict, path: Path, entry: dict) -> list[dict]:
-    base = {"__path": str(path), "__dir": str(path.parent), "__case_group_id": case_group.get("id", entry.get("id")), "__entry_id": entry.get("id")}
+    base = _case_base(case_group, path, entry)
     group_cases = case_group.get("cases")
     if isinstance(group_cases, list):
-        expanded: list[dict] = []
-        for index, item in enumerate(group_cases, start=1):
-            if not isinstance(item, dict):
-                continue
-            case = dict(item)
-            case.setdefault("type", case_group.get("type") or entry.get("type"))
-            case.setdefault("title", case.get("id", "case"))
-            case.update(base)
-            case["__case_index"] = index
-            case["__artifact_slug"] = _stable_slug(index, str(case.get("id", f"case-{index}")))
-            expanded.append(case)
-        return expanded
+        return [
+            _expanded_subcase(case_group, entry, base, item, index)
+            for index, item in enumerate(group_cases, start=1)
+            if isinstance(item, dict)
+        ]
     case = dict(case_group)
     case.update(base)
     case["__case_index"] = 1
     case["__artifact_slug"] = _stable_slug(1, str(case.get("id", entry.get("id", "case"))))
     return [case]
-
 
 def load_cases(spec: dict, skill_dir: Path) -> list[dict]:
     cases: list[dict] = []
@@ -322,7 +337,7 @@ def load_cases(spec: dict, skill_dir: Path) -> list[dict]:
     return cases
 
 
-def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
+def _validate_spec_header(spec: dict) -> list[str]:
     errors: list[str] = []
     if not spec.get("skill"):
         errors.append("eval.yaml: missing 'skill'")
@@ -330,196 +345,264 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
         errors.append("eval.yaml: missing 'title'")
     if "description" in spec:
         errors.append("eval.yaml: 'description' is not allowed; keep only 'title'")
-
     policy = spec.get("test_policy", {}) or {}
     if not isinstance(policy, dict):
         errors.append("eval.yaml: 'test_policy' must be a mapping when present")
-
-    case_entries, manifest_key = _manifest_entries(spec)
-    if not isinstance(case_entries, list) or not case_entries:
-        errors.append("eval.yaml: 'entries' must be a non-empty list")
-        case_entries = []
     if "entries" in spec and "cases" in spec:
         errors.append("eval.yaml: use either 'entries' or legacy 'cases', not both")
+    return errors
 
+
+def _required_manifest_fields(manifest_key: str) -> tuple[str, ...]:
+    if manifest_key == "entries":
+        return ("id", "type", "path")
+    return ("id", "type", "title", "path")
+
+
+def _validate_manifest_entry_shape(entry: Any, where: str, manifest_key: str) -> list[str]:
+    if not isinstance(entry, dict):
+        return [f"{where}: must be a mapping"]
+    errors = [f"{where}: missing '{field}'" for field in _required_manifest_fields(manifest_key) if not entry.get(field)]
+    if entry.get("type") and entry["type"] not in VALID_CASE_TYPES:
+        errors.append(f"{where}: unsupported type {entry['type']!r}")
+    return errors
+
+
+def _record_declared_id(entry: dict, where: str, declared_ids: set[str]) -> list[str]:
+    entry_id = entry.get("id")
+    if not isinstance(entry_id, str):
+        return []
+    if entry_id in declared_ids:
+        return [f"{where}: duplicate id {entry['id']!r}"]
+    declared_ids.add(entry_id)
+    return []
+
+
+def _validate_case_file_entry(entry: dict, where: str, skill_dir: Path, manifest_key: str) -> list[str]:
+    if not entry.get("path"):
+        return []
+    cpath = _case_path(skill_dir, entry)
+    if not cpath.exists():
+        return [f"{where}: case file not found: {entry['path']}"]
+    try:
+        case = parse_yaml_subset(cpath)
+    except Exception as exc:
+        return [f"{where}: malformed case yaml: {exc}"]
+    return validate_case(case, cpath, entry, new_shape=(manifest_key == "entries"))
+
+
+def _validate_manifest_entry(entry: Any, where: str, skill_dir: Path, manifest_key: str, declared_ids: set[str]) -> list[str]:
+    errors = _validate_manifest_entry_shape(entry, where, manifest_key)
+    if not isinstance(entry, dict):
+        return errors
+    errors.extend(_record_declared_id(entry, where, declared_ids))
+    errors.extend(_validate_case_file_entry(entry, where, skill_dir, manifest_key))
+    return errors
+
+
+def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
+    errors = _validate_spec_header(spec)
+    case_entries, manifest_key = _manifest_entries(spec)
+    if not isinstance(case_entries, list) or not case_entries:
+        return errors + ["eval.yaml: 'entries' must be a non-empty list"]
     declared_ids: set[str] = set()
     for i, entry in enumerate(case_entries):
-        where = f"eval.yaml {manifest_key}[{i}]"
-        if not isinstance(entry, dict):
-            errors.append(f"{where}: must be a mapping")
-            continue
-        required_fields = ("id", "type", "path") if manifest_key == "entries" else ("id", "type", "title", "path")
-        for field in required_fields:
-            if not entry.get(field):
-                errors.append(f"{where}: missing '{field}'")
-        if entry.get("type") and entry["type"] not in VALID_CASE_TYPES:
-            errors.append(f"{where}: unsupported type {entry['type']!r}")
-        entry_id = entry.get("id")
-        if isinstance(entry_id, str) and entry_id in declared_ids:
-            errors.append(f"{where}: duplicate id {entry['id']!r}")
-        if isinstance(entry_id, str):
-            declared_ids.add(entry_id)
-        if entry.get("path"):
-            cpath = _case_path(skill_dir, entry)
-            if not cpath.exists():
-                errors.append(f"{where}: case file not found: {entry['path']}")
-                continue
-            try:
-                case = parse_yaml_subset(cpath)
-            except Exception as exc:
-                errors.append(f"{where}: malformed case yaml: {exc}")
-                continue
-            errors.extend(validate_case(case, cpath, entry, new_shape=(manifest_key == "entries")))
+        errors.extend(_validate_manifest_entry(entry, f"eval.yaml {manifest_key}[{i}]", skill_dir, manifest_key, declared_ids))
+    return errors
 
+def _case_prefix(cpath: Path) -> str:
+    return f"{cpath.relative_to(cpath.parents[2]) if len(cpath.parents) > 2 else cpath}"
+
+
+def _validate_case_group_header(case: dict, entry: dict, prefix: str, new_shape: bool) -> list[str]:
+    errors = [f"{prefix}: missing '{field}'" for field in ("id", "type") if not case.get(field)]
+    if not new_shape and not case.get("title"):
+        errors.append(f"{prefix}: missing 'title'")
+    for field in ("id", "type"):
+        if case.get(field) != entry.get(field):
+            errors.append(f"{prefix}: {field} does not match eval.yaml entry")
+    if not new_shape and case.get("title") != entry.get("title"):
+        errors.append(f"{prefix}: title does not match eval.yaml entry")
+    return errors
+
+
+def _subcase_entry(case: dict, subcase: dict) -> dict:
+    return {
+        "id": subcase.get("id"),
+        "type": subcase.get("type", case.get("type")),
+        "title": subcase.get("title", subcase.get("id")),
+    }
+
+
+def _validate_subcase(case: dict, cpath: Path, subcase: Any, where: str, seen_case_ids: set[str]) -> list[str]:
+    if not isinstance(subcase, dict):
+        return [f"{where}: must be a mapping"]
+    errors: list[str] = []
+    if not subcase.get("id"):
+        errors.append(f"{where}: missing 'id'")
+    elif subcase["id"] in seen_case_ids:
+        errors.append(f"{where}: duplicate id {subcase['id']!r}")
+    else:
+        seen_case_ids.add(subcase["id"])
+    sub = dict(subcase)
+    sub.setdefault("type", case.get("type"))
+    sub.setdefault("title", subcase.get("id"))
+    errors.extend(_validate_executable_case(sub, cpath, _subcase_entry(case, subcase), where))
+    return errors
+
+
+def _validate_case_group_cases(case: dict, cpath: Path, prefix: str, group_cases: list) -> list[str]:
+    if not group_cases:
+        return [f"{prefix}: cases must be a non-empty list"]
+    errors: list[str] = []
+    seen_case_ids: set[str] = set()
+    for index, subcase in enumerate(group_cases):
+        errors.extend(_validate_subcase(case, cpath, subcase, f"{prefix} cases[{index}]", seen_case_ids))
     return errors
 
 
 def validate_case(case: dict, cpath: Path, entry: dict, new_shape: bool = False) -> list[str]:
-    errors: list[str] = []
-    prefix = f"{cpath.relative_to(cpath.parents[2]) if len(cpath.parents) > 2 else cpath}"
-    for field in ("id", "type"):
-        if not case.get(field):
-            errors.append(f"{prefix}: missing '{field}'")
-    if not new_shape and not case.get("title"):
-        errors.append(f"{prefix}: missing 'title'")
-    if case.get("id") != entry.get("id"):
-        errors.append(f"{prefix}: id does not match eval.yaml entry")
-    if case.get("type") != entry.get("type"):
-        errors.append(f"{prefix}: type does not match eval.yaml entry")
-    if not new_shape and case.get("title") != entry.get("title"):
-        errors.append(f"{prefix}: title does not match eval.yaml entry")
-
+    prefix = _case_prefix(cpath)
+    errors = _validate_case_group_header(case, entry, prefix, new_shape)
     group_cases = case.get("cases")
     if isinstance(group_cases, list):
-        if not group_cases:
-            errors.append(f"{prefix}: cases must be a non-empty list")
-        seen_case_ids: set[str] = set()
-        for index, subcase in enumerate(group_cases):
-            sw = f"{prefix} cases[{index}]"
-            if not isinstance(subcase, dict):
-                errors.append(f"{sw}: must be a mapping")
-                continue
-            if not subcase.get("id"):
-                errors.append(f"{sw}: missing 'id'")
-            elif subcase["id"] in seen_case_ids:
-                errors.append(f"{sw}: duplicate id {subcase['id']!r}")
-            else:
-                seen_case_ids.add(subcase["id"])
-            sub_entry = {"id": subcase.get("id"), "type": subcase.get("type", case.get("type")), "title": subcase.get("title", subcase.get("id"))}
-            sub = dict(subcase)
-            sub.setdefault("type", case.get("type"))
-            sub.setdefault("title", subcase.get("id"))
-            errors.extend(_validate_executable_case(sub, cpath, sub_entry, f"{sw}"))
-        return errors
+        return errors + _validate_case_group_cases(case, cpath, prefix, group_cases)
+    return errors + _validate_executable_case(case, cpath, entry, prefix, require_title=not new_shape)
 
-    return _validate_executable_case(case, cpath, entry, prefix, require_title=not new_shape)
+def _validate_judge_command(command: Any, prefix: str) -> list[str]:
+    if not command:
+        return [f"{prefix}: judge.command is required"]
+    has_packet = JUDGE_PACKET_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command
+    has_assertion = ASSERTION_INPUT_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command
+    if has_packet or has_assertion:
+        return []
+    return [
+        f"{prefix}: judge.command must contain either {JUDGE_PACKET_PLACEHOLDER} and "
+        f"{JUDGE_OUTPUT_PLACEHOLDER}, or {ASSERTION_INPUT_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
+    ]
+
+
+def _validate_judge_case_definition(case: dict, prefix: str) -> list[str]:
+    errors: list[str] = []
+    judge = case.get("judge")
+    if case.get("run") is not None:
+        errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use top-level judge.command")
+    if not isinstance(judge, dict):
+        return errors + [f"{prefix}: type 'llm-judge' must define top-level judge mapping"]
+    if judge.get("method") not in VALID_JUDGE_METHODS:
+        errors.append(f"{prefix}: judge.method must be one of {VALID_JUDGE_METHODS}")
+    errors.extend(_validate_judge_command(judge.get("command"), prefix))
+    verify_command = judge.get("verifyCommand")
+    if verify_command and JUDGE_EVIDENCE_PLACEHOLDER not in verify_command:
+        errors.append(f"{prefix}: judge.verifyCommand must contain {JUDGE_EVIDENCE_PLACEHOLDER}")
+    return errors
+
+def _validate_judge_setup(case: dict, prefix: str) -> list[str]:
+    setup = case.get("setup")
+    if setup is None:
+        return []
+    if not isinstance(setup, dict):
+        return [f"{prefix}: setup must be a mapping when present"]
+
+    setup_command = setup.get("command")
+    if not setup_command:
+        return [f"{prefix}: setup.command is required when setup is present"]
+    if PIPELINE_OUTPUT_PLACEHOLDER not in setup_command:
+        return [f"{prefix}: setup.command must contain {PIPELINE_OUTPUT_PLACEHOLDER}"]
+    return []
+
+
+def _validate_run_case_definition(case: dict, prefix: str) -> list[str]:
+    errors: list[str] = []
+    run = case.get("run")
+    if case.get("judge") is not None:
+        errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
+    if not isinstance(run, dict) or not run.get("command"):
+        errors.append(f"{prefix}: non-llm-judge case must define run.command")
+    elif OUTPUT_PLACEHOLDER not in run["command"]:
+        errors.append(f"{prefix}: run.command must contain {OUTPUT_PLACEHOLDER}")
+    return errors
+
+
+def _validate_assertions(case: dict, prefix: str) -> list[str]:
+    errors: list[str] = []
+    assertions = case.get("assertions")
+    if not isinstance(assertions, list) or not assertions:
+        return [f"{prefix}: assertions must be a non-empty list"]
+
+    for i, assertion in enumerate(assertions):
+        errors.extend(_validate_assertion(case, assertion, f"{prefix} assertions[{i}]"))
+    return errors
+
+
+def _validate_assertion(case: dict, assertion: Any, awhere: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(assertion, dict):
+        return [f"{awhere}: must be a mapping"]
+
+    for field in ("id", "title", "type"):
+        if not assertion.get(field):
+            errors.append(f"{awhere}: missing '{field}'")
+    atype = assertion.get("type")
+    if atype not in VALID_ASSERTION_TYPES:
+        errors.append(f"{awhere}: type must be one of {VALID_ASSERTION_TYPES}, got {atype!r}")
+    if atype == "command" and not assertion.get("cmd"):
+        errors.append(f"{awhere}: command assertion needs 'cmd'")
+    if atype == "llm-judge":
+        errors.extend(_validate_llm_judge_assertion(case, assertion, awhere))
+    return errors
+
+
+def _validate_llm_judge_assertion(case: dict, assertion: dict, awhere: str) -> list[str]:
+    errors: list[str] = []
+    if case.get("type") != "llm-judge":
+        errors.append(f"{awhere}: llm-judge assertion is only allowed in type 'llm-judge' cases")
+    if assertion.get("judge") is not None:
+        errors.append(f"{awhere}: llm-judge assertion must not define judge; use top-level judge")
+    if assertion.get("checks") is not None:
+        errors.append(f"{awhere}: llm-judge assertion must not define checks; put the prompt on the assertion")
+    if not assertion.get("prompt"):
+        errors.append(f"{awhere}: llm-judge assertion needs 'prompt'")
+    return errors
+
+
+def _validate_case_paths(case: dict, cpath: Path, prefix: str) -> list[str]:
+    errors: list[str] = []
+
+    if case.get("input") and not (cpath.parent / case["input"]).exists():
+        errors.append(f"{prefix}: input file not found: {case['input']}")
+    if case.get("expected") and not (cpath.parent / case["expected"]).exists():
+        errors.append(f"{prefix}: expected file not found: {case['expected']}")
+    return errors
 
 
 def _validate_executable_case(case: dict, cpath: Path, entry: dict, prefix: str, require_title: bool = True) -> list[str]:
     errors: list[str] = []
     if require_title and not case.get("title"):
         errors.append(f"{prefix}: missing 'title'")
-    ctype = case.get("type")
-    run = case.get("run")
-    judge = case.get("judge")
-    if ctype == "llm-judge":
-        if run is not None:
-            errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use top-level judge.command")
-        if not isinstance(judge, dict):
-            errors.append(f"{prefix}: type 'llm-judge' must define top-level judge mapping")
-        else:
-            if judge.get("method") not in VALID_JUDGE_METHODS:
-                errors.append(f"{prefix}: judge.method must be one of {VALID_JUDGE_METHODS}")
-            command = judge.get("command")
-            if not command:
-                errors.append(f"{prefix}: judge.command is required")
-            elif not (
-                (JUDGE_PACKET_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command)
-                or (ASSERTION_INPUT_PLACEHOLDER in command and JUDGE_OUTPUT_PLACEHOLDER in command)
-            ):
-                errors.append(
-                    f"{prefix}: judge.command must contain either {JUDGE_PACKET_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}, "
-                    f"or {ASSERTION_INPUT_PLACEHOLDER} and {JUDGE_OUTPUT_PLACEHOLDER}"
-                )
-            verify_command = judge.get("verifyCommand")
-            if verify_command and JUDGE_EVIDENCE_PLACEHOLDER not in verify_command:
-                errors.append(f"{prefix}: judge.verifyCommand must contain {JUDGE_EVIDENCE_PLACEHOLDER}")
-            setup = case.get("setup")
-            if setup is not None:
-                if not isinstance(setup, dict):
-                    errors.append(f"{prefix}: setup must be a mapping when present")
-                else:
-                    setup_command = setup.get("command")
-                    if not setup_command:
-                        errors.append(f"{prefix}: setup.command is required when setup is present")
-                    elif PIPELINE_OUTPUT_PLACEHOLDER not in setup_command:
-                        errors.append(f"{prefix}: setup.command must contain {PIPELINE_OUTPUT_PLACEHOLDER}")
+
+    if case.get("type") == "llm-judge":
+        errors.extend(_validate_judge_case_definition(case, prefix))
+        errors.extend(_validate_judge_setup(case, prefix))
     else:
-        if judge is not None:
-            errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
-        if not isinstance(run, dict) or not run.get("command"):
-            errors.append(f"{prefix}: non-llm-judge case must define run.command")
-        elif OUTPUT_PLACEHOLDER not in run["command"]:
-            errors.append(f"{prefix}: run.command must contain {OUTPUT_PLACEHOLDER}")
-
-    if case.get("input") and not (cpath.parent / case["input"]).exists():
-        errors.append(f"{prefix}: input file not found: {case['input']}")
-    if case.get("expected") and not (cpath.parent / case["expected"]).exists():
-        errors.append(f"{prefix}: expected file not found: {case['expected']}")
-
-    assertions = case.get("assertions")
-    if not isinstance(assertions, list) or not assertions:
-        errors.append(f"{prefix}: assertions must be a non-empty list")
-        assertions = []
-    for i, assertion in enumerate(assertions):
-        awhere = f"{prefix} assertions[{i}]"
-        if not isinstance(assertion, dict):
-            errors.append(f"{awhere}: must be a mapping")
-            continue
-        for field in ("id", "title", "type"):
-            if not assertion.get(field):
-                errors.append(f"{awhere}: missing '{field}'")
-        atype = assertion.get("type")
-        if atype not in VALID_ASSERTION_TYPES:
-            errors.append(f"{awhere}: type must be one of {VALID_ASSERTION_TYPES}, got {atype!r}")
-        if atype == "command" and not assertion.get("cmd"):
-            errors.append(f"{awhere}: command assertion needs 'cmd'")
-        if atype == "llm-judge":
-            if ctype != "llm-judge":
-                errors.append(f"{awhere}: llm-judge assertion is only allowed in type 'llm-judge' cases")
-            if assertion.get("judge") is not None:
-                errors.append(f"{awhere}: llm-judge assertion must not define judge; use top-level judge")
-            if assertion.get("checks") is not None:
-                errors.append(f"{awhere}: llm-judge assertion must not define checks; put the prompt on the assertion")
-            if not assertion.get("prompt"):
-                errors.append(f"{awhere}: llm-judge assertion needs 'prompt'")
+        errors.extend(_validate_run_case_definition(case, prefix))
+    errors.extend(_validate_case_paths(case, cpath, prefix))
+    errors.extend(_validate_assertions(case, prefix))
     return errors
 
 
-def _bind_placeholders(
-    cmd: str,
-    *,
-    input_path: Path | None,
-    output_path: Path | None,
-    expected_path: Path | None,
-    judge_packet: Path | None = None,
-    judge_output: Path | None = None,
-    assertion_input: Path | None = None,
-    judge_evidence: Path | None = None,
-    primary_output: Path | None = None,
-    pipeline_output: Path | None = None,
-) -> str:
+def _bind_placeholders(cmd: str, **paths: Path | None) -> str:
     replacements = {
         PYTHON_PLACEHOLDER: Path(sys.executable),
-        INPUT_PLACEHOLDER: input_path,
-        OUTPUT_PLACEHOLDER: output_path,
-        EXPECTED_PLACEHOLDER: expected_path,
-        JUDGE_PACKET_PLACEHOLDER: judge_packet,
-        JUDGE_OUTPUT_PLACEHOLDER: judge_output,
-        ASSERTION_INPUT_PLACEHOLDER: assertion_input,
-        JUDGE_EVIDENCE_PLACEHOLDER: judge_evidence,
-        PRIMARY_OUTPUT_PLACEHOLDER: primary_output,
-        PIPELINE_OUTPUT_PLACEHOLDER: pipeline_output,
+        INPUT_PLACEHOLDER: paths.get("input_path"),
+        OUTPUT_PLACEHOLDER: paths.get("output_path"),
+        EXPECTED_PLACEHOLDER: paths.get("expected_path"),
+        JUDGE_PACKET_PLACEHOLDER: paths.get("judge_packet"),
+        JUDGE_OUTPUT_PLACEHOLDER: paths.get("judge_output"),
+        ASSERTION_INPUT_PLACEHOLDER: paths.get("assertion_input"),
+        JUDGE_EVIDENCE_PLACEHOLDER: paths.get("judge_evidence"),
+        PRIMARY_OUTPUT_PLACEHOLDER: paths.get("primary_output"),
+        PIPELINE_OUTPUT_PLACEHOLDER: paths.get("pipeline_output"),
     }
     bound = cmd
     for placeholder, path in replacements.items():
@@ -622,14 +705,12 @@ def _files_written_read_back(path: Path) -> list[dict[str, Any]]:
             continue
         fpath = Path(item["path"])
         exists = fpath.exists()
-        out.append(
-            {
-                "path": str(fpath),
-                "exists": exists,
-                "sha256": _sha256_file(fpath) if exists and fpath.is_file() else "",
-                "excerpt": _excerpt(fpath, 500) if exists and fpath.is_file() else "",
-            }
-        )
+        out.append({
+            "path": str(fpath),
+            "exists": exists,
+            "sha256": _sha256_file(fpath) if exists and fpath.is_file() else "",
+            "excerpt": _excerpt(fpath, 500) if exists and fpath.is_file() else "",
+        })
     return out
 
 
@@ -674,7 +755,12 @@ def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: P
 
 
 def _evidence_prompt(primary_output: Path, evidence_path: Path) -> str:
-    return "Primary output:\n" + _primary_output_text(primary_output) + "\n\nCase-local provenance evidence:\n" + _excerpt(evidence_path, 1800)
+    return (
+        "Primary output:\n"
+        + _primary_output_text(primary_output)
+        + "\n\nCase-local provenance evidence:\n"
+        + _excerpt(evidence_path, 1800)
+    )
 
 
 def _run_llm_judge_setup(case: dict, cwd: Path, temp_dir: Path) -> tuple[dict | None, Path | None]:
@@ -735,7 +821,10 @@ def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
             "exit_code": 0,
             "primary_output": str(primary_output),
         }
-    cmd = f"{shlex.quote(sys.executable)} scripts/run_llm_judge.py output --input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
+    cmd = (
+        f"{shlex.quote(sys.executable)} scripts/run_llm_judge.py output "
+        f"--input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
+    )
     rc, stdout, stderr = _run_shell(cmd, cwd, int(case.get("judge", {}).get("timeout_sec") or DEFAULT_TIMEOUT))
     return {
         "id": "judge.output",
@@ -749,209 +838,277 @@ def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
     }
 
 
-def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
+def _prepare_llm_primary_output(case: dict, cwd: Path, temp_dir: Path, checks: list[dict]) -> tuple[Path | None, dict | None]:
+    primary_output = temp_dir / "primary-output.json"
+    setup_result, setup_output = _run_llm_judge_setup(case, cwd, temp_dir)
+    if setup_result is not None:
+        checks.append(setup_result)
+        return (setup_output if setup_result["status"] == "pass" else None), setup_result
+    output_check = _run_llm_judge_output(case, cwd, primary_output)
+    checks.append(output_check)
+    return (primary_output if output_check["status"] == "pass" else None), None
+
+
+def _write_assertion_input(case: dict, judge: dict, assertion_input: Path, primary_output: Path, evidence_path: Path) -> None:
+    payload = {
+        "schema_version": 1,
+        "method": judge.get("method", "aggregate"),
+        "primary_output": _evidence_prompt(primary_output, evidence_path),
+        "assertions": [
+            {"id": a["id"], "title": a["title"], "prompt": a["prompt"]}
+            for a in case.get("assertions", [])
+            if a.get("type") == "llm-judge"
+        ],
+    }
+    assertion_input.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _write_judge_packet(packet_path: Path, primary_output: Path, evidence_path: Path) -> None:
+    payload = {"schema_version": 1, "prompt": _evidence_prompt(primary_output, evidence_path)}
+    packet_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _judge_command_failure(rc: int, stdout: str, stderr: str) -> dict:
+    return {
+        "id": "judge.command",
+        "title": "llm-judge assertion mode 실행",
+        "type": "llm-judge",
+        "status": "fail",
+        "exit_code": rc,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+        "error": "judge command failed or did not create judge_output",
+    }
+
+
+def _empty_judge_output_failure() -> dict:
+    return {"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "error": "judge output is empty"}
+
+
+def _parse_judge_output(judge_text: str) -> tuple[str, list]:
+    try:
+        judge_payload = json.loads(judge_text)
+    except json.JSONDecodeError:
+        return "pass", []
+    results = judge_payload.get("results") if isinstance(judge_payload.get("results"), list) else []
+    return ("pass" if judge_payload.get("status") == "success" else "fail"), results
+
+
+def _judge_evidence(assertion_input: Path, primary_output: Path, evidence_path: Path) -> dict:
+    return {
+        "assertion_input": str(assertion_input),
+        "primary_output": str(primary_output),
+        "judge_evidence": str(evidence_path),
+        "provenance": json.loads(evidence_path.read_text(encoding="utf-8")),
+    }
+
+
+def _append_structured_judge_results(checks: list[dict], case: dict, results: list, evidence: dict) -> None:
+    for result in results:
+        assertion_id = result.get("assertion_id", "judge.command")
+        matching = next((a for a in case.get("assertions", []) if a.get("id") == assertion_id), {})
+        checks.append({
+            "id": assertion_id,
+            "title": matching.get("title", assertion_id),
+            "type": "llm-judge",
+            "status": "pass" if result.get("status") == "pass" else "fail",
+            "judge_output": str(result.get("judge_output", ""))[-2000:],
+            "evidence": evidence,
+        })
+
+
+def _append_judge_result_checks(checks: list[dict], case: dict, judge_text: str, result_status: str, results: list, evidence: dict) -> None:
+    if results:
+        _append_structured_judge_results(checks, case, results, evidence)
+    else:
+        checks.append({
+            "id": "judge.command",
+            "title": "llm-judge assertion mode 실행",
+            "type": "llm-judge",
+            "status": result_status,
+            "judge_output": judge_text[-2000:],
+            "evidence": evidence,
+        })
+
+
+def _append_verify_command(
+    checks: list[dict],
+    case: dict,
+    judge: dict,
+    paths: dict[str, Path],
+    cwd: Path,
+) -> None:
+    verify_command = judge.get("verifyCommand")
+    if not verify_command or not all(c.get("status") == "pass" for c in checks):
+        return
+    verify_cmd = _bind_placeholders(
+        verify_command,
+        input_path=_input_path(case),
+        output_path=paths["output"],
+        expected_path=_expected_path(case),
+        judge_output=paths["judge_output"],
+        assertion_input=paths["assertion_input"],
+        judge_evidence=paths["evidence"],
+        primary_output=paths["primary"],
+    )
+    vrc, vstdout, vstderr = _run_shell(verify_cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
+    checks.append({
+        "id": "judge.verifyCommand",
+        "title": "llm-judge deterministic evidence 검증",
+        "type": "command",
+        "status": "pass" if vrc == 0 else "fail",
+        "exit_code": vrc,
+        "stdout": vstdout[-2000:],
+        "stderr": vstderr[-2000:],
+        "evidence": str(paths["evidence"]),
+    })
+
+
+def _run_bound_judge_command(
+    case: dict,
+    judge: dict,
+    output_path: Path,
+    temp_dir: Path,
+    primary_output: Path,
+    evidence_path: Path,
+    cwd: Path,
+) -> tuple[int, str, str, Path, Path]:
+    assertion_input = temp_dir / "assertion-input.json"
+    judge_output = temp_dir / "assertion-output.json"
+    packet_path = temp_dir / "judge-packet.json"
+    _write_assertion_input(case, judge, assertion_input, primary_output, evidence_path)
+    _write_judge_packet(packet_path, primary_output, evidence_path)
+    cmd = _bind_placeholders(
+        judge["command"],
+        input_path=_input_path(case),
+        output_path=output_path,
+        expected_path=_expected_path(case),
+        judge_packet=packet_path,
+        judge_output=judge_output,
+        assertion_input=assertion_input,
+        judge_evidence=evidence_path,
+        primary_output=primary_output,
+    )
+    rc, stdout, stderr = _run_shell(cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
+    return rc, stdout, stderr, assertion_input, judge_output
+
+
+def _run_judge_assertion_phase(
+    case: dict,
+    output_path: Path,
+    cwd: Path,
+    temp_dir: Path,
+    primary_output: Path,
+    evidence_path: Path,
+) -> tuple[list[dict], str]:
     judge = case["judge"]
+    rc, stdout, stderr, assertion_input, judge_output = _run_bound_judge_command(
+        case, judge, output_path, temp_dir, primary_output, evidence_path, cwd
+    )
+    if rc != 0 or not judge_output.exists():
+        return [_judge_command_failure(rc, stdout, stderr)], "fail"
+    judge_text = judge_output.read_text(encoding="utf-8")
+    if not judge_text.strip():
+        return [_empty_judge_output_failure()], "fail"
+    result_status, results = _parse_judge_output(judge_text)
+    evidence = _judge_evidence(assertion_input, primary_output, evidence_path)
+    checks: list[dict] = []
+    _append_judge_result_checks(checks, case, judge_text, result_status, results, evidence)
+    paths = {"output": output_path, "judge_output": judge_output, "assertion_input": assertion_input, "evidence": evidence_path, "primary": primary_output}
+    if result_status == "pass":
+        _append_verify_command(checks, case, judge, paths, cwd)
+    return checks, result_status
+
+
+def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
     checks: list[dict] = []
     with tempfile.TemporaryDirectory() as td:
         temp_dir = Path(td)
-        primary_output = temp_dir / "primary-output.json"
         evidence_path = temp_dir / "judge-evidence.json"
-        setup_result, setup_output = _run_llm_judge_setup(case, cwd, temp_dir)
-        if setup_result is not None:
-            checks.append(setup_result)
-            if setup_result["status"] != "pass" or setup_output is None:
-                return checks
-            primary_output = setup_output
-        else:
-            output_check = _run_llm_judge_output(case, cwd, primary_output)
-            checks.append(output_check)
-            if output_check["status"] != "pass":
-                return checks
+        primary_output, setup_result = _prepare_llm_primary_output(case, cwd, temp_dir, checks)
+        if primary_output is None:
+            return checks
         shutil.copyfile(primary_output, output_path)
         _write_judge_evidence(case, _input_path(case), primary_output, evidence_path, setup_result)
-
-        assertion_input = Path(td) / "assertion-input.json"
-        judge_output = Path(td) / "assertion-output.json"
-        assertion_input.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "method": judge.get("method", "aggregate"),
-                    "primary_output": _evidence_prompt(primary_output, evidence_path),
-                    "assertions": [
-                        {"id": a["id"], "title": a["title"], "prompt": a["prompt"]} for a in case.get("assertions", []) if a.get("type") == "llm-judge"
-                    ],
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        packet_path = Path(td) / "judge-packet.json"
-        packet_path.write_text(
-            json.dumps({"schema_version": 1, "prompt": _evidence_prompt(primary_output, evidence_path)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-        cmd = _bind_placeholders(
-            judge["command"],
-            input_path=_input_path(case),
-            output_path=output_path,
-            expected_path=_expected_path(case),
-            judge_packet=packet_path,
-            judge_output=judge_output,
-            assertion_input=assertion_input,
-            judge_evidence=evidence_path,
-            primary_output=primary_output,
-        )
-        rc, stdout, stderr = _run_shell(cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
-        if rc != 0 or not judge_output.exists():
-            checks.append(
-                {
-                    "id": "judge.command",
-                    "title": "llm-judge assertion mode 실행",
-                    "type": "llm-judge",
-                    "status": "fail",
-                    "exit_code": rc,
-                    "stdout": stdout[-2000:],
-                    "stderr": stderr[-2000:],
-                    "error": "judge command failed or did not create judge_output",
-                }
-            )
-            return checks
-        judge_text = judge_output.read_text(encoding="utf-8")
-        if not judge_text.strip():
-            checks.append(
-                {"id": "judge.command", "title": "llm-judge assertion mode 실행", "type": "llm-judge", "status": "fail", "error": "judge output is empty"}
-            )
-            return checks
-
-        try:
-            judge_payload = json.loads(judge_text)
-            result_status = "pass" if judge_payload.get("status") == "success" else "fail"
-            results = judge_payload.get("results") if isinstance(judge_payload.get("results"), list) else []
-        except json.JSONDecodeError:
-            result_status = "pass"
-            results = []
-
-        evidence_payload = json.loads(evidence_path.read_text(encoding="utf-8"))
-        evidence = {
-            "assertion_input": str(assertion_input),
-            "primary_output": str(primary_output),
-            "judge_evidence": str(evidence_path),
-            "provenance": evidence_payload,
-        }
-        if results:
-            for result in results:
-                assertion_id = result.get("assertion_id", "judge.command")
-                matching = next((a for a in case.get("assertions", []) if a.get("id") == assertion_id), {})
-                checks.append(
-                    {
-                        "id": assertion_id,
-                        "title": matching.get("title", assertion_id),
-                        "type": "llm-judge",
-                        "status": "pass" if result.get("status") == "pass" else "fail",
-                        "judge_output": str(result.get("judge_output", ""))[-2000:],
-                        "evidence": evidence,
-                    }
-                )
-        else:
-            checks.append(
-                {
-                    "id": "judge.command",
-                    "title": "llm-judge assertion mode 실행",
-                    "type": "llm-judge",
-                    "status": result_status,
-                    "judge_output": judge_text[-2000:],
-                    "evidence": evidence,
-                }
-            )
-
-        verify_command = judge.get("verifyCommand")
-        if verify_command and result_status == "pass" and all(c.get("status") == "pass" for c in checks):
-            verify_cmd = _bind_placeholders(
-                verify_command,
-                input_path=_input_path(case),
-                output_path=output_path,
-                expected_path=_expected_path(case),
-                judge_output=judge_output,
-                assertion_input=assertion_input,
-                judge_evidence=evidence_path,
-                primary_output=primary_output,
-            )
-            vrc, vstdout, vstderr = _run_shell(verify_cmd, cwd, int(judge.get("timeout_sec") or DEFAULT_TIMEOUT))
-            checks.append(
-                {
-                    "id": "judge.verifyCommand",
-                    "title": "llm-judge deterministic evidence 검증",
-                    "type": "command",
-                    "status": "pass" if vrc == 0 else "fail",
-                    "exit_code": vrc,
-                    "stdout": vstdout[-2000:],
-                    "stderr": vstderr[-2000:],
-                    "evidence": str(evidence_path),
-                }
-            )
+        assertion_checks, _ = _run_judge_assertion_phase(case, output_path, cwd, temp_dir, primary_output, evidence_path)
+        checks.extend(assertion_checks)
         return checks
+
+def _case_output_path(temp_dir: Path, case: dict) -> Path:
+    output_suffix = ".json" if (case.get("expected") or "").endswith(".json") else ".out"
+    return temp_dir / f"{case.get('__artifact_slug', 'output')}{output_suffix}"
+
+
+def _run_command_case(case: dict, skill_dir: Path, output_path: Path) -> tuple[str, list[dict]]:
+    run = case["run"]
+    try:
+        cmd = _bind_placeholders(run["command"], input_path=_input_path(case), output_path=output_path, expected_path=_expected_path(case))
+        rc, stdout, stderr = _run_shell(cmd, skill_dir, int(run.get("timeout_sec") or DEFAULT_TIMEOUT))
+    except ValueError as exc:
+        rc, stdout, stderr = 1, "", str(exc)
+    if rc == 0 and output_path.exists():
+        return "pass", []
+    return "fail", [{
+        "id": "run.command",
+        "title": "case run.command 실행",
+        "type": "run",
+        "status": "fail",
+        "exit_code": rc,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+    }]
+
+
+def _run_case_body(case: dict, skill_dir: Path, output_path: Path) -> tuple[str, list[dict]]:
+    if case.get("type") == "llm-judge":
+        checks = _run_llm_judge_case(case, output_path, skill_dir)
+        return "pass", checks
+    return _run_command_case(case, skill_dir, output_path)
+
+
+def _append_post_run_checks(checks: list[dict], case: dict, output_path: Path, skill_dir: Path, promote: bool, run_status: str) -> None:
+    if run_status == "pass" and not promote:
+        expected_check = _compare_expected(case, output_path)
+        if expected_check:
+            checks.append(expected_check)
+    if run_status != "pass":
+        return
+    for assertion in case.get("assertions", []):
+        if assertion["type"] == "command":
+            checks.append(_run_command_assertion(assertion, case, output_path, skill_dir))
+
+
+def _promote_case_output(case: dict, output_path: Path, promote: bool, failed: bool, run_status: str) -> str | None:
+    if not promote or failed or run_status != "pass":
+        return None
+    dest = _promote_path(case, output_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(output_path, dest)
+    return str(dest)
+
+
+def _case_result(case: dict, checks: list[dict], promoted: str | None, run_status: str) -> dict:
+    failed = any(c["status"] != "pass" for c in checks)
+    return {
+        "id": case["id"],
+        "case_group_id": case.get("__case_group_id", case["id"]),
+        "artifact_slug": case.get("__artifact_slug"),
+        "type": case["type"],
+        "title": case.get("title", case["id"]),
+        "status": "fail" if failed or run_status == "fail" else "pass",
+        "checks": checks,
+        "promoted": promoted,
+    }
 
 
 def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
-    output_suffix = ".json" if (case.get("expected") or "").endswith(".json") else ".out"
     with tempfile.TemporaryDirectory() as td:
-        output_path = Path(td) / f"{case.get('__artifact_slug', 'output')}{output_suffix}"
-        checks: list[dict] = []
-        run_status = "pass"
-        if case.get("type") == "llm-judge":
-            checks.extend(_run_llm_judge_case(case, output_path, skill_dir))
-        else:
-            run = case["run"]
-            try:
-                cmd = _bind_placeholders(run["command"], input_path=_input_path(case), output_path=output_path, expected_path=_expected_path(case))
-                rc, stdout, stderr = _run_shell(cmd, skill_dir, int(run.get("timeout_sec") or DEFAULT_TIMEOUT))
-            except ValueError as exc:
-                rc, stdout, stderr = 1, "", str(exc)
-            if rc != 0 or not output_path.exists():
-                run_status = "fail"
-                checks.append(
-                    {
-                        "id": "run.command",
-                        "title": "case run.command 실행",
-                        "type": "run",
-                        "status": "fail",
-                        "exit_code": rc,
-                        "stdout": stdout[-2000:],
-                        "stderr": stderr[-2000:],
-                    }
-                )
-
-        if run_status == "pass" and not promote:
-            expected_check = _compare_expected(case, output_path)
-            if expected_check:
-                checks.append(expected_check)
-
-        if run_status == "pass":
-            for assertion in case.get("assertions", []):
-                if assertion["type"] == "command":
-                    checks.append(_run_command_assertion(assertion, case, output_path, skill_dir))
-
+        output_path = _case_output_path(Path(td), case)
+        run_status, checks = _run_case_body(case, skill_dir, output_path)
+        _append_post_run_checks(checks, case, output_path, skill_dir, promote, run_status)
         failed = any(c["status"] != "pass" for c in checks)
-        promoted = None
-        if promote and not failed and run_status == "pass":
-            dest = _promote_path(case, output_path)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(output_path, dest)
-            promoted = str(dest)
-
-        return {
-            "id": case["id"],
-            "case_group_id": case.get("__case_group_id", case["id"]),
-            "artifact_slug": case.get("__artifact_slug"),
-            "type": case["type"],
-            "title": case.get("title", case["id"]),
-            "status": "fail" if failed or run_status == "fail" else "pass",
-            "checks": checks,
-            "promoted": promoted,
-        }
-
+        promoted = _promote_case_output(case, output_path, promote, failed, run_status)
+        return _case_result(case, checks, promoted, run_status)
 
 def run_suite(spec: dict, skill_dir: Path, promote: bool = False) -> dict:
     cases = load_cases(spec, skill_dir)
@@ -965,57 +1122,71 @@ def _default_skill_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a skill's case-based eval suite.")
     parser.add_argument("skill_dir", nargs="?", default=None, help="Skill root (default: parent of scripts/).")
     parser.add_argument("--validate", action="store_true", help="Only validate eval.yaml and declared case.yaml files.")
     parser.add_argument("--promote", action="store_true", help="Create or overwrite expected files for passing cases.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
-    args = parser.parse_args(argv)
+    return parser
 
-    skill_dir = Path(args.skill_dir).resolve() if args.skill_dir else _default_skill_dir()
+
+def _print_error(message: str, as_json: bool) -> None:
+    print(json.dumps({"error": message}) if as_json else f"ERROR: {message}", file=sys.stderr)
+
+
+def _load_suite(skill_dir: Path, as_json: bool) -> tuple[Path | None, dict | None, int]:
     spec_path = find_spec(skill_dir)
     if spec_path is None:
-        msg = f"no evals/*.eval.yaml found under {skill_dir}"
-        print(json.dumps({"error": msg}) if args.json else f"ERROR: {msg}", file=sys.stderr)
-        return 2
+        _print_error(f"no evals/*.eval.yaml found under {skill_dir}", as_json)
+        return None, None, 2
     try:
-        spec = parse_spec(spec_path)
+        return spec_path, parse_spec(spec_path), 0
     except ValueError as exc:
-        print(json.dumps({"error": str(exc)}) if args.json else f"ERROR: {exc}", file=sys.stderr)
-        return 1
+        _print_error(str(exc), as_json)
+        return spec_path, None, 1
 
+
+def _handle_validate(spec_path: Path, errors: list[str], as_json: bool) -> int:
+    if as_json:
+        print(json.dumps({"valid": not errors, "errors": errors}, indent=2, ensure_ascii=False))
+    elif errors:
+        print(f"INVALID {spec_path.name}:")
+        for err in errors:
+            print(f"  - {err}")
+    else:
+        print(f"VALID {spec_path.name}")
+    return 1 if errors else 0
+
+
+def _print_suite_result(result: dict, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    for case in result["cases"]:
+        print(f"[{case['status']}] {case['id']} — {case['title']}")
+        for check in case["checks"]:
+            print(f"  [{check['status']}] {check['id']} — {check['title']}")
+        if case.get("promoted"):
+            print(f"  promoted: {case['promoted']}")
+    print(f"\nsummary: {result['passed']} passed, {result['failed']} failed")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    skill_dir = Path(args.skill_dir).resolve() if args.skill_dir else _default_skill_dir()
+    spec_path, spec, load_exit = _load_suite(skill_dir, args.json)
+    if load_exit:
+        return load_exit
     errors = validate_spec(spec, skill_dir)
     if args.validate:
-        if args.json:
-            print(json.dumps({"valid": not errors, "errors": errors}, indent=2, ensure_ascii=False))
-        elif errors:
-            print(f"INVALID {spec_path.name}:")
-            for err in errors:
-                print(f"  - {err}")
-        else:
-            print(f"VALID {spec_path.name}")
-        return 1 if errors else 0
+        return _handle_validate(spec_path, errors, args.json)
     if errors:
-        print(
-            json.dumps({"error": "eval suite is malformed", "errors": errors}, ensure_ascii=False)
-            if args.json
-            else "ERROR: eval suite is malformed; run --validate",
-            file=sys.stderr,
-        )
+        message = json.dumps({"error": "eval suite is malformed", "errors": errors}, ensure_ascii=False)
+        print(message if args.json else "ERROR: eval suite is malformed; run --validate", file=sys.stderr)
         return 1
-
     result = run_suite(spec, skill_dir, promote=args.promote)
-    if args.json:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    else:
-        for case in result["cases"]:
-            print(f"[{case['status']}] {case['id']} — {case['title']}")
-            for check in case["checks"]:
-                print(f"  [{check['status']}] {check['id']} — {check['title']}")
-            if case.get("promoted"):
-                print(f"  promoted: {case['promoted']}")
-        print(f"\nsummary: {result['passed']} passed, {result['failed']} failed")
+    _print_suite_result(result, args.json)
     return 1 if result["failed"] else 0
 
 

@@ -47,7 +47,10 @@ def python_files(skill_dir: Path) -> list[Path]:
     for sub in ("scripts", "shared"):
         root = skill_dir / sub
         if root.is_dir():
-            out += [p for p in root.rglob("*.py") if not (_SKIP_DIR_PARTS & set(p.parts))]
+            out += [
+                p for p in root.rglob("*.py")
+                if not (_SKIP_DIR_PARTS & set(p.parts))
+            ]
     return sorted(out)
 
 
@@ -90,34 +93,11 @@ def _top_level_imports(file: Path) -> set[str]:
 def third_party_imports(skill_dir: Path, files: list[Path]) -> list[str]:
     """stdlib도 local module도 아닌 top-level import module 목록을 반환한다."""
     local = _local_module_names(skill_dir, files)
-    stdlib = getattr(
-        sys,
-        "stdlib_module_names",
-        set(sys.builtin_module_names)
-        | {
-            "__future__",
-            "argparse",
-            "ast",
-            "csv",
-            "datetime",
-            "hashlib",
-            "io",
-            "json",
-            "math",
-            "os",
-            "pathlib",
-            "py_compile",
-            "re",
-            "shlex",
-            "shutil",
-            "subprocess",
-            "sys",
-            "tempfile",
-            "textwrap",
-            "typing",
-            "unittest",
-        },
-    )
+    stdlib = getattr(sys, "stdlib_module_names", set(sys.builtin_module_names) | {
+        "__future__", "argparse", "ast", "csv", "datetime", "hashlib", "io", "json", "math",
+        "os", "pathlib", "py_compile", "re", "shlex", "shutil", "subprocess",
+        "sys", "tempfile", "textwrap", "typing", "unittest",
+    })
     third: set[str] = set()
     for f in files:
         for mod in _top_level_imports(f):
@@ -168,7 +148,8 @@ def check(skill_dir: Path) -> dict:
     third = third_party_imports(skill_dir, files)
     if third and not requirements_declared(skill_dir):
         errors.append(
-            f"third-party import가 선언되지 않았다: 다음 module을 제공하는 package를 requirements.txt에 추가해야 한다: the package(s) behind {', '.join(third)}"
+            "third-party import가 선언되지 않았다: 다음 module을 제공하는 package를 requirements.txt에 추가해야 한다: "
+            f"the package(s) behind {', '.join(third)}"
         )
 
     steps = step_scripts(skill_dir, files)
@@ -181,28 +162,38 @@ def check(skill_dir: Path) -> dict:
     return {"errors": errors, "warnings": warnings}
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="생성된 skill의 pipeline wiring을 검증한다.")
     parser.add_argument("skill_dir", help="skill directory 경로.")
     parser.add_argument("--json", action="store_true", help="machine-readable JSON을 출력한다.")
-    args = parser.parse_args(argv)
+    return parser.parse_args(argv)
 
+
+def _print_missing_dir(skill_dir: Path, *, as_json: bool) -> None:
+    msg = f"not a directory: {skill_dir}"
+    print(json.dumps({"error": msg}) if as_json else f"ERROR: {msg}", file=sys.stderr)
+
+
+def _emit_result(result: dict, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result, indent=2))
+        return
+    for err in result["errors"]:
+        print(f"  [ERROR] {err}")
+    for warn in result["warnings"]:
+        print(f"  [WARN]  {warn}")
+    if not result["errors"] and not result["warnings"]:
+        print("pipeline OK")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
     skill_dir = Path(args.skill_dir).resolve()
     if not skill_dir.is_dir():
-        msg = f"not a directory: {skill_dir}"
-        print(json.dumps({"error": msg}) if args.json else f"ERROR: {msg}", file=sys.stderr)
+        _print_missing_dir(skill_dir, as_json=args.json)
         return 2
-
     result = check(skill_dir)
-    if args.json:
-        print(json.dumps(result, indent=2))
-    else:
-        for err in result["errors"]:
-            print(f"  [ERROR] {err}")
-        for warn in result["warnings"]:
-            print(f"  [WARN]  {warn}")
-        if not result["errors"] and not result["warnings"]:
-            print("pipeline OK")
+    _emit_result(result, as_json=args.json)
     return 1 if result["errors"] else 0
 
 

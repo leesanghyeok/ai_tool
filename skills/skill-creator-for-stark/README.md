@@ -66,16 +66,14 @@
 
 ```bash
 cd /Users/stark/project/jarvis/ai_tool/skills/skill-creator-for-stark
-bash scripts/test.sh
-uv run ruff check scripts
-uv run python scripts/run_evals.py --validate
-uv run python scripts/run_evals.py --json
-uv run python -m unittest discover -s scripts/tests -v
-uv run python scripts/validate-skill-package.py .
+make check
+make lint
+make complexity-check
+make test
 git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-for-stark
 ```
 
-주의: standalone 검증은 `uv`가 제공하는 Python 3.14 환경에서 실행한다. 옵션 이름은 `--validate`이며 `--validation`은 지원하지 않는다.
+주의: standalone 검증은 `Makefile` target을 canonical entrypoint로 사용한다. 전체 검증은 `make check`, 부분 검증은 `make lint`, `make complexity-check`, `make test`를 사용한다. `run_evals.py` 옵션 이름은 `--validate`이며 `--validation`은 지원하지 않는다.
 
 ## 사용자가 준비하면 좋은 입력
 

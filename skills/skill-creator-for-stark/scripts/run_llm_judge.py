@@ -8,9 +8,10 @@ Canonical modes:
 Legacy migration form도 계속 지원한다:
   python3 scripts/run_llm_judge.py --input judge-packet.json --output judge-output.txt
 
-이 adapter는 의도적으로 deterministic하며 external LLM/API 호출, credential 접근, commit, publish, promotion을 수행하지 않는다. Portable JSON 계약을 검증하고 eval runner가 확인할 수 있는 bounded smoke-judge artifact를 쓴다.
+이 adapter는 의도적으로 deterministic하며 external LLM/API 호출, credential 접근, commit,
+publish, promotion을 수행하지 않는다. Portable JSON 계약을 검증하고 eval runner가
+확인할 수 있는 bounded smoke-judge artifact를 쓴다.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,8 @@ def _write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _failure_json(output: Path, message: str, *, mode: str, method: str | None = None, primary_output: str = "") -> int:
+def _failure_json(output: Path, message: str, *, mode: str, method: str | None = None,
+                  primary_output: str = "") -> int:
     if mode == "output":
         payload = {
             "schema_version": SCHEMA_VERSION,
@@ -76,7 +78,9 @@ def _failure_json(output: Path, message: str, *, mode: str, method: str | None =
 def _legacy_failure(output: Path, message: str) -> int:
     _write_text(
         output,
-        f"상태: failed\n핵심 오류: {message}\n영향: judge_output은 생성됐지만 llm-judge assertion은 실패해야 한다.\n",
+        "상태: failed\n"
+        f"핵심 오류: {message}\n"
+        "영향: judge_output은 생성됐지만 llm-judge assertion은 실패해야 한다.\n",
     )
     return 1
 
@@ -110,7 +114,12 @@ def run_output(input_path: Path, output_path: Path) -> int:
     except Exception as exc:  # noqa: BLE001 - convert validation failure into contract artifact.
         return _failure_json(output_path, str(exc), mode="output")
 
-    content = f"Portable llm-judge primary output\nstatus: deterministic-smoke\nexternal_calls: none\nprompt_excerpt: {_summary(prompt, 500)}"
+    content = (
+        "Portable llm-judge primary output\n"
+        "status: deterministic-smoke\n"
+        "external_calls: none\n"
+        f"prompt_excerpt: {_summary(prompt, 500)}"
+    )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "status": "success",
@@ -133,7 +142,7 @@ def _normalize_method(method: Any) -> str:
     return "each-session" if method == "subagent" else str(method)
 
 
-def _validate_assertion_input(packet: dict[str, Any]) -> tuple[str, str, list[dict[str, str]]]:
+def _check_assertion_packet_keys(packet: dict[str, Any]) -> None:
     extra = set(packet) - ASSERTION_INPUT_KEYS
     missing = ASSERTION_INPUT_KEYS - set(packet)
     if missing:
@@ -142,23 +151,35 @@ def _validate_assertion_input(packet: dict[str, Any]) -> tuple[str, str, list[di
         raise ValueError(f"assertion input has unexpected field(s): {', '.join(sorted(extra))}")
     if packet.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("schema_version must be 1")
-    method = _normalize_method(packet.get("method"))
-    primary_output = packet.get("primary_output")
-    if not isinstance(primary_output, str) or not primary_output.strip():
-        raise ValueError("primary_output must be a non-empty string")
-    assertions_value = packet.get("assertions")
-    if not isinstance(assertions_value, list) or not assertions_value:
-        raise ValueError("assertions must be a non-empty array")
 
-    assertions: list[dict[str, str]] = []
-    for i, assertion in enumerate(assertions_value):
-        where = f"assertions[{i}]"
-        if not isinstance(assertion, dict):
-            raise ValueError(f"{where} must be a JSON object")
-        for field in ("id", "title", "prompt"):
-            if not isinstance(assertion.get(field), str) or not assertion[field].strip():
-                raise ValueError(f"{where}.{field} must be a non-empty string")
-        assertions.append({"id": assertion["id"], "title": assertion["title"], "prompt": assertion["prompt"]})
+
+def _validate_primary_output(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("primary_output must be a non-empty string")
+    return value
+
+
+def _validate_assertion_item(index: int, assertion: Any) -> dict[str, str]:
+    where = f"assertions[{index}]"
+    if not isinstance(assertion, dict):
+        raise ValueError(f"{where} must be a JSON object")
+    for field in ("id", "title", "prompt"):
+        if not isinstance(assertion.get(field), str) or not assertion[field].strip():
+            raise ValueError(f"{where}.{field} must be a non-empty string")
+    return {"id": assertion["id"], "title": assertion["title"], "prompt": assertion["prompt"]}
+
+
+def _validate_assertions(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError("assertions must be a non-empty array")
+    return [_validate_assertion_item(index, assertion) for index, assertion in enumerate(value)]
+
+
+def _validate_assertion_input(packet: dict[str, Any]) -> tuple[str, str, list[dict[str, str]]]:
+    _check_assertion_packet_keys(packet)
+    method = _normalize_method(packet.get("method"))
+    primary_output = _validate_primary_output(packet.get("primary_output"))
+    assertions = _validate_assertions(packet.get("assertions"))
     return method, primary_output, assertions
 
 
@@ -188,7 +209,10 @@ def run_assertion(input_path: Path, output_path: Path) -> int:
         return _failure_json(output_path, str(exc), mode="assertion", method=method, primary_output=primary_output)
 
     if method == "aggregate":
-        results = [_judge_result(assertion, method=method, session_id="aggregate", primary_output=primary_output) for assertion in assertions]
+        results = [
+            _judge_result(assertion, method=method, session_id="aggregate", primary_output=primary_output)
+            for assertion in assertions
+        ]
     else:
         results = [
             _judge_result(assertion, method=method, session_id=f"each-session:{index}:{assertion['id']}", primary_output=primary_output)

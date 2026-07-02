@@ -4,7 +4,6 @@
 Usage:
   python3 skills/skill-creator-for-stark/scripts/validate-skill-package.py skills/<skill-name>
 """
-
 from __future__ import annotations
 
 import re
@@ -14,7 +13,7 @@ from pathlib import Path
 
 REQUIRED_KEYS = ["name", "description", "version", "author", "license"]
 ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history", "feedback", "evals"}
-IGNORED_TOP_LEVEL_DIRS = {".venv", ".ruff_cache", "__pycache__"}
+IGNORED_TOP_LEVEL_DIRS = {".venv", ".ruff_cache", ".complexipy_cache", "__pycache__"}
 REQUIRED_SECTIONS = [
     "## 입력 변수",
     "## 출력 변수",
@@ -143,26 +142,41 @@ def parse_table_rows(section: str) -> list[list[str]]:
     return rows
 
 
-def check_variable_tables(text: str) -> tuple[int, int, int]:
-    counts = []
-    for heading in ["## 입력 변수", "## 출력 변수"]:
-        section = section_text(text, heading)
-        if VARIABLE_TABLE_HEADER not in section:
-            fail(f"variable table header missing in section: {heading}")
-        rows = parse_table_rows(section)
-        if not rows:
-            fail(f"no variable rows found in section: {heading}")
-        for row in rows:
-            if len(row) < 4:
-                fail(f"variable table row must have at least 4 cells in {heading}: {row}")
-            if row[1] not in VALID_REQUIRED_VALUES:
-                fail(f"variable required cell must be required or optional in {heading}: {row}")
-            if not row[2] or row[2] in {"-", "TBD", "<default>"}:
-                fail(f"variable default cell must be explicit in {heading}: {row}")
-            if len(row[3]) < 20:
-                fail(f"variable description too short in {heading}: {' | '.join(row)}")
-        counts.append(len(rows))
+def _check_variable_row(row: list[str], heading: str) -> None:
+    if len(row) < 4:
+        fail(f"variable table row must have at least 4 cells in {heading}: {row}")
+    if row[1] not in VALID_REQUIRED_VALUES:
+        fail(f"variable required cell must be required or optional in {heading}: {row}")
+    if not row[2] or row[2] in {"-", "TBD", "<default>"}:
+        fail(f"variable default cell must be explicit in {heading}: {row}")
+    if len(row[3]) < 20:
+        fail(f"variable description too short in {heading}: {' | '.join(row)}")
 
+
+def _check_variable_section(text: str, heading: str) -> int:
+    section = section_text(text, heading)
+    if VARIABLE_TABLE_HEADER not in section:
+        fail(f"variable table header missing in section: {heading}")
+    rows = parse_table_rows(section)
+    if not rows:
+        fail(f"no variable rows found in section: {heading}")
+    for row in rows:
+        _check_variable_row(row, heading)
+    return len(rows)
+
+
+def _check_env_row(row: list[str]) -> None:
+    if len(row) < 4:
+        fail(f"ENV table row must have at least 4 cells: {row}")
+    if row[1] not in VALID_REQUIRED_VALUES:
+        fail(f"ENV required cell must be required or optional: {row}")
+    if not row[2] or row[2] in {"-", "TBD", "<default>"}:
+        fail(f"ENV default cell must be explicit: {row}")
+    if len(row[3]) < 20:
+        fail(f"ENV description too short: {' | '.join(row)}")
+
+
+def _check_env_section(text: str) -> int:
     env_section = section_text(text, "## 필수 환경")
     if ENV_TABLE_HEADER not in env_section:
         fail("environment table header missing in section: ## 필수 환경")
@@ -170,15 +184,15 @@ def check_variable_tables(text: str) -> tuple[int, int, int]:
     if not env_rows:
         fail("no ENV rows found in section: ## 필수 환경")
     for row in env_rows:
-        if len(row) < 4:
-            fail(f"ENV table row must have at least 4 cells: {row}")
-        if row[1] not in VALID_REQUIRED_VALUES:
-            fail(f"ENV required cell must be required or optional: {row}")
-        if not row[2] or row[2] in {"-", "TBD", "<default>"}:
-            fail(f"ENV default cell must be explicit: {row}")
-        if len(row[3]) < 20:
-            fail(f"ENV description too short: {' | '.join(row)}")
-    return counts[0], counts[1], len(env_rows)
+        _check_env_row(row)
+    return len(env_rows)
+
+
+def check_variable_tables(text: str) -> tuple[int, int, int]:
+    input_count = _check_variable_section(text, "## 입력 변수")
+    output_count = _check_variable_section(text, "## 출력 변수")
+    env_count = _check_env_section(text)
+    return input_count, output_count, env_count
 
 
 def check_contract_minimalism(input_count: int, output_count: int, env_count: int) -> None:
@@ -260,36 +274,16 @@ def check_eval_spec(skill_dir: Path) -> None:
         fail("case-based eval suite validation failed: " + (proc.stdout + proc.stderr).strip())
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        fail("Usage: validate-skill-package.py <skill-dir>")
-
-    skill_dir = Path(sys.argv[1]).resolve()
-    if not skill_dir.exists() or not skill_dir.is_dir():
-        fail(f"skill directory does not exist: {skill_dir}")
-
-    skill_md = skill_dir / "SKILL.md"
-    if not skill_md.exists():
-        fail(f"SKILL.md not found: {skill_md}")
-
-    text = skill_md.read_text(encoding="utf-8")
-    frontmatter, body = parse_frontmatter(text)
-
-    for key in REQUIRED_KEYS:
-        if key not in frontmatter or not frontmatter[key]:
-            fail(f"frontmatter missing required key: {key}")
-
-    name = frontmatter["name"]
+def _validate_skill_name(skill_dir: Path, name: str) -> None:
     if name != skill_dir.name:
         fail(f"frontmatter name '{name}' does not match directory '{skill_dir.name}'")
-
     if len(name) > NAME_MAX_CHARS:
         fail(f"skill name exceeds {NAME_MAX_CHARS} characters")
-
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
         fail(f"skill name is not lowercase hyphen slug: {name}")
 
-    description = frontmatter["description"]
+
+def _validate_description(description: str) -> int:
     if len(description) > DESCRIPTION_MAX_CHARS:
         fail(f"description exceeds {DESCRIPTION_MAX_CHARS} characters")
     if not description.strip():
@@ -297,39 +291,87 @@ def main() -> None:
     desc_words = word_count(description)
     if desc_words > DESCRIPTION_TARGET_WORDS:
         fail(f"description exceeds target {DESCRIPTION_TARGET_WORDS} words: {desc_words}")
+    return desc_words
 
-    body_words = word_count(body)
-    if body_words > SKILL_BODY_MAX_WORDS:
-        fail(f"SKILL.md body exceeds {SKILL_BODY_MAX_WORDS} words: {body_words}")
 
+def validate_frontmatter(skill_dir: Path, frontmatter: dict[str, str]) -> tuple[str, str, int]:
+    for key in REQUIRED_KEYS:
+        if key not in frontmatter or not frontmatter[key]:
+            fail(f"frontmatter missing required key: {key}")
+    name = frontmatter["name"]
+    _validate_skill_name(skill_dir, name)
+    description = frontmatter["description"]
+    desc_words = _validate_description(description)
+    return name, description, desc_words
+
+
+def check_required_contract_sections(text: str) -> None:
     for section in REQUIRED_SECTIONS:
         if section not in text:
             fail(f"required section missing: {section}")
-
     for token in ["INPUT_", "OUTPUT_", "ENV_"]:
         if token not in text:
             fail(f"required variable prefix missing in SKILL.md: {token}")
 
-    input_count, output_count, env_count = check_variable_tables(text)
-    check_contract_minimalism(input_count, output_count, env_count)
-    check_trigger_duplication(text)
-    check_hard_gate_specificity(name, text)
-    check_template_placement(skill_dir)
-    check_feedback_guidance(text)
-    check_eval_spec(skill_dir)
 
+def check_support_directories(skill_dir: Path) -> None:
     for child in skill_dir.iterdir():
         if child.is_dir() and child.name not in ALLOWED_SUPPORT_DIRS and child.name not in IGNORED_TOP_LEVEL_DIRS:
             fail(f"unsupported support directory: {child.name}")
 
-    check_fence_balance(text, "SKILL.md")
-    check_links(skill_dir, text, "SKILL.md")
+
+def check_markdown_files(skill_dir: Path, skill_text: str) -> None:
+    check_fence_balance(skill_text, "SKILL.md")
+    check_links(skill_dir, skill_text, "SKILL.md")
     for md in skill_dir.rglob("*.md"):
         rel = str(md.relative_to(skill_dir))
         md_text = md.read_text(encoding="utf-8")
         check_fence_balance(md_text, rel)
         check_links(skill_dir, md_text, rel)
 
+
+def _skill_dir_from_argv() -> Path:
+    if len(sys.argv) != 2:
+        fail("Usage: validate-skill-package.py <skill-dir>")
+    skill_dir = Path(sys.argv[1]).resolve()
+    if not skill_dir.exists() or not skill_dir.is_dir():
+        fail(f"skill directory does not exist: {skill_dir}")
+    return skill_dir
+
+
+def _read_skill_md(skill_dir: Path) -> str:
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_md.exists():
+        fail(f"SKILL.md not found: {skill_md}")
+    return skill_md.read_text(encoding="utf-8")
+
+
+def _run_skill_checks(skill_dir: Path, text: str, body: str, name: str) -> tuple[int, int, int, int]:
+    body_words = word_count(body)
+    if body_words > SKILL_BODY_MAX_WORDS:
+        fail(f"SKILL.md body exceeds {SKILL_BODY_MAX_WORDS} words: {body_words}")
+    check_required_contract_sections(text)
+    counts = check_variable_tables(text)
+    check_contract_minimalism(*counts)
+    check_trigger_duplication(text)
+    check_hard_gate_specificity(name, text)
+    check_template_placement(skill_dir)
+    check_feedback_guidance(text)
+    check_eval_spec(skill_dir)
+    check_support_directories(skill_dir)
+    check_markdown_files(skill_dir, text)
+    return body_words, *counts
+
+
+def _print_report(
+    skill_dir: Path,
+    name: str,
+    description: str,
+    desc_words: int,
+    body_words: int,
+    counts: tuple[int, int, int],
+) -> None:
+    input_count, output_count, env_count = counts
     print(f"PASS: {skill_dir}")
     print(
         f"name_chars={len(name)} description_chars={len(description)} "
@@ -338,6 +380,15 @@ def main() -> None:
     )
     for message in warnings:
         print(f"WARN: {message}")
+
+
+def main() -> None:
+    skill_dir = _skill_dir_from_argv()
+    text = _read_skill_md(skill_dir)
+    frontmatter, body = parse_frontmatter(text)
+    name, description, desc_words = validate_frontmatter(skill_dir, frontmatter)
+    body_words, input_count, output_count, env_count = _run_skill_checks(skill_dir, text, body, name)
+    _print_report(skill_dir, name, description, desc_words, body_words, (input_count, output_count, env_count))
 
 
 if __name__ == "__main__":
