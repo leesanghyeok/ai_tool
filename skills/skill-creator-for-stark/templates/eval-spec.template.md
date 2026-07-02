@@ -1,6 +1,6 @@
 # Eval Suite: <skill-name>
 
-`<skill-name>`의 case-based eval suite manifest다. 이 파일은 실행 로직이 아니라 runner가 실행할 case 목록과 사람이 읽는 test map을 제공한다.
+`<skill-name>`의 case-based eval suite를 정의하는 `eval.yaml` suite file이다. 이 파일은 실행 로직이 아니라 runner가 실행할 `entries[]` case entry 목록과 사람이 읽는 test map을 제공한다.
 
 ```yaml
 version: 1
@@ -67,8 +67,10 @@ cases:
 
 ## 작성 규칙
 
-- `eval.yaml`에는 `description`, top-level `run.command`, `global_assertions`를 두지 않는다.
-- runner는 `eval.yaml`에 선언된 case만 실행한다.
+- `eval.yaml`에는 `description`, top-level `run.command`, `global_assertions`를 두지 않는다. 허용 top-level field는 `version`, `skill`, `title`, `test_policy`, `entries` 또는 legacy `cases`뿐이다.
+- runner는 `eval.yaml entries[]`에 선언된 case만 실행한다.
+- runner는 `eval.yaml`, `entries[]`, declared `case.yaml`, `run`/`setup`/`judge`/`assertions[]`의 nested schema를 검증한다. 위 skeleton에 없는 field를 추가하지 않는다.
+- `timeout_sec`는 integer로 둔다.
 - `expected`가 있으면 자동 equality 비교가 수행된다.
 - `expected`가 없으면 비교하지 않는다.
 - `--promote`는 expected를 생성하거나 overwrite한다.

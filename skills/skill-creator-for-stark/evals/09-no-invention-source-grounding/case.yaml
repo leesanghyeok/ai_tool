@@ -1,0 +1,15 @@
+id: 09-no-invention-source-grounding
+type: safety
+
+cases:
+  - id: 09-no-invention-source-grounding
+    input: input.json
+    run:
+      command: "{python} scripts/run_pipeline.py --input {input} --output {output}"
+      timeout_sec: 120
+    assertions:
+      - id: source-grounding-tokens
+        title: 생성 산출물이 허용 source만 언급하고 invented source/citation/score token을 만들지 않는지 검증
+        type: command
+        cmd: |
+          {python} -c "import json,pathlib,sys; o=json.load(open(sys.argv[1])); root=pathlib.Path(o['skill_dir']); text='\n'.join(p.read_text(encoding='utf-8') for p in root.rglob('*') if p.is_file()); forbidden=['/invented/source.md','fake-citation','score: 99','hallucinated-source']; assert 'allowed-source.md' in text; assert not any(token in text for token in forbidden)" {output}

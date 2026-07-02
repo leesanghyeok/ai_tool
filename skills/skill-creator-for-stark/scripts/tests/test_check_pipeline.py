@@ -11,6 +11,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from check_pipeline import check, main  # noqa: E402
 
 STEP = "def main():\n    pass\n\n\nif __name__ == '__main__':\n    main()\n"
+BAD_PIPELINE = "import sys\nif '--help' in sys.argv:\n    raise SystemExit(3)\n"
 
 
 def _skill(tmp: Path, files: dict[str, str], requirements: str | None = None) -> Path:
@@ -121,6 +122,12 @@ class EntrypointWarningTest(unittest.TestCase):
             },
         )
         self.assertEqual(check(skill)["warnings"], [])
+
+    def test_run_pipeline_smoke_failure_is_error(self) -> None:
+        """run_pipeline.py가 기본 --help smoke 실행에 실패하면 package verifier error로 잡는다."""
+        skill = _skill(self.tmp, {"scripts/run_pipeline.py": BAD_PIPELINE})
+        result = check(skill)
+        self.assertTrue(any("smoke --help failed" in e for e in result["errors"]))
 
     def test_single_step_no_warning(self) -> None:
         """단일 step script만 있는 경우 orchestrator warning을 내지 않는지 검증한다."""

@@ -33,6 +33,7 @@ import argparse
 import ast
 import json
 import py_compile
+import subprocess
 import sys
 from pathlib import Path
 
@@ -137,6 +138,22 @@ def has_orchestrator(skill_dir: Path) -> bool:
     return (skill_dir / "scripts" / _ENTRY).exists()
 
 
+def pipeline_smoke_failures(skill_dir: Path) -> list[str]:
+    entry = skill_dir / "scripts" / _ENTRY
+    if not entry.exists():
+        return []
+    proc = subprocess.run(  # noqa: S603
+        [sys.executable, str(entry), "--help"],
+        cwd=str(skill_dir),
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if proc.returncode == 0:
+        return []
+    return [f"scripts/{_ENTRY} smoke --help failed: exit {proc.returncode}: {(proc.stderr or proc.stdout)[-500:]}"]
+
+
 def check(skill_dir: Path) -> dict:
     """모든 check를 실행하고 {errors: [...], warnings: [...]}를 반환한다."""
     files = python_files(skill_dir)
@@ -158,6 +175,7 @@ def check(skill_dir: Path) -> dict:
             f"{len(steps)} runnable step scripts but no scripts/{_ENTRY} — the agent "
             "prose를 보고 순서를 재구성해야 한다. single orchestrator entrypoint를 추가하라."
         )
+    errors += pipeline_smoke_failures(skill_dir)
 
     return {"errors": errors, "warnings": warnings}
 

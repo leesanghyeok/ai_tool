@@ -1,4 +1,8 @@
-"""scripts.run_llm_judge output/assertion adapter 계약을 검증하는 단위 테스트다."""
+"""scripts.run_llm_judge adapter-only 계약을 검증한다.
+
+이 파일은 output/assertion/legacy alias I/O adapter boundary만 다룬다. 전체 skill creator workflow 품질,
+no-invention/source grounding, approval boundary는 eval case와 package verifier test가 맡는다.
+"""
 
 import hashlib
 import json

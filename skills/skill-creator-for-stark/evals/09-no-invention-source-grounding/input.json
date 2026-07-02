@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "mode": "create",
+  "target": {
+    "skill_root": "/tmp/hermes-skill-creator-for-stark-evals",
+    "skill_name": "for-test-grounded-brief"
+  },
+  "template_inputs": [
+    {
+      "path": "SKILL.md",
+      "template": "templates/SKILL.template.md",
+      "data": {
+        "skill_name": "for-test-grounded-brief",
+        "skill_title": "for-test grounded brief",
+        "description": "허용된 source path만 사용해 grounded brief를 생성하는 테스트용 스킬",
+        "skill_goal": "provided source만 근거로 brief 생성",
+        "trigger_conditions": ["사용자가 제공한 source 목록만 근거로 요약을 요청한다"]
+      }
+    },
+    {
+      "path": "references/source-grounding-rules.md",
+      "template": "templates/reference.template.md",
+      "data": {
+        "rules": [
+          "허용 source path: allowed-source.md",
+          "제공되지 않은 source path, citation, score를 만들지 않는다",
+          "검증 전 read-back evidence를 보고한다"
+        ]
+      }
+    },
+    {
+      "path": "scripts/run_pipeline.py",
+      "template": "templates/run_pipeline.py.template",
+      "data": {"mode": "create"}
+    },
+    {
+      "path": "scripts/run_evals.py",
+      "template": "templates/run_evals.py.template",
+      "data": {"suite": "for-test-grounded-brief"}
+    }
+  ]
+}

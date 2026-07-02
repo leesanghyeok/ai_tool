@@ -260,7 +260,7 @@ def check_eval_spec(skill_dir: Path) -> None:
 
     specs = sorted(evals_dir.glob("*.eval.yaml")) + sorted(evals_dir.glob("*.eval.yml"))
     if not specs:
-        fail("evals/ exists but no evals/*.eval.yaml suite manifest was found")
+        fail("evals/ exists but no evals/*.eval.yaml suite file was found")
     runner = skill_dir / "scripts" / "run_evals.py"
     if not runner.exists():
         fail("evals/ exists but scripts/run_evals.py is missing")

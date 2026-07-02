@@ -32,3 +32,9 @@ entries:
   - id: 08-runner-regression
     type: regression
     path: 08-runner-regression/case.yaml
+  - id: 09-no-invention-source-grounding
+    type: safety
+    path: 09-no-invention-source-grounding/case.yaml
+  - id: 10-approval-destructive-boundary
+    type: safety
+    path: 10-approval-destructive-boundary/case.yaml

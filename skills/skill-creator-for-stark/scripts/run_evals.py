@@ -2,11 +2,11 @@
 """
 생성된 skill 내부에 scripts/run_evals.py로 포함되는 case-based eval runner.
 
-Spec model:
-  evals/<skill>.eval.yaml          # suite manifest + 사람이 읽는 case map
+Eval suite model:
+  evals/<skill>.eval.yaml          # eval suite + 사람이 읽는 entries[] case map
   evals/<case-id>/case.yaml        # canonical case group definition
 
-eval.yaml manifest가 source of truth다. eval.yaml에 선언된 case만 validate/run하며,
+eval.yaml이 source of truth다. eval.yaml에 선언된 case만 validate/run하며,
 disk에 남아 있지만 선언되지 않은 case directory는 무시한다.
 
 non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는
@@ -24,7 +24,7 @@ Usage:
 
 Exit codes:
   0 - valid / 선택된 suite case 전체 통과
-  1 - malformed spec, failed command, failed judge, or failed expected compare
+  1 - malformed eval.yaml/case.yaml, failed command, failed judge, or failed expected compare
   2 - eval suite not found
 """
 
@@ -45,6 +45,13 @@ VALID_ASSERTION_TYPES = ("command", "llm-judge")
 VALID_CASE_TYPES = ("happy-path", "edge", "regression", "safety", "llm-judge", "integration")
 VALID_JUDGE_METHODS = ("aggregate", "each-session", "subagent")
 DEFAULT_TIMEOUT = 120
+EVAL_SCHEMA_FIELDS = frozenset(("version", "skill", "title", "test_policy", "entries", "cases"))
+TEST_POLICY_FIELDS = frozenset(("expected_compare", "llm_judge", "promote"))
+ENTRY_SCHEMA_FIELDS = frozenset(("id", "type", "title", "path"))
+CASE_SCHEMA_FIELDS = frozenset(("id", "type", "title", "input", "expected", "run", "setup", "judge", "assertions", "cases"))
+RUN_SCHEMA_FIELDS = frozenset(("command", "timeout_sec"))
+JUDGE_SCHEMA_FIELDS = frozenset(("method", "command", "verifyCommand", "timeout_sec"))
+ASSERTION_SCHEMA_FIELDS = frozenset(("id", "title", "type", "cmd", "prompt", "timeout_sec"))
 INPUT_PLACEHOLDER = "{input}"
 OUTPUT_PLACEHOLDER = "{output}"
 EXPECTED_PLACEHOLDER = "{expected}"
@@ -243,7 +250,7 @@ def parse_yaml_subset(path: Path) -> Any:
 
     Nested mappings, mappings/scalars list, quoted/unquoted scalars,
     ints/bools/null, inline JSON arrays/objects, literal/folded blocks를 지원한다.
-    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에
+    의도적으로 general YAML parser가 아니다. generated eval.yaml/case.yaml files는 generated skill에
     PyYAML dependency를 추가하지 않도록 이 제한된 shape를 유지해야 한다.
     """
     lines = _logical_lines(path.read_text(encoding="utf-8"))
@@ -270,7 +277,7 @@ def parse_spec(spec_path: Path) -> dict:
     except Exception as exc:
         raise ValueError(f"{spec_path}: malformed eval yaml: {exc}") from exc
     if not isinstance(spec, dict):
-        raise ValueError(f"{spec_path}: eval spec must be a mapping")
+        raise ValueError(f"{spec_path}: eval.yaml must be a mapping")
     return spec
 
 
@@ -284,6 +291,20 @@ def _manifest_entries(spec: dict) -> tuple[list[dict], str]:
         return (entries if isinstance(entries, list) else []), "entries"
     entries = spec.get("cases")
     return (entries if isinstance(entries, list) else []), "cases"
+
+
+def _unknown_field_errors(mapping: dict, allowed: frozenset[str], where: str) -> list[str]:
+    return [f"{where}: unknown field '{field}'" for field in sorted(set(mapping) - allowed)]
+
+
+def _type_error(mapping: dict, field: str, expected: type, where: str) -> str | None:
+    if field not in mapping or isinstance(mapping[field], expected):
+        return None
+    return f"{where}.{field}: must be {expected.__name__}"
+
+
+def _field_type_errors(mapping: dict, fields: tuple[str, ...], expected: type, where: str) -> list[str]:
+    return [err for field in fields if (err := _type_error(mapping, field, expected, where))]
 
 
 def _stable_slug(index: int, case_id: str) -> str:
@@ -332,22 +353,25 @@ def load_cases(spec: dict, skill_dir: Path) -> list[dict]:
         path = _case_path(skill_dir, entry)
         case_group = parse_yaml_subset(path)
         if not isinstance(case_group, dict):
-            raise ValueError(f"{path}: case spec must be a mapping")
+            raise ValueError(f"{path}: case.yaml must be a mapping")
         cases.extend(_expand_case_group(case_group, path, entry))
     return cases
 
 
 def _validate_spec_header(spec: dict) -> list[str]:
-    errors: list[str] = []
+    errors = _unknown_field_errors(spec, EVAL_SCHEMA_FIELDS, "eval.yaml")
+    errors.extend(_field_type_errors(spec, ("skill", "title"), str, "eval.yaml"))
+    errors.extend(_field_type_errors(spec, ("version",), int, "eval.yaml"))
     if not spec.get("skill"):
         errors.append("eval.yaml: missing 'skill'")
     if not spec.get("title"):
         errors.append("eval.yaml: missing 'title'")
-    if "description" in spec:
-        errors.append("eval.yaml: 'description' is not allowed; keep only 'title'")
     policy = spec.get("test_policy", {}) or {}
     if not isinstance(policy, dict):
         errors.append("eval.yaml: 'test_policy' must be a mapping when present")
+    else:
+        errors.extend(_unknown_field_errors(policy, TEST_POLICY_FIELDS, "eval.yaml.test_policy"))
+        errors.extend(_field_type_errors(policy, tuple(TEST_POLICY_FIELDS), str, "eval.yaml.test_policy"))
     if "entries" in spec and "cases" in spec:
         errors.append("eval.yaml: use either 'entries' or legacy 'cases', not both")
     return errors
@@ -362,7 +386,9 @@ def _required_manifest_fields(manifest_key: str) -> tuple[str, ...]:
 def _validate_manifest_entry_shape(entry: Any, where: str, manifest_key: str) -> list[str]:
     if not isinstance(entry, dict):
         return [f"{where}: must be a mapping"]
-    errors = [f"{where}: missing '{field}'" for field in _required_manifest_fields(manifest_key) if not entry.get(field)]
+    errors = _unknown_field_errors(entry, ENTRY_SCHEMA_FIELDS, where)
+    errors.extend(_field_type_errors(entry, ("id", "type", "title", "path"), str, where))
+    errors.extend(f"{where}: missing '{field}'" for field in _required_manifest_fields(manifest_key) if not entry.get(field))
     if entry.get("type") and entry["type"] not in VALID_CASE_TYPES:
         errors.append(f"{where}: unsupported type {entry['type']!r}")
     return errors
@@ -415,7 +441,9 @@ def _case_prefix(cpath: Path) -> str:
 
 
 def _validate_case_group_header(case: dict, entry: dict, prefix: str, new_shape: bool) -> list[str]:
-    errors = [f"{prefix}: missing '{field}'" for field in ("id", "type") if not case.get(field)]
+    errors = _unknown_field_errors(case, CASE_SCHEMA_FIELDS, prefix)
+    errors.extend(_field_type_errors(case, ("id", "type", "title", "input", "expected"), str, prefix))
+    errors.extend(f"{prefix}: missing '{field}'" for field in ("id", "type") if not case.get(field))
     if not new_shape and not case.get("title"):
         errors.append(f"{prefix}: missing 'title'")
     for field in ("id", "type"):
@@ -437,7 +465,8 @@ def _subcase_entry(case: dict, subcase: dict) -> dict:
 def _validate_subcase(case: dict, cpath: Path, subcase: Any, where: str, seen_case_ids: set[str]) -> list[str]:
     if not isinstance(subcase, dict):
         return [f"{where}: must be a mapping"]
-    errors: list[str] = []
+    errors = _unknown_field_errors(subcase, CASE_SCHEMA_FIELDS, where)
+    errors.extend(_field_type_errors(subcase, ("id", "type", "title", "input", "expected"), str, where))
     if not subcase.get("id"):
         errors.append(f"{where}: missing 'id'")
     elif subcase["id"] in seen_case_ids:
@@ -489,6 +518,9 @@ def _validate_judge_case_definition(case: dict, prefix: str) -> list[str]:
         errors.append(f"{prefix}: type 'llm-judge' must not define run.command; use top-level judge.command")
     if not isinstance(judge, dict):
         return errors + [f"{prefix}: type 'llm-judge' must define top-level judge mapping"]
+    errors.extend(_unknown_field_errors(judge, JUDGE_SCHEMA_FIELDS, f"{prefix} judge"))
+    errors.extend(_field_type_errors(judge, ("method", "command", "verifyCommand"), str, f"{prefix} judge"))
+    errors.extend(_field_type_errors(judge, ("timeout_sec",), int, f"{prefix} judge"))
     if judge.get("method") not in VALID_JUDGE_METHODS:
         errors.append(f"{prefix}: judge.method must be one of {VALID_JUDGE_METHODS}")
     errors.extend(_validate_judge_command(judge.get("command"), prefix))
@@ -504,12 +536,15 @@ def _validate_judge_setup(case: dict, prefix: str) -> list[str]:
     if not isinstance(setup, dict):
         return [f"{prefix}: setup must be a mapping when present"]
 
+    errors = _unknown_field_errors(setup, RUN_SCHEMA_FIELDS, f"{prefix} setup")
+    errors.extend(_field_type_errors(setup, ("command",), str, f"{prefix} setup"))
+    errors.extend(_field_type_errors(setup, ("timeout_sec",), int, f"{prefix} setup"))
     setup_command = setup.get("command")
     if not setup_command:
-        return [f"{prefix}: setup.command is required when setup is present"]
-    if PIPELINE_OUTPUT_PLACEHOLDER not in setup_command:
-        return [f"{prefix}: setup.command must contain {PIPELINE_OUTPUT_PLACEHOLDER}"]
-    return []
+        errors.append(f"{prefix}: setup.command is required when setup is present")
+    elif PIPELINE_OUTPUT_PLACEHOLDER not in setup_command:
+        errors.append(f"{prefix}: setup.command must contain {PIPELINE_OUTPUT_PLACEHOLDER}")
+    return errors
 
 
 def _validate_run_case_definition(case: dict, prefix: str) -> list[str]:
@@ -519,8 +554,12 @@ def _validate_run_case_definition(case: dict, prefix: str) -> list[str]:
         errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
     if not isinstance(run, dict) or not run.get("command"):
         errors.append(f"{prefix}: non-llm-judge case must define run.command")
-    elif OUTPUT_PLACEHOLDER not in run["command"]:
-        errors.append(f"{prefix}: run.command must contain {OUTPUT_PLACEHOLDER}")
+    else:
+        errors.extend(_unknown_field_errors(run, RUN_SCHEMA_FIELDS, f"{prefix} run"))
+        errors.extend(_field_type_errors(run, ("command",), str, f"{prefix} run"))
+        errors.extend(_field_type_errors(run, ("timeout_sec",), int, f"{prefix} run"))
+        if OUTPUT_PLACEHOLDER not in run["command"]:
+            errors.append(f"{prefix}: run.command must contain {OUTPUT_PLACEHOLDER}")
     return errors
 
 
@@ -536,10 +575,12 @@ def _validate_assertions(case: dict, prefix: str) -> list[str]:
 
 
 def _validate_assertion(case: dict, assertion: Any, awhere: str) -> list[str]:
-    errors: list[str] = []
     if not isinstance(assertion, dict):
         return [f"{awhere}: must be a mapping"]
 
+    errors = _unknown_field_errors(assertion, ASSERTION_SCHEMA_FIELDS, awhere)
+    errors.extend(_field_type_errors(assertion, ("id", "title", "type", "cmd", "prompt"), str, awhere))
+    errors.extend(_field_type_errors(assertion, ("timeout_sec",), int, awhere))
     for field in ("id", "title", "type"):
         if not assertion.get(field):
             errors.append(f"{awhere}: missing '{field}'")

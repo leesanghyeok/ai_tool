@@ -29,24 +29,24 @@
 - `references/`: 작성 규칙, eval authoring rules, 품질 루브릭 평가, feedback logging, trigger/history, deterministic workflow 같은 판단 기준을 둔다.
 - `templates/`: `SKILL.template.md`, `eval-spec.template.md`, `skill-output-template.md`, `feedback-log.template.md`처럼 복사 가능한 skeleton을 둔다.
 - `scripts/`: deterministic 검증과 반복 작업을 둔다. 주요 명령은 `scripts/run_evals.py`, `scripts/validate-skill-package.py`, `scripts/run_pipeline.py`, `scripts/run_llm_judge.py`, `scripts/check_pipeline.py`, `scripts/run_evals_template.py`다.
-- `evals/`: `evals/skill-creator-for-stark.eval.yaml`와 declared `evals/<case-id>/case.yaml`로 case-based regression/evaluation contract를 관리한다.
+- `evals/`: `evals/skill-creator-for-stark.eval.yaml`와 declared `case.yaml` file(`evals/<case-id>/case.yaml`)로 case-based regression/evaluation contract를 관리한다.
 - `history/`: 의미 있는 변경 이력과 이전 migration 기록을 보관한다.
 - `feedback/`: 생성/수정되는 스킬에 포함할 사용자 불만족 사건 기록 절차의 대상 디렉터리다.
 
 ## Eval 방식 가이드
 
-`skill-creator-for-stark`는 case-based eval suite를 기본 단위로 본다. suite manifest는 `evals/<skill>.eval.yaml`, 각 case는 `evals/<case-id>/case.yaml`에 둔다. 사용자는 runner 내부 구현을 이해하기보다 “무엇을 deterministic하게 검증할지”와 “무엇을 의미 판단으로 남길지”를 먼저 정하면 된다.
+`skill-creator-for-stark`는 case-based eval suite를 기본 단위로 본다. `eval.yaml` suite file은 `evals/<skill>.eval.yaml`, 각 `case.yaml`은 `evals/<case-id>/case.yaml`에 둔다. 사용자는 runner 내부 구현을 이해하기보다 “무엇을 deterministic하게 검증할지”와 “무엇을 의미 판단으로 남길지”를 먼저 정하면 된다.
 
 ### case type 의미
 
 - `happy-path`: 대표 성공 경로를 검증한다. 예: 새 스킬 생성 시 기본 package skeleton이 만들어지는지 확인한다.
-- `integration`: 여러 파일, 단계, 보존 조건이 함께 맞아야 하는 흐름을 검증한다. 예: 기존 스킬 수정에서 feedback logging과 eval manifest가 함께 생기는지 확인한다.
+- `integration`: 여러 파일, 단계, 보존 조건이 함께 맞아야 하는 흐름을 검증한다. 예: 기존 스킬 수정에서 feedback logging과 `eval.yaml`이 함께 생기는지 확인한다.
 - `regression`: 이미 보장한 동작이 깨지지 않았는지 확인한다. 예: package validator, runner regression, 계약 문서 정합성.
 - `safety`: 승인, credential, destructive action, no-invention 같은 안전 경계를 검증한다.
 - `edge`: 예상 가능한 경계 조건이나 예외 입력을 검증한다.
 - `llm-judge`: 정적 검사나 byte 비교만으로 부족한 의미 품질을 subprocess-backed judge로 확인한다.
 
-현재 creator 자체 manifest에는 `07-validate-package`, `08-runner-regression`, `06-eval-contract`, `02-create-skill`, `01-create-skill-judge`, `04-modify-skill`, `03-modify-skill-judge`, `05-migrate-skill-judge`가 declared case로 등록되어 있다.
+현재 creator 자체 `eval.yaml`에는 `07-validate-package`, `08-runner-regression`, `06-eval-contract`, `02-create-skill`, `01-create-skill-judge`, `04-modify-skill`, `03-modify-skill-judge`, `05-migrate-skill-judge`가 case entry로 등록되어 있다.
 
 ### `command` assertion과 `llm-judge` 책임 분리
 
@@ -110,6 +110,7 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 - [`SKILL.md`](SKILL.md): 전체 workflow, hard gate, 입력/출력/환경 계약, 보안/프라이버시, 실패 보고 형식.
 - [`references/skill-authoring-rules.md`](references/skill-authoring-rules.md): 스킬 작성 세부 규칙.
 - [`references/skill-eval-authoring-rules.md`](references/skill-eval-authoring-rules.md): case-based eval suite 작성 규칙.
+- [`references/eval-terminology-glossary.md`](references/eval-terminology-glossary.md): `eval.yaml`, `case.yaml`, `entries[]` 등 eval 용어 기준.
 - [`references/skill-quality-rubric-evaluation.md`](references/skill-quality-rubric-evaluation.md): 품질 루브릭 평가 절차.
 - [`references/skill-feedback-logging-rules.md`](references/skill-feedback-logging-rules.md): feedback logging 절차.
 - [`templates/SKILL.template.md`](templates/SKILL.template.md): 새 스킬 `SKILL.md` skeleton.

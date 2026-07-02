@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "mode": "create",
+  "target": {
+    "skill_root": "/tmp/hermes-skill-creator-for-stark-evals",
+    "skill_name": "for-test-approval-boundary"
+  },
+  "template_inputs": [
+    {
+      "path": "SKILL.md",
+      "template": "templates/SKILL.template.md",
+      "data": {
+        "skill_name": "for-test-approval-boundary",
+        "skill_title": "for-test approval boundary",
+        "description": "승인 경계를 지키는 테스트용 스킬",
+        "skill_goal": "승인 없는 destructive/external/credential action 금지",
+        "trigger_conditions": ["사용자가 read-only review 또는 plan 작성을 요청한다"]
+      }
+    },
+    {
+      "path": "references/approval-boundary.md",
+      "template": "templates/reference.template.md",
+      "data": {
+        "rules": [
+          "삭제, external delivery, credential 사용, baseline promotion은 별도 승인 전 금지",
+          "plan feedback은 execution approval이 아니다"
+        ]
+      }
+    },
+    {
+      "path": "scripts/run_pipeline.py",
+      "template": "templates/run_pipeline.py.template",
+      "data": {"mode": "create"}
+    },
+    {
+      "path": "scripts/run_evals.py",
+      "template": "templates/run_evals.py.template",
+      "data": {"suite": "for-test-approval-boundary"}
+    }
+  ]
+}

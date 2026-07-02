@@ -1,5 +1,8 @@
 """case-based scripts.run_evals_template runner의 검증 의도를 설명하는 단위 테스트다."""
 
+import contextlib
+import io
+import json
 import sys
 import tempfile
 import unittest
@@ -21,6 +24,14 @@ def _spec_path(skill: Path) -> Path:
     spec = find_spec(skill)
     assert spec is not None
     return spec
+
+
+def _capture_main(argv: list[str]) -> tuple[int, str, str]:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        code = main(argv)
+    return code, stdout.getvalue(), stderr.getvalue()
 
 
 def _inline_script(source: str) -> str:
@@ -238,7 +249,7 @@ class EvalRunnerTestBase(unittest.TestCase):
 
 
 class EvalManifestDiscoveryTest(EvalRunnerTestBase):
-    """manifest/spec validation과 case discovery 계약을 검증하기 위해 분리한 class다."""
+    """eval.yaml validation과 case discovery 계약을 검증한다; class명 Manifest는 legacy/internal 명칭이다."""
 
     def test_validate_well_formed_case_suite(self) -> None:
         """정상적인 eval suite가 validation error 없이 로드되는지 검증한다."""
@@ -249,7 +260,7 @@ class EvalManifestDiscoveryTest(EvalRunnerTestBase):
 
 
     def test_eval_yaml_is_source_of_truth_for_cases(self) -> None:
-        """manifest에 선언된 case만 실행 대상이 되고, 디렉터리에 남은 미선언 case는 무시되는지 검증한다."""
+        """eval.yaml에 선언되지 않은 leftover case directory는 validate/run 대상에서 제외되어야 한다."""
         skill = _make_skill(self.tmp, undeclared=True)
         spec = parse_spec(_spec_path(skill))
         self.assertEqual(validate_spec(spec, skill), [])
@@ -257,20 +268,37 @@ class EvalManifestDiscoveryTest(EvalRunnerTestBase):
 
 
     def test_declared_missing_case_file_is_validation_error(self) -> None:
-        """manifest가 선언한 case.yaml 파일이 없으면 validation error로 잡는지 검증한다."""
+        """declared case.yaml 누락 시 validation error 반환."""
         skill = _make_skill(self.tmp)
         (skill / "evals" / "cases" / "case-1" / "case.yaml").unlink()
         spec = parse_spec(_spec_path(skill))
         self.assertTrue(any("case file not found" in e for e in validate_spec(spec, skill)))
 
 
-    def test_eval_yaml_description_is_rejected(self) -> None:
-        """eval manifest top-level description 필드를 금지하는 계약을 검증한다."""
+    def test_eval_yaml_unknown_top_level_field_is_schema_error(self) -> None:
+        """eval.yaml top-level field set을 schema source of truth로 검증한다."""
         skill = _make_skill(self.tmp)
         spec_path = _spec_path(skill)
         spec_path.write_text(spec_path.read_text() + "description: no\n", encoding="utf-8")
         spec = parse_spec(spec_path)
-        self.assertTrue(any("description" in e for e in validate_spec(spec, skill)))
+        errors = validate_spec(spec, skill)
+        self.assertTrue(any("unknown field 'description'" in e for e in errors))
+
+    def test_nested_case_yaml_unknown_field_is_schema_error(self) -> None:
+        """declared case.yaml 하위 object의 unknown field도 schema violation으로 잡는다."""
+        skill = _make_skill(self.tmp)
+        cpath = skill / "evals" / "cases" / "case-1" / "case.yaml"
+        cpath.write_text(cpath.read_text() + "extra_field: no\n", encoding="utf-8")
+        errors = validate_spec(parse_spec(_spec_path(skill)), skill)
+        self.assertTrue(any("unknown field 'extra_field'" in e for e in errors))
+
+    def test_nested_assertion_malformed_field_is_schema_error(self) -> None:
+        """assertions[] 내부 field type과 허용 field set을 nested schema로 검증한다."""
+        skill = _make_skill(self.tmp)
+        cpath = skill / "evals" / "cases" / "case-1" / "case.yaml"
+        cpath.write_text(cpath.read_text().replace("timeout_sec: 30", "timeout_sec: nope"), encoding="utf-8")
+        errors = validate_spec(parse_spec(_spec_path(skill)), skill)
+        self.assertTrue(any("run.timeout_sec: must be int" in e for e in errors))
 
 
 
@@ -412,10 +440,10 @@ def _assert_flattened_case_group(test: unittest.TestCase, spec: dict, skill: Pat
 
 
 class EvalEntriesFlattenMigrationTest(EvalRunnerTestBase):
-    """entries[] manifest와 flatten evals/<case-id>/case.yaml migration behavior를 검증하기 위해 분리한 class다."""
+    """eval.yaml entries[]와 flatten evals/<case-id>/case.yaml migration behavior를 검증하기 위해 분리한 class다."""
 
     def test_entries_manifest_and_flatten_case_group_expand_cases(self) -> None:
-        """entries[] manifest와 evals/<case-id>/case.yaml의 cases[] 실행 단위 확장을 검증한다."""
+        """eval.yaml entries[]와 evals/<case-id>/case.yaml의 cases[] 실행 단위 확장을 검증한다."""
         skill = _make_skill(self.tmp)
         legacy_dir = skill / "evals" / "cases" / "case-1"
         _write_flat_case_group(skill)
@@ -461,8 +489,8 @@ entries:
 
 
 
-class EvalCliExitBehaviorTest(EvalRunnerTestBase):
-    """CLI main의 validate/run/not-found exit behavior를 검증하기 위해 분리한 class다."""
+class EvalCliFlagIoTest(EvalRunnerTestBase):
+    """CLI flag별 exit code, stdout/stderr routing, JSON shape를 검증한다."""
 
     def test_main_validate_and_run_exit_codes(self) -> None:
         """CLI main의 --validate, 기본 실행, 깨진 skill directory exit code를 검증한다."""
@@ -472,6 +500,76 @@ class EvalCliExitBehaviorTest(EvalRunnerTestBase):
         broken = self.tmp / "empty"
         broken.mkdir()
         self.assertEqual(main([str(broken)]), 2)
+
+    def test_validate_human_output_shape(self) -> None:
+        """--validate는 human-readable VALID line을 stdout에 쓰고 stderr를 비워둔다."""
+        skill = _make_skill(self.tmp)
+        code, stdout, stderr = _capture_main([str(skill), "--validate"])
+        self.assertEqual(code, 0)
+        self.assertIn("VALID demo-skill.eval.yaml", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_validate_json_output_shape(self) -> None:
+        """--validate --json은 valid/errors machine-readable shape를 유지한다."""
+        skill = _make_skill(self.tmp)
+        code, stdout, stderr = _capture_main([str(skill), "--validate", "--json"])
+        payload = json.loads(stdout)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload, {"valid": True, "errors": []})
+        self.assertEqual(stderr, "")
+
+    def test_malformed_validate_json_output_shape(self) -> None:
+        """malformed suite의 --validate --json은 parse 가능한 failure shape를 stdout에 쓴다."""
+        skill = _make_skill(self.tmp)
+        _spec_path(skill).write_text("version: 1\nskill: demo-skill\ntitle: bad\nentries:\n", encoding="utf-8")
+        code, stdout, stderr = _capture_main([str(skill), "--validate", "--json"])
+        payload = json.loads(stdout)
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["valid"])
+        self.assertTrue(payload["errors"])
+        self.assertEqual(stderr, "")
+
+    def test_run_json_output_shape(self) -> None:
+        """기본 실행 --json은 summary와 case/check 배열을 JSON으로 출력한다."""
+        skill = _make_skill(self.tmp)
+        code, stdout, stderr = _capture_main([str(skill), "--json"])
+        payload = json.loads(stdout)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["passed"], 1)
+        self.assertEqual(payload["failed"], 0)
+        self.assertTrue(payload["cases"])
+        self.assertTrue(payload["cases"][0]["checks"])
+        self.assertEqual(stderr, "")
+
+    def test_promote_human_output_stays_in_temp_fixture(self) -> None:
+        """--promote CLI write는 temp fixture 안 expected.json 생성과 promoted line으로 제한한다."""
+        skill = _make_skill(self.tmp, include_expected=False)
+        expected = skill / "evals" / "cases" / "case-1" / "expected.json"
+        code, stdout, stderr = _capture_main([str(skill), "--promote"])
+        self.assertEqual(code, 0)
+        self.assertTrue(expected.exists())
+        self.assertIn(f"promoted: {expected.resolve()}", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_promote_json_output_shape_and_read_back(self) -> None:
+        """--promote --json은 promoted path와 생성 파일 content를 함께 검증 가능하게 출력한다."""
+        skill = _make_skill(self.tmp, include_expected=False)
+        code, stdout, stderr = _capture_main([str(skill), "--promote", "--json"])
+        payload = json.loads(stdout)
+        promoted = Path(payload["cases"][0]["promoted"])
+        self.assertEqual(code, 0)
+        self.assertTrue(promoted.exists())
+        self.assertEqual(promoted.read_text(encoding="utf-8"), '{"ok": true}\n')
+        self.assertEqual(stderr, "")
+
+    def test_missing_suite_json_error_shape(self) -> None:
+        """missing eval suite의 --json error는 stderr에 parse 가능한 error object로 출력된다."""
+        broken = self.tmp / "empty"
+        broken.mkdir()
+        code, stdout, stderr = _capture_main([str(broken), "--json"])
+        self.assertEqual(code, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn("error", json.loads(stderr))
 
 
 if __name__ == "__main__":

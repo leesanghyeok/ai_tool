@@ -2,14 +2,16 @@
 
 ## 목적
 
-생성되는 skill package가 처음부터 regression 가능한 test suite를 갖도록 case-based eval 모델을 사용한다. 이 모델은 모든 case에 같은 global criteria를 강제하지 않고, `eval.yaml`은 suite manifest와 human-readable test map 역할만 하며, 실제 실행과 검증은 각 `case.yaml`이 독립적으로 가진다.
+생성되는 skill package가 처음부터 regression 가능한 test suite를 갖도록 case-based eval 모델을 사용한다. 이 모델은 모든 case에 같은 global criteria를 강제하지 않고, `eval.yaml`은 eval suite file과 human-readable test map 역할을 하며, 실제 실행과 검증은 각 `case.yaml`이 독립적으로 가진다.
+
+용어 기준은 [`eval-terminology-glossary.md`](eval-terminology-glossary.md)를 따른다.
 
 ## 기본 원칙
 
 - eval generation은 기본값으로 켠다. 사용자가 명시적으로 원하지 않거나 skill이 eval에 부적합할 때만 생략한다.
 - eval은 “더 좋아졌는가” 비교가 아니라 “의도한 대로 동작하는가”를 검증하는 test contract다.
 - `evals/<skill-name>.eval.yaml`이 실행 source of truth다. `evals/` 아래 case directory가 있어도 `eval.yaml`에 선언되지 않으면 실행하지 않고 validation error로 본다.
-- `eval.yaml`에는 top-level `run.command`, `global_assertions`, `description`을 두지 않는다. `title`, `test_policy`, `cases`만 간결하게 둔다.
+- `eval.yaml`에는 top-level `run.command`, `global_assertions`, `description`을 두지 않는다. 허용 top-level field는 `version`, `skill`, `title`, `test_policy`, `entries[]` 또는 legacy `cases[]`뿐이다.
 - 각 `case.yaml`은 `id`, `type`, `title`, optional `input`, optional `expected`, optional `run`, `assertions`를 가진다.
 - assertion type은 `command`, `llm-judge` 두 개만 지원한다.
 - `expected`가 있으면 runner가 자동으로 actual output과 byte equality 비교를 수행한다. `expected`가 없으면 비교하지 않는다.
@@ -20,8 +22,8 @@
 
 SKILL.md를 쓰기 전에 다음을 정한다.
 
-1. suite title과 case 목록을 정한다.
-   - `eval.yaml`의 `cases`는 runner가 읽는 유일한 case 목록이다.
+1. suite title과 `entries[]` case entry 목록을 정한다.
+   - `eval.yaml`의 `entries[]`는 runner가 읽는 유일한 case 목록이다.
    - 각 case entry는 `id`, `type`, `title`, `path`를 가진다.
 2. case별 실행 방식을 정한다.
    - non-`llm-judge` case는 `run.command`를 갖고 `{output}` placeholder를 포함해야 한다.
@@ -44,7 +46,7 @@ SKILL.md를 쓰기 전에 다음을 정한다.
   scripts/run_evals.py           # scripts/run_evals_template.py 복사본
   scripts/run_llm_judge.py       # llm-judge assertion이 필요할 때
   evals/
-    <skill-name>.eval.yaml       # suite manifest + human-readable test map
+    <skill-name>.eval.yaml       # eval.yaml suite file + human-readable test map
     cases/
       <case-id>/
         case.yaml
@@ -64,7 +66,7 @@ test_policy:
   llm_judge: required
   promote: allow-overwrite
 
-cases:
+entries:
   - id: create-basic
     type: happy-path
     title: 기본 생성 workflow 검증
@@ -83,7 +85,26 @@ cases:
 | `llm_judge` | `required` | `llm-judge` assertion은 기본 실행에 포함되며 judge command 실패나 verdict fail은 case fail이다. |
 | `promote` | `allow-overwrite` | `--promote`가 있으면 expected가 없을 때 생성하고 이미 있으면 overwrite한다. |
 
-`eval.yaml entries[]`가 validate/run 대상의 source of truth다. `evals/<case-id>/case.yaml` 아래에 있어도 manifest에 선언되지 않은 case directory는 기본적으로 무시한다.
+`eval.yaml entries[]`가 validate/run 대상의 source of truth다. `evals/<case-id>/case.yaml` 아래에 있어도 `eval.yaml`에 선언되지 않은 case directory는 기본적으로 무시한다. Runner validation은 dependency 없는 in-repo schema helper를 source of truth로 사용하며, unknown field, required/type/enum 위반, `run`/`setup`/`judge`/`assertions[]`의 nested shape 위반을 error로 반환한다.
+
+### Schema validation 기준
+
+허용 field set은 runner의 `run_evals.py`/`run_evals_template.py` 상수와 validation helper가 기준이다.
+
+| 위치 | 허용 field |
+|---|---|
+| `eval.yaml` top-level | `version`, `skill`, `title`, `test_policy`, `entries`, legacy `cases` |
+| `test_policy` | `expected_compare`, `llm_judge`, `promote` |
+| `entries[]` case entry | `id`, `type`, optional `title`, `path` |
+| `case.yaml` top-level 또는 `cases[]` item | `id`, `type`, optional `title`, optional `input`, optional `expected`, optional `run`, optional `setup`, optional `judge`, `assertions`, optional nested `cases` |
+| `run` / `setup` | `command`, optional `timeout_sec` |
+| `judge` | `method`, `command`, optional `verifyCommand`, optional `timeout_sec` |
+| `assertions[]` | `id`, `title`, `type`, `cmd` for `command`, `prompt` for `llm-judge`, optional `timeout_sec` |
+
+- `additionalProperties` 성격은 false다. 위 표에 없는 field는 `unknown field` validation error다.
+- `entries[]`와 legacy `cases[]`를 동시에 쓰면 error다.
+- `run.command`는 `{output}`, `setup.command`는 `{pipeline_output}`, `judge.command`는 `{assertion_input}`/`{judge_packet}`와 `{judge_output}` placeholder를 포함해야 한다.
+- `timeout_sec`는 integer로 둔다.
 
 ## `case.yaml` 형식
 
@@ -245,14 +266,14 @@ uv run python scripts/run_evals.py --json
 
 `skill-creator-for-stark`가 만드는 skill에는 최소 다음 성격의 case를 설계한다.
 
-1. 새 skill 생성: eval suite, declared case, runner, quality gate가 포함되는지 확인한다.
+1. 새 skill 생성: eval suite, declared case entry, runner, quality gate가 포함되는지 확인한다.
 2. 기존 skill 수정: 기존 eval suite를 보존·갱신하고 새 behavior에 맞춰 case/assertion이 변하는지 확인한다.
 3. 다른 skill의 Stark 포맷 업데이트: source workflow를 보존하면서 Stark format과 case-based eval structure를 함께 심는지 확인한다.
 
 ## 검증 체크리스트
 
 - [ ] `evals/<skill-name>.eval.yaml`이 존재한다.
-- [ ] `eval.yaml`에 `skill`, `title`, `cases`가 있다.
+- [ ] `eval.yaml`에 `skill`, `title`, `entries[]`가 있다.
 - [ ] `eval.yaml`에 `description`이 없다.
 - [ ] runner는 `eval.yaml`에 선언된 case만 실행한다.
 - [ ] undeclared `evals/<case-id>/case.yaml`은 validation error다.
