@@ -2,7 +2,7 @@
 """portable skill package를 검증한다.
 
 Usage:
-  python3 skills/skill-creator-for-stark/scripts/validate-skill-package.py skills/<skill-name>
+  python3 skills/skill-creator-for-stark/scripts/validators/validate-skill-package.py skills/<skill-name>
 """
 from __future__ import annotations
 

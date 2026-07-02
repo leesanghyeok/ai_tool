@@ -1,4 +1,4 @@
-"""case-based scripts.run_evals_template runner의 검증 의도를 설명하는 단위 테스트다."""
+"""case-based scripts.run_evals runner의 검증 의도를 설명하는 단위 테스트다."""
 
 import contextlib
 import io
@@ -12,7 +12,7 @@ from textwrap import dedent
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from run_evals_template import (  # noqa: E402
+from run_evals import (  # noqa: E402
     find_spec,
     load_cases,
     main,
@@ -32,6 +32,26 @@ def _capture_main(argv: list[str]) -> tuple[int, str, str]:
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         code = main(argv)
     return code, stdout.getvalue(), stderr.getvalue()
+
+
+def _assert_cli_result(
+    test: unittest.TestCase,
+    result: tuple[int, str, str],
+    *,
+    code: int,
+    stdout_token: str | None = None,
+    stderr_token: str | None = None,
+) -> None:
+    actual_code, stdout, stderr = result
+    test.assertEqual(actual_code, code)
+    if stdout_token is None:
+        test.assertEqual(stdout, "")
+    else:
+        test.assertIn(stdout_token, stdout)
+    if stderr_token is None:
+        test.assertEqual(stderr, "")
+    else:
+        test.assertIn(stderr_token, stderr)
 
 
 def _inline_script(source: str) -> str:
@@ -236,7 +256,7 @@ def _make_skill(
 
 
 class EvalRunnerTestBase(unittest.TestCase):
-    """run_evals_template runner 테스트가 공유하는 임시 skill fixture lifecycle을 제공한다."""
+    """run_evals runner 테스트가 공유하는 임시 skill fixture lifecycle을 제공한다."""
     """각 테스트 호출 전"""
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -495,11 +515,19 @@ class EvalCliFlagIoTest(EvalRunnerTestBase):
     def test_main_validate_and_run_exit_codes(self) -> None:
         """CLI main의 --validate, 기본 실행, 깨진 skill directory exit code를 검증한다."""
         skill = _make_skill(self.tmp)
-        self.assertEqual(main([str(skill), "--validate"]), 0)
-        self.assertEqual(main([str(skill)]), 0)
+        validate_code, validate_stdout, validate_stderr = _capture_main([str(skill), "--validate"])
+        run_code, run_stdout, run_stderr = _capture_main([str(skill)])
         broken = self.tmp / "empty"
         broken.mkdir()
-        self.assertEqual(main([str(broken)]), 2)
+        broken_code, broken_stdout, broken_stderr = _capture_main([str(broken)])
+        _assert_cli_result(self, (validate_code, validate_stdout, validate_stderr), code=0, stdout_token="VALID")
+        _assert_cli_result(self, (run_code, run_stdout, run_stderr), code=0, stdout_token="summary:")
+        _assert_cli_result(
+            self,
+            (broken_code, broken_stdout, broken_stderr),
+            code=2,
+            stderr_token="no evals/*.eval.yaml",
+        )
 
     def test_validate_human_output_shape(self) -> None:
         """--validate는 human-readable VALID line을 stdout에 쓰고 stderr를 비워둔다."""

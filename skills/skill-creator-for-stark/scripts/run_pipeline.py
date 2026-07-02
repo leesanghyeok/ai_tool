@@ -171,7 +171,7 @@ def _builtin_template(template: str, data: dict[str, Any], target_skill: str) ->
     if name == "run_pipeline.py.template":
         return _runner_template()
     if name == "run_evals.py.template":
-        source = ROOT / "scripts" / "run_evals_template.py"
+        source = ROOT / "scripts" / "run_evals.py"
         if source.exists():
             return source.read_text(encoding="utf-8")
         return "#!/usr/bin/env python3\nprint('run_evals placeholder')\n"
@@ -278,7 +278,7 @@ def _postprocess_written_file(dest: Path, template: str) -> None:
     if dest.suffix == ".py":
         dest.chmod(0o755)
     if template == "templates/run_evals.py.template":
-        template_copy = ROOT / "scripts" / "run_evals_template.py"
+        template_copy = ROOT / "scripts" / "run_evals.py"
         if template_copy.exists():
             shutil.copyfile(template_copy, dest)
             dest.chmod(0o755)

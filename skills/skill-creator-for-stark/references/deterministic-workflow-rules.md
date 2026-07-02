@@ -67,10 +67,10 @@
 검증:
 
 ```bash
-uv run python scripts/check_pipeline.py <skill-dir>
+uv run python scripts/validators/validate-pipeline.py <skill-dir>
 ```
 
-`check_pipeline.py`는 `scripts/`와 `shared/` 아래 Python compile, third-party import 선언, 2개 이상 runnable step이 있을 때 `scripts/run_pipeline.py` 존재 여부를 확인한다. orchestrator wiring의 실제 정합성은 case-based eval suite의 각 `case.yaml`에서 `run.command`로 검증한다.
+`validate-pipeline.py`는 `scripts/`와 `shared/` 아래 Python compile, third-party import 선언, 2개 이상 runnable step이 있을 때 `scripts/run_pipeline.py` 존재 여부를 확인한다. orchestrator wiring의 실제 정합성은 case-based eval suite의 각 `case.yaml`에서 `run.command`로 검증한다.
 
 ## Eval 연결
 

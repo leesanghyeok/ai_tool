@@ -4,7 +4,7 @@ type: regression
 cases:
   - id: 07-validate-package
     run:
-      command: {python} scripts/validate-skill-package.py . > {output}
+      command: {python} scripts/validators/validate-skill-package.py . > {output}
       timeout_sec: 120
 
     assertions:

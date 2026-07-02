@@ -56,7 +56,7 @@ cases:
     judge:
       method: each-session
       command: {python} scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
-      verifyCommand: {python} scripts/verify_llm_judge_state.py --evidence {judge_evidence}
+      verifyCommand: {python} evals/scripts/validate-llm-judge-state.py --evidence {judge_evidence}
       timeout_sec: 300
     assertions:
       - id: actionable-workflow

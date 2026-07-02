@@ -9,6 +9,6 @@ cases:
 
     assertions:
       - id: upstream-regression-tests-pass
-        title: run_evals_template regression test가 OK로 종료되는지 검증
+        title: run_evals regression test가 OK로 종료되는지 검증
         type: command
         cmd: grep -q '^OK$' {output}

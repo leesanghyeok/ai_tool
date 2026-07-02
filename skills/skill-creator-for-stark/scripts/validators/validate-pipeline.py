@@ -18,8 +18,8 @@ agent에게 맡기면 불안정하다. 해결책은 실행 순서를 code로 옮
               재구성하지 않고 한 command만 실행하게 만드는 것이다.
 
 사용법:
-    python3 scripts/check_pipeline.py <skill-dir>
-    python3 scripts/check_pipeline.py <skill-dir> --json
+    python3 scripts/validators/validate-pipeline.py <skill-dir>
+    python3 scripts/validators/validate-pipeline.py <skill-dir> --json
 
 Exit code:
     0 - error 없음. warning은 허용한다.
@@ -126,7 +126,7 @@ def step_scripts(skill_dir: Path, files: list[Path]) -> list[Path]:
     """
     steps: list[Path] = []
     for f in files:
-        if f.name in _TOOLING or "utils" in f.parts:
+        if f.name in _TOOLING or "utils" in f.parts or "validators" in f.parts:
             continue
         text = f.read_text(encoding="utf-8")
         if "if __name__" in text and "__main__" in text:

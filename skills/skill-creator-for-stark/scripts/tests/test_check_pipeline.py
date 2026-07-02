@@ -1,17 +1,31 @@
-"""scripts.check_pipeline, 즉 생성 skill pipeline verifier용 테스트다."""
+"""scripts.validate_pipeline, 즉 생성 skill pipeline verifier용 테스트다."""
 
-import sys
 import tempfile
 import unittest
+import contextlib
+import io
+import importlib.util
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(SCRIPTS_DIR))
-
-from check_pipeline import check, main  # noqa: E402
+VALIDATOR = Path(__file__).parent.parent / "validators" / "validate-pipeline.py"
+SPEC = importlib.util.spec_from_file_location("validate_pipeline", VALIDATOR)
+assert SPEC is not None and SPEC.loader is not None
+validate_pipeline = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(validate_pipeline)
+check = validate_pipeline.check
+main = validate_pipeline.main
 
 STEP = "def main():\n    pass\n\n\nif __name__ == '__main__':\n    main()\n"
 BAD_PIPELINE = "import sys\nif '--help' in sys.argv:\n    raise SystemExit(3)\n"
+
+
+def _capture_main(argv: list[str]) -> tuple[int, str, str]:
+    """CLI main의 expected error/warning 출력을 unittest progress와 섞이지 않게 capture한다."""
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        code = main(argv)
+    return code, stdout.getvalue(), stderr.getvalue()
 
 
 def _skill(tmp: Path, files: dict[str, str], requirements: str | None = None) -> Path:
@@ -48,7 +62,10 @@ class CompileCheckTest(unittest.TestCase):
         skill = _skill(self.tmp, {"scripts/broken.py": "def main(:\n    pass\n"})
         result = check(skill)
         self.assertTrue(any("does not compile" in e for e in result["errors"]))
-        self.assertEqual(main([str(skill)]), 1)
+        code, stdout, stderr = _capture_main([str(skill)])
+        self.assertEqual(code, 1)
+        self.assertIn("does not compile", stdout)
+        self.assertEqual(stderr, "")
 
 
 class DependencyCheckTest(unittest.TestCase):
@@ -109,7 +126,10 @@ class EntrypointWarningTest(unittest.TestCase):
         result = check(skill)
         self.assertEqual(result["errors"], [])
         self.assertTrue(any("orchestrator" in w or "sequence" in w for w in result["warnings"]))
-        self.assertEqual(main([str(skill)]), 0)  # warning이며 error는 아니다
+        code, stdout, stderr = _capture_main([str(skill)])
+        self.assertEqual(code, 0)  # warning이며 error는 아니다
+        self.assertIn("[WARN]", stdout)
+        self.assertEqual(stderr, "")
 
     def test_two_steps_with_orchestrator_no_warning(self) -> None:
         """여러 step script와 run_pipeline.py가 함께 있으면 orchestrator warning을 내지 않는지 검증한다."""
@@ -140,7 +160,10 @@ class MainExitTest(unittest.TestCase):
 
     def test_missing_dir_exits_two(self) -> None:
         """존재하지 않는 skill directory 입력은 CLI exit code 2로 처리되는지 검증한다."""
-        self.assertEqual(main(["/no/such/skill/dir/xyz"]), 2)
+        code, stdout, stderr = _capture_main(["/no/such/skill/dir/xyz"])
+        self.assertEqual(code, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn("not a directory", stderr)
 
 
 if __name__ == "__main__":

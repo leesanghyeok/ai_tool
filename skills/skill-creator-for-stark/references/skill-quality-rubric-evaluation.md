@@ -38,7 +38,7 @@ Quality judge에는 현재 대화나 작성자 self-report가 아니라 다음 p
 - `deterministic_checker_output`: validator 출력, file counts, word counts, markdown fence/link check 결과.
 - `allowed_evidence`: packet 내부 파일과 deterministic checker output만 허용.
 - `scorecard_schema`: rubric의 JSON Scorecard 스키마 또는 `templates/skill-quality-scorecard.template.json`.
-- `scorecard_validator`: 가능한 경우 `scripts/validate-quality-scorecard.py <scorecard.json> 95` 실행 결과.
+- `scorecard_validator`: 가능한 경우 `scripts/validators/validate-quality-scorecard.py <scorecard.json> 95` 실행 결과.
 - `workflow_mode`: `create`, `modify`, `quality-review-only`.
 - `minimum_certification_score`: `95`.
 
@@ -54,7 +54,7 @@ Quality judge에는 현재 대화나 작성자 self-report가 아니라 다음 p
 
 Parent agent는 judge 결과를 그대로 믿지 않는다. 다음을 직접 확인한다.
 
-1. JSON scorecard가 parse되는가. 가능하면 `scripts/validate-quality-scorecard.py`로 점수 합계, D1-D5 hard gate, 95점 기준을 검증했는가.
+1. JSON scorecard가 parse되는가. 가능하면 `scripts/validators/validate-quality-scorecard.py`로 점수 합계, D1-D5 hard gate, 95점 기준을 검증했는가.
 2. D1-D8 dimension score가 각 max score를 넘지 않는가.
 3. D1-D8 합계와 `raw_total_score`가 일치하는가.
 4. D1-D5 hard gate threshold가 모두 통과했는가.

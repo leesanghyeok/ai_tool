@@ -4,7 +4,7 @@ type: regression
 cases:
   - id: 06-eval-contract
     run:
-      command: {python} scripts/check_eval_contract_docs.py --output {output}
+      command: {python} evals/scripts/validate-eval-contract-docs.py --output {output}
       timeout_sec: 120
 
     assertions:

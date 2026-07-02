@@ -2,7 +2,7 @@
 """skill-quality scorecard JSON 파일을 검증한다.
 
 Usage:
-  python3 skills/skill-creator-for-stark/scripts/validate-quality-scorecard.py <scorecard.json> [minimum_score]
+  python3 skills/skill-creator-for-stark/scripts/validators/validate-quality-scorecard.py <scorecard.json> [minimum_score]
 """
 
 from __future__ import annotations

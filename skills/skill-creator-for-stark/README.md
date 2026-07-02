@@ -28,7 +28,7 @@
 - `SKILL.md`: agent가 로드하는 orchestration 문서다. 사용 시점, 입력/출력/환경 계약, hard gate, workflow, 완료 보고 기준을 담는다.
 - `references/`: 작성 규칙, eval authoring rules, 품질 루브릭 평가, feedback logging, trigger/history, deterministic workflow 같은 판단 기준을 둔다.
 - `templates/`: `SKILL.template.md`, `eval-spec.template.md`, `skill-output-template.md`, `feedback-log.template.md`처럼 복사 가능한 skeleton을 둔다.
-- `scripts/`: deterministic 검증과 반복 작업을 둔다. 주요 명령은 `scripts/run_evals.py`, `scripts/validate-skill-package.py`, `scripts/run_pipeline.py`, `scripts/run_llm_judge.py`, `scripts/check_pipeline.py`, `scripts/run_evals_template.py`다.
+- `scripts/`: deterministic 검증과 반복 작업을 둔다. 주요 명령은 `scripts/run_evals.py`, `scripts/validators/validate-skill-package.py`, `scripts/run_pipeline.py`, `scripts/run_llm_judge.py`, `scripts/validators/validate-pipeline.py`, `scripts/run_evals.py`다.
 - `evals/`: `evals/skill-creator-for-stark.eval.yaml`와 declared `case.yaml` file(`evals/<case-id>/case.yaml`)로 case-based regression/evaluation contract를 관리한다.
 - `history/`: 의미 있는 변경 이력과 이전 migration 기록을 보관한다.
 - `feedback/`: 생성/수정되는 스킬에 포함할 사용자 불만족 사건 기록 절차의 대상 디렉터리다.
@@ -96,7 +96,7 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 
 - 생성/수정된 skill root와 주요 파일 경로를 보고한다.
 - `SKILL.md`, `references/`, `templates/`, `scripts/`, `evals/`, `history/`, `feedback/` 중 실제로 생성/수정한 support files를 구분한다.
-- package 구조는 `uv run python scripts/validate-skill-package.py .` 또는 대상 skill root 인자로 검증한다.
+- package 구조는 `uv run python scripts/validators/validate-skill-package.py .` 또는 대상 skill root 인자로 검증한다.
 - eval suite는 가능하면 `uv run python scripts/run_evals.py --validate`와 `uv run python scripts/run_evals.py --json`으로 확인한다.
 - creator 자체의 runner/helper/test를 바꿨다면 `uv run python -m unittest discover -s scripts/tests -v`를 실행한다.
 - whitespace와 patch 품질은 `git diff --check`로 확인한다.
@@ -115,9 +115,9 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 - [`references/skill-feedback-logging-rules.md`](references/skill-feedback-logging-rules.md): feedback logging 절차.
 - [`templates/SKILL.template.md`](templates/SKILL.template.md): 새 스킬 `SKILL.md` skeleton.
 - [`templates/eval-spec.template.md`](templates/eval-spec.template.md): eval suite skeleton.
-- [`scripts/validate-skill-package.py`](scripts/validate-skill-package.py): package 구조 validator.
+- [`scripts/validators/validate-skill-package.py`](scripts/validators/validate-skill-package.py): package 구조 validator.
 - [`scripts/run_evals.py`](scripts/run_evals.py): creator 자체 eval runner.
-- [`scripts/run_evals_template.py`](scripts/run_evals_template.py): 생성되는 skill에 복사할 eval runner template.
+- [`scripts/run_evals.py`](scripts/run_evals.py): 생성되는 skill에 복사할 eval runner template.
 - [`scripts/run_pipeline.py`](scripts/run_pipeline.py): creator 사용자 시나리오 command case의 deterministic template rendering entrypoint.
 - [`scripts/run_llm_judge.py`](scripts/run_llm_judge.py): `llm-judge` output/assertion adapter. Canonical subcommand는 `output`/`assertion`이며, 기존 `--input {judge_packet} --output {judge_output}`는 migration alias다.
-- [`scripts/check_pipeline.py`](scripts/check_pipeline.py): generated skill pipeline verifier.
+- [`scripts/validators/validate-pipeline.py`](scripts/validators/validate-pipeline.py): generated skill pipeline verifier.

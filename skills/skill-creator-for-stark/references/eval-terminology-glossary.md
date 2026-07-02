@@ -37,7 +37,7 @@
 
 - `nested schema validation`: `eval.yaml` top-level만이 아니라 `test_policy`, `entries[]`, declared `case.yaml`, `case.yaml cases[]`, `run`, `setup`, `judge`, `assertions[]`까지 허용 field set, required field, type, enum, placeholder 조건을 검증하는 runner 계약이다.
 - `unknown field`: schema에 없는 YAML key다. 특정 key blacklist가 아니라 `additionalProperties: false` 성격으로 처리한다.
-- `schema source of truth`: `scripts/run_evals.py`와 `scripts/run_evals_template.py`의 validation constants/helper다. 문서와 template은 이 구현 기준을 설명하고, dependency 없는 in-repo validator를 사용한다.
+- `schema source of truth`: `scripts/run_evals.py`와 `scripts/run_evals.py`의 validation constants/helper다. 문서와 template은 이 구현 기준을 설명하고, dependency 없는 in-repo validator를 사용한다.
 
 ## 작성 규칙
 

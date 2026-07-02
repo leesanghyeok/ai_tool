@@ -253,7 +253,7 @@ metadata:
 새 스킬 작성 후 최소 검증:
 
 ```bash
-python3 skills/skill-creator-for-stark/scripts/validate-skill-package.py skills/<skill-name>
+python3 skills/skill-creator-for-stark/scripts/validators/validate-skill-package.py skills/<skill-name>
 git diff --check
 git status --short
 ```

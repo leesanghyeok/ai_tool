@@ -43,7 +43,7 @@ SKILL.md를 쓰기 전에 다음을 정한다.
 ```text
 <skill>/
   scripts/run_pipeline.py        # 필요한 case에서만 호출
-  scripts/run_evals.py           # scripts/run_evals_template.py 복사본
+  scripts/run_evals.py           # scripts/run_evals.py 복사본
   scripts/run_llm_judge.py       # llm-judge assertion이 필요할 때
   evals/
     <skill-name>.eval.yaml       # eval.yaml suite file + human-readable test map
@@ -89,7 +89,7 @@ entries:
 
 ### Schema validation 기준
 
-허용 field set은 runner의 `run_evals.py`/`run_evals_template.py` 상수와 validation helper가 기준이다.
+허용 field set은 runner의 `run_evals.py` 상수와 validation helper가 기준이다.
 
 | 위치 | 허용 field |
 |---|---|
@@ -200,7 +200,7 @@ setup:
 judge:
   method: each-session
   command: {python} scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
-  verifyCommand: {python} scripts/verify_llm_judge_state.py --evidence {judge_evidence}
+  verifyCommand: {python} evals/scripts/validate-llm-judge-state.py --evidence {judge_evidence}
   timeout_sec: 300
 
 assertions:
