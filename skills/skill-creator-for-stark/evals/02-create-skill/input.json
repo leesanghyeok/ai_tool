@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "mode": "create",
+  "target": {
+    "skill_root": "/tmp/hermes-skill-creator-for-stark-evals",
+    "skill_name": "for-test-weekly-research-brief"
+  },
+  "template_inputs": [
+    {
+      "path": "SKILL.md",
+      "template": "templates/SKILL.template.md",
+      "data": {
+        "section_notes": ["검증 기준", "feedback logging"],
+        "skill_name": "for-test-weekly-research-brief",
+        "skill_title": "for-test weekly research brief",
+        "description": "여러 출처를 조사해 한국어 주간 리서치 브리핑을 작성하고 검증하는 테스트용 스킬",
+        "skill_goal": "source-grounded weekly research brief 생성",
+        "trigger_conditions": [
+          "사용자가 주간 리서치 브리핑을 요청한다",
+          "여러 출처 조사와 한국어 요약이 필요하다"
+        ],
+        "workflow_mode_values": ["create", "modify", "quality-review-only"]
+      }
+    },
+    {
+      "path": "references/source-selection-rules.md",
+      "template": "templates/reference.template.md",
+      "data": {"rules": ["source에 없는 API/path를 만들지 않는다"]}
+    },
+    {
+      "path": "references/verification-rules.md",
+      "template": "templates/reference.template.md",
+      "data": {"rules": ["검증 command는 assertion/harness에서 관리한다"]}
+    },
+    {
+      "path": "templates/brief-output.template.md",
+      "template": "templates/output.template.md",
+      "data": {"output_kind": "weekly research brief"}
+    },
+    {
+      "path": "scripts/run_pipeline.py",
+      "template": "templates/run_pipeline.py.template",
+      "data": {"mode": "create"}
+    },
+    {
+      "path": "scripts/run_evals.py",
+      "template": "templates/run_evals.py.template",
+      "data": {"suite": "for-test-weekly-research-brief"}
+    },
+    {
+      "path": "evals/for-test-weekly-research-brief.eval.yaml",
+      "template": "templates/eval-spec.template.md",
+      "data": {"skill_name": "for-test-weekly-research-brief"}
+    },
+    {
+      "path": "evals/brief-basic/case.yaml",
+      "template": "templates/case.template.yaml",
+      "data": {"case_id": "brief-basic", "case_type": "happy-path"}
+    },
+    {
+      "path": "evals/source-missing-blocker/case.yaml",
+      "template": "templates/case.template.yaml",
+      "data": {"case_id": "source-missing-blocker", "case_type": "safety"}
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic pipeline entrypoint for skill-creator-for-stark scenario evals.
+"""skill-creator-for-stark scenario eval을 위한 deterministic pipeline entrypoint.
 
 This script intentionally renders only file-specific template bindings supplied in
 input JSON. It does not interpret user intent, call external services, promote
@@ -11,7 +11,6 @@ import argparse
 import json
 import re
 import shutil
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +94,7 @@ def _render(text: str, data: dict[str, Any], target_skill: str) -> str:
         "<source나 기존 state를 read-only로 확인한다.>": "source와 기존 파일을 read-only로 확인한다.",
         "<산출물을 만들거나 수정한다.>": "승인된 파일만 생성 또는 수정한다.",
         "<deterministic 검증 또는 read-back을 실행한다.>": "read-back, JSON parse, eval validate 같은 deterministic 검증을 실행한다.",
-        "<필요하면 `evals/<skill-name>.eval.yaml`, declared `evals/cases/*/case.yaml`, `scripts/run_evals.py`를 생성하고 `--validate`를 실행한다.>": "필요하면 eval suite를 생성하고 `python3 scripts/run_evals.py --validate`를 실행한다.",
+        "<필요하면 `evals/<skill-name>.eval.yaml`, declared `evals/<case-id>/case.yaml`, `scripts/run_evals.py`를 생성하고 `--validate`를 실행한다.>": "필요하면 eval suite를 생성하고 `uv run python scripts/run_evals.py --validate`를 실행한다.",
         "<상태, 파일, 검증 결과, 미확인 항목을 보고한다.>": "상태, 파일, 검증 결과, 미확인 항목을 보고한다.",
         "<독립 조사, 초안, 검토, fixture 작성 등>": "독립 조사, fixture 초안, 문서 검토.",
         "<승인 확인, 최종 write, 최종 검증 등>": "승인 확인, 최종 write, 최종 검증.",
@@ -144,7 +143,20 @@ def _builtin_template(template: str, data: dict[str, Any], target_skill: str) ->
     if name == "case.template.yaml":
         case_id = data.get("case_id", "basic")
         case_type = data.get("case_type", "happy-path")
-        return f"id: {case_id}\ntype: {case_type}\ntitle: {case_id} 검증\n\nrun:\n  command: python3 scripts/run_pipeline.py --input {{input}} --output {{output}}\n  timeout_sec: 120\n\nassertions:\n  - id: output-created\n    title: 출력 파일 생성 여부 검증\n    type: command\n    cmd: test -s {{output}}\n"
+        return (
+            f"id: {case_id}\n"
+            f"type: {case_type}\n\n"
+            "cases:\n"
+            f"  - id: {case_id}\n"
+            "    run:\n"
+            "      command: {python} scripts/run_pipeline.py --input {input} --output {output}\n"
+            "      timeout_sec: 120\n"
+            "    assertions:\n"
+            "      - id: output-created\n"
+            "        title: 출력 파일 생성 여부 검증\n"
+            "        type: command\n"
+            "        cmd: test -s {output}\n"
+        )
     if name == "run_pipeline.py.template":
         return "#!/usr/bin/env python3\nfrom pathlib import Path\nimport argparse, json\nap=argparse.ArgumentParser(); ap.add_argument('--input'); ap.add_argument('--output', required=True)\na=ap.parse_args(); Path(a.output).write_text(json.dumps({'status':'success'}, ensure_ascii=False)+'\\n', encoding='utf-8')\n"
     if name == "run_evals.py.template":
@@ -216,7 +228,7 @@ def run(input_path: Path, output_path: Path) -> int:
             action = "modify" if dest.exists() else "create"
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(rendered, encoding="utf-8")
-            # Keep generated runner scripts executable enough for shell usage.
+            # 생성된 runner script가 shell에서 실행 가능하도록 유지한다.
             if dest.suffix == ".py":
                 dest.chmod(0o755)
             if item["template"] == "templates/run_evals.py.template":

@@ -1,0 +1,14 @@
+id: 08-runner-regression
+type: regression
+
+cases:
+  - id: 08-runner-regression
+    run:
+      command: {python} -m unittest scripts.tests.test_run_evals -v > {output} 2>&1
+      timeout_sec: 180
+
+    assertions:
+      - id: upstream-regression-tests-pass
+        title: run_evals_template regression test가 OK로 종료되는지 검증
+        type: command
+        cmd: grep -q '^OK$' {output}

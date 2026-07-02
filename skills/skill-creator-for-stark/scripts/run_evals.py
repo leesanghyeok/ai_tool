@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
 """
-Case-based eval runner shipped inside generated skills as scripts/run_evals.py.
+생성된 skill 내부에 scripts/run_evals.py로 포함되는 case-based eval runner.
 
 Spec model:
-  evals/<skill>.eval.yaml          # suite manifest + human-readable case map
-  evals/cases/<case-id>/case.yaml  # independent test case definition
+  evals/<skill>.eval.yaml          # suite manifest + 사람이 읽는 case map
+  evals/<case-id>/case.yaml        # canonical case group definition
 
-The suite manifest is the source of truth: only cases listed in eval.yaml are
-validated and run. Case directories that exist on disk but are not declared are
-ignored.
+eval.yaml manifest가 source of truth다. eval.yaml에 선언된 case만 validate/run하며, disk에 남아 있지만 선언되지 않은 case directory는 무시한다.
 
-Each non-llm-judge case owns its own run command and assertions. llm-judge
-cases own a top-level judge command and assertion-level prompts. There are no
-global assertions and no top-level suite run command. Supported assertion types are:
+non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는 top-level judge command와 assertion-level prompts를 가진다. global assertions와 top-level suite run command는 없다. 지원 assertion type은 다음 두 가지다.
   - command: shell command exits 0
-  - llm-judge: subprocess judge command returns a non-empty natural-language response
+  - llm-judge: subprocess judge command가 non-empty natural-language response를 반환
 
-Expected handling is automatic: when a case declares `expected`, produced output
-is byte-compared to that file unless --promote is set. With --promote, passing
-case output creates or overwrites the expected file.
+Expected 처리는 자동이다. case가 `expected`를 선언하면 --promote가 없을 때 produced output을 해당 file과 byte-compare한다. --promote를 쓰면 passing case output으로 expected file을 생성하거나 overwrite한다.
 
 Usage:
-  python3 scripts/run_evals.py [skill_dir] [--validate] [--promote] [--json]
+  uv run python scripts/run_evals.py [skill_dir] [--validate] [--promote] [--json]
 
 Exit codes:
-  0 - valid / all selected suite cases passed
+  0 - valid / 선택된 suite case 전체 통과
   1 - malformed spec, failed command, failed judge, or failed expected compare
   2 - eval suite not found
 """
@@ -54,6 +48,8 @@ JUDGE_OUTPUT_PLACEHOLDER = "{judge_output}"
 ASSERTION_INPUT_PLACEHOLDER = "{assertion_input}"
 JUDGE_EVIDENCE_PLACEHOLDER = "{judge_evidence}"
 PRIMARY_OUTPUT_PLACEHOLDER = "{primary_output}"
+PIPELINE_OUTPUT_PLACEHOLDER = "{pipeline_output}"
+PYTHON_PLACEHOLDER = "{python}"
 
 
 class SimpleYamlError(ValueError):
@@ -137,12 +133,10 @@ def _logical_lines(text: str) -> list[tuple[int, str]]:
 
 
 def parse_yaml_subset(path: Path) -> Any:
-    """Parse the small YAML subset used by eval.yaml/case.yaml.
+    """eval.yaml/case.yaml에서 사용하는 작은 YAML 부분집합을 파싱한다.
 
-    Supports nested mappings, lists of mappings/scalars, quoted/unquoted scalars,
-    ints/bools/null, inline JSON arrays/objects, and literal/folded blocks.
-    It is intentionally not a general YAML parser; generated specs should stay in
-    this constrained shape to avoid a PyYAML dependency in generated skills.
+    Nested mappings, mappings/scalars list, quoted/unquoted scalars, ints/bools/null, inline JSON arrays/objects, literal/folded blocks를 지원한다.
+    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에 PyYAML dependency를 추가하지 않도록 이 제한된 shape를 유지해야 한다.
     """
     lines = _logical_lines(path.read_text(encoding="utf-8"))
     if not lines:
@@ -235,16 +229,51 @@ def _case_path(skill_dir: Path, case_entry: dict) -> Path:
     return (skill_dir / "evals" / str(case_entry.get("path", ""))).resolve()
 
 
+def _manifest_entries(spec: dict) -> tuple[list[dict], str]:
+    if "entries" in spec:
+        entries = spec.get("entries")
+        return (entries if isinstance(entries, list) else []), "entries"
+    entries = spec.get("cases")
+    return (entries if isinstance(entries, list) else []), "cases"
+
+
+def _stable_slug(index: int, case_id: str) -> str:
+    digest = hashlib.sha256(case_id.encode("utf-8")).hexdigest()[:12]
+    return f"{index:02d}-{digest}"
+
+
+def _expand_case_group(case_group: dict, path: Path, entry: dict) -> list[dict]:
+    base = {"__path": str(path), "__dir": str(path.parent), "__case_group_id": case_group.get("id", entry.get("id")), "__entry_id": entry.get("id")}
+    group_cases = case_group.get("cases")
+    if isinstance(group_cases, list):
+        expanded: list[dict] = []
+        for index, item in enumerate(group_cases, start=1):
+            if not isinstance(item, dict):
+                continue
+            case = dict(item)
+            case.setdefault("type", case_group.get("type") or entry.get("type"))
+            case.setdefault("title", case.get("id", "case"))
+            case.update(base)
+            case["__case_index"] = index
+            case["__artifact_slug"] = _stable_slug(index, str(case.get("id", f"case-{index}")))
+            expanded.append(case)
+        return expanded
+    case = dict(case_group)
+    case.update(base)
+    case["__case_index"] = 1
+    case["__artifact_slug"] = _stable_slug(1, str(case.get("id", entry.get("id", "case"))))
+    return [case]
+
+
 def load_cases(spec: dict, skill_dir: Path) -> list[dict]:
     cases: list[dict] = []
-    for entry in spec.get("cases", []) or []:
+    entries, _ = _manifest_entries(spec)
+    for entry in entries:
         path = _case_path(skill_dir, entry)
-        case = parse_yaml_subset(path)
-        if not isinstance(case, dict):
+        case_group = parse_yaml_subset(path)
+        if not isinstance(case_group, dict):
             raise ValueError(f"{path}: case spec must be a mapping")
-        case["__path"] = str(path)
-        case["__dir"] = str(path.parent)
-        cases.append(case)
+        cases.extend(_expand_case_group(case_group, path, entry))
     return cases
 
 
@@ -261,18 +290,21 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
     if not isinstance(policy, dict):
         errors.append("eval.yaml: 'test_policy' must be a mapping when present")
 
-    case_entries = spec.get("cases")
+    case_entries, manifest_key = _manifest_entries(spec)
     if not isinstance(case_entries, list) or not case_entries:
-        errors.append("eval.yaml: 'cases' must be a non-empty list")
+        errors.append("eval.yaml: 'entries' must be a non-empty list")
         case_entries = []
+    if "entries" in spec and "cases" in spec:
+        errors.append("eval.yaml: use either 'entries' or legacy 'cases', not both")
 
     declared_ids: set[str] = set()
     for i, entry in enumerate(case_entries):
-        where = f"eval.yaml cases[{i}]"
+        where = f"eval.yaml {manifest_key}[{i}]"
         if not isinstance(entry, dict):
             errors.append(f"{where}: must be a mapping")
             continue
-        for field in ("id", "type", "title", "path"):
+        required_fields = ("id", "type", "path") if manifest_key == "entries" else ("id", "type", "title", "path")
+        for field in required_fields:
             if not entry.get(field):
                 errors.append(f"{where}: missing '{field}'")
         if entry.get("type") and entry["type"] not in VALID_CASE_TYPES:
@@ -292,24 +324,56 @@ def validate_spec(spec: dict, skill_dir: Path) -> list[str]:
             except Exception as exc:
                 errors.append(f"{where}: malformed case yaml: {exc}")
                 continue
-            errors.extend(validate_case(case, cpath, entry))
+            errors.extend(validate_case(case, cpath, entry, new_shape=(manifest_key == "entries")))
 
     return errors
 
 
-def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
+def validate_case(case: dict, cpath: Path, entry: dict, new_shape: bool = False) -> list[str]:
     errors: list[str] = []
     prefix = f"{cpath.relative_to(cpath.parents[2]) if len(cpath.parents) > 2 else cpath}"
-    for field in ("id", "type", "title"):
+    for field in ("id", "type"):
         if not case.get(field):
             errors.append(f"{prefix}: missing '{field}'")
+    if not new_shape and not case.get("title"):
+        errors.append(f"{prefix}: missing 'title'")
     if case.get("id") != entry.get("id"):
         errors.append(f"{prefix}: id does not match eval.yaml entry")
     if case.get("type") != entry.get("type"):
         errors.append(f"{prefix}: type does not match eval.yaml entry")
-    if case.get("title") != entry.get("title"):
+    if not new_shape and case.get("title") != entry.get("title"):
         errors.append(f"{prefix}: title does not match eval.yaml entry")
 
+    group_cases = case.get("cases")
+    if isinstance(group_cases, list):
+        if not group_cases:
+            errors.append(f"{prefix}: cases must be a non-empty list")
+        seen_case_ids: set[str] = set()
+        for index, subcase in enumerate(group_cases):
+            sw = f"{prefix} cases[{index}]"
+            if not isinstance(subcase, dict):
+                errors.append(f"{sw}: must be a mapping")
+                continue
+            if not subcase.get("id"):
+                errors.append(f"{sw}: missing 'id'")
+            elif subcase["id"] in seen_case_ids:
+                errors.append(f"{sw}: duplicate id {subcase['id']!r}")
+            else:
+                seen_case_ids.add(subcase["id"])
+            sub_entry = {"id": subcase.get("id"), "type": subcase.get("type", case.get("type")), "title": subcase.get("title", subcase.get("id"))}
+            sub = dict(subcase)
+            sub.setdefault("type", case.get("type"))
+            sub.setdefault("title", subcase.get("id"))
+            errors.extend(_validate_executable_case(sub, cpath, sub_entry, f"{sw}"))
+        return errors
+
+    return _validate_executable_case(case, cpath, entry, prefix, require_title=not new_shape)
+
+
+def _validate_executable_case(case: dict, cpath: Path, entry: dict, prefix: str, require_title: bool = True) -> list[str]:
+    errors: list[str] = []
+    if require_title and not case.get("title"):
+        errors.append(f"{prefix}: missing 'title'")
     ctype = case.get("type")
     run = case.get("run")
     judge = case.get("judge")
@@ -335,6 +399,16 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
             verify_command = judge.get("verifyCommand")
             if verify_command and JUDGE_EVIDENCE_PLACEHOLDER not in verify_command:
                 errors.append(f"{prefix}: judge.verifyCommand must contain {JUDGE_EVIDENCE_PLACEHOLDER}")
+            setup = case.get("setup")
+            if setup is not None:
+                if not isinstance(setup, dict):
+                    errors.append(f"{prefix}: setup must be a mapping when present")
+                else:
+                    setup_command = setup.get("command")
+                    if not setup_command:
+                        errors.append(f"{prefix}: setup.command is required when setup is present")
+                    elif PIPELINE_OUTPUT_PLACEHOLDER not in setup_command:
+                        errors.append(f"{prefix}: setup.command must contain {PIPELINE_OUTPUT_PLACEHOLDER}")
     else:
         if judge is not None:
             errors.append(f"{prefix}: non-llm-judge case must not define top-level judge")
@@ -380,8 +454,10 @@ def validate_case(case: dict, cpath: Path, entry: dict) -> list[str]:
 def _bind_placeholders(cmd: str, *, input_path: Path | None, output_path: Path | None,
                        expected_path: Path | None, judge_packet: Path | None = None,
                        judge_output: Path | None = None, assertion_input: Path | None = None,
-                       judge_evidence: Path | None = None, primary_output: Path | None = None) -> str:
+                       judge_evidence: Path | None = None, primary_output: Path | None = None,
+                       pipeline_output: Path | None = None) -> str:
     replacements = {
+        PYTHON_PLACEHOLDER: Path(sys.executable),
         INPUT_PLACEHOLDER: input_path,
         OUTPUT_PLACEHOLDER: output_path,
         EXPECTED_PLACEHOLDER: expected_path,
@@ -390,6 +466,7 @@ def _bind_placeholders(cmd: str, *, input_path: Path | None, output_path: Path |
         ASSERTION_INPUT_PLACEHOLDER: assertion_input,
         JUDGE_EVIDENCE_PLACEHOLDER: judge_evidence,
         PRIMARY_OUTPUT_PLACEHOLDER: primary_output,
+        PIPELINE_OUTPUT_PLACEHOLDER: pipeline_output,
     }
     bound = cmd
     for placeholder, path in replacements.items():
@@ -456,6 +533,51 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _load_json_file(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _excerpt(path: Path, limit: int = 1200) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - evidence should record read-back failures.
+        return f"<read failed: {exc}>"
+    return text[:limit]
+
+
+def _pipeline_status(path: Path) -> str:
+    try:
+        payload = _load_json_file(path)
+    except Exception:
+        return "unknown"
+    if isinstance(payload, dict) and isinstance(payload.get("status"), str):
+        return payload["status"]
+    return "unknown"
+
+
+def _files_written_read_back(path: Path) -> list[dict[str, Any]]:
+    try:
+        payload = _load_json_file(path)
+    except Exception:
+        return []
+    files = payload.get("files_written") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in files:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            continue
+        fpath = Path(item["path"])
+        exists = fpath.exists()
+        out.append({
+            "path": str(fpath),
+            "exists": exists,
+            "sha256": _sha256_file(fpath) if exists and fpath.is_file() else "",
+            "excerpt": _excerpt(fpath, 500) if exists and fpath.is_file() else "",
+        })
+    return out
+
+
 def _primary_output_text(primary_output: Path) -> str:
     try:
         payload = json.loads(primary_output.read_text(encoding="utf-8"))
@@ -467,8 +589,7 @@ def _primary_output_text(primary_output: Path) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: Path, evidence_path: Path) -> None:
-    primary_text = primary_output.read_text(encoding="utf-8")
+def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: Path, evidence_path: Path, setup_result: dict | None = None) -> None:
     payload = {
         "schema_version": 1,
         "case_id": case["id"],
@@ -476,9 +597,10 @@ def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: P
         "primary_output": {
             "path": str(primary_output),
             "sha256": _sha256_file(primary_output),
-            "status": "success" if '\"status\": \"success\"' in primary_text else "unknown",
-            "required_fields": ["schema_version", "status", "output.content"],
+            "status": _pipeline_status(primary_output),
+            "required_fields": ["schema_version", "status"],
             "summary": _primary_output_text(primary_output)[:500],
+            "read_back_excerpt": _excerpt(primary_output, 1000),
         },
         "artifacts": [{"path": str(primary_output), "sha256": _sha256_file(primary_output), "kind": "primary-output", "must_exist": True}],
         "checks": [
@@ -487,7 +609,55 @@ def _write_judge_evidence(case: dict, input_path: Path | None, primary_output: P
         ],
         "redaction": {"secret_like_values_removed": True, "rules": ["secret", "token", "private-url"]},
     }
+    if setup_result is not None:
+        payload["setup"] = setup_result
+        payload["primary_output"]["kind"] = "pipeline-output"
+        payload["files_written_read_back"] = _files_written_read_back(primary_output)
+    else:
+        payload["primary_output"]["required_fields"].append("output.content")
     evidence_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _evidence_prompt(primary_output: Path, evidence_path: Path) -> str:
+    return (
+        "Primary output:\n"
+        + _primary_output_text(primary_output)
+        + "\n\nCase-local provenance evidence:\n"
+        + _excerpt(evidence_path, 1800)
+    )
+
+
+def _run_llm_judge_setup(case: dict, cwd: Path, temp_dir: Path) -> tuple[dict | None, Path | None]:
+    setup = case.get("setup")
+    if not setup:
+        return None, None
+    pipeline_output = temp_dir / "pipeline-output.json"
+    try:
+        cmd = _bind_placeholders(
+            setup["command"],
+            input_path=_input_path(case),
+            output_path=None,
+            expected_path=_expected_path(case),
+            pipeline_output=pipeline_output,
+        )
+        rc, stdout, stderr = _run_shell(cmd, cwd, int(setup.get("timeout_sec") or DEFAULT_TIMEOUT))
+    except ValueError as exc:
+        cmd, rc, stdout, stderr = setup.get("command", ""), 1, "", str(exc)
+    exists = pipeline_output.exists()
+    result = {
+        "id": "judge.setup",
+        "title": "llm-judge setup.command 실행",
+        "type": "run",
+        "status": "pass" if rc == 0 and exists else "fail",
+        "command": cmd,
+        "exit_code": rc,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+        "pipeline_output": str(pipeline_output),
+        "pipeline_output_sha256": _sha256_file(pipeline_output) if exists else "",
+        "pipeline_output_status": _pipeline_status(pipeline_output) if exists else "missing",
+    }
+    return result, pipeline_output if exists else None
 
 
 def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
@@ -495,7 +665,7 @@ def _run_llm_judge_output(case: dict, cwd: Path, primary_output: Path) -> dict:
     if input_path is None:
         primary_output.write_text(json.dumps({"schema_version": 1, "status": "success", "output": {"format": "text", "content": "", "summary": ""}, "artifacts": [], "redactions_applied": [], "errors": []}, ensure_ascii=False), encoding="utf-8")
         return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass", "exit_code": 0, "primary_output": str(primary_output)}
-    cmd = f"python3 scripts/run_llm_judge.py output --input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
+    cmd = f"{shlex.quote(sys.executable)} scripts/run_llm_judge.py output --input {shlex.quote(str(input_path))} --output {shlex.quote(str(primary_output))}"
     rc, stdout, stderr = _run_shell(cmd, cwd, int(case.get("judge", {}).get("timeout_sec") or DEFAULT_TIMEOUT))
     return {"id": "judge.output", "title": "llm-judge primary output 생성", "type": "run", "status": "pass" if rc == 0 and primary_output.exists() else "fail", "exit_code": rc, "stdout": stdout[-2000:], "stderr": stderr[-2000:], "primary_output": str(primary_output)}
 
@@ -504,14 +674,22 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
     judge = case["judge"]
     checks: list[dict] = []
     with tempfile.TemporaryDirectory() as td:
-        primary_output = Path(td) / "primary-output.json"
-        evidence_path = Path(td) / "judge-evidence.json"
-        output_check = _run_llm_judge_output(case, cwd, primary_output)
-        checks.append(output_check)
-        if output_check["status"] != "pass":
-            return checks
+        temp_dir = Path(td)
+        primary_output = temp_dir / "primary-output.json"
+        evidence_path = temp_dir / "judge-evidence.json"
+        setup_result, setup_output = _run_llm_judge_setup(case, cwd, temp_dir)
+        if setup_result is not None:
+            checks.append(setup_result)
+            if setup_result["status"] != "pass" or setup_output is None:
+                return checks
+            primary_output = setup_output
+        else:
+            output_check = _run_llm_judge_output(case, cwd, primary_output)
+            checks.append(output_check)
+            if output_check["status"] != "pass":
+                return checks
         shutil.copyfile(primary_output, output_path)
-        _write_judge_evidence(case, _input_path(case), primary_output, evidence_path)
+        _write_judge_evidence(case, _input_path(case), primary_output, evidence_path, setup_result)
 
         assertion_input = Path(td) / "assertion-input.json"
         judge_output = Path(td) / "assertion-output.json"
@@ -520,7 +698,7 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
                 {
                     "schema_version": 1,
                     "method": judge.get("method", "aggregate"),
-                    "primary_output": _primary_output_text(primary_output),
+                    "primary_output": _evidence_prompt(primary_output, evidence_path),
                     "assertions": [
                         {"id": a["id"], "title": a["title"], "prompt": a["prompt"]}
                         for a in case.get("assertions", [])
@@ -533,7 +711,7 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
             encoding="utf-8",
         )
         packet_path = Path(td) / "judge-packet.json"
-        packet_path.write_text(json.dumps({"schema_version": 1, "prompt": _primary_output_text(primary_output)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        packet_path.write_text(json.dumps({"schema_version": 1, "prompt": _evidence_prompt(primary_output, evidence_path)}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         cmd = _bind_placeholders(
             judge["command"],
             input_path=_input_path(case),
@@ -562,7 +740,8 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
             result_status = "pass"
             results = []
 
-        evidence = {"assertion_input": str(assertion_input), "primary_output": str(primary_output), "judge_evidence": str(evidence_path)}
+        evidence_payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence = {"assertion_input": str(assertion_input), "primary_output": str(primary_output), "judge_evidence": str(evidence_path), "provenance": evidence_payload}
         if results:
             for result in results:
                 assertion_id = result.get("assertion_id", "judge.command")
@@ -591,7 +770,7 @@ def _run_llm_judge_case(case: dict, output_path: Path, cwd: Path) -> list[dict]:
 def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
     output_suffix = ".json" if (case.get("expected") or "").endswith(".json") else ".out"
     with tempfile.TemporaryDirectory() as td:
-        output_path = Path(td) / f"output{output_suffix}"
+        output_path = Path(td) / f"{case.get('__artifact_slug', 'output')}{output_suffix}"
         checks: list[dict] = []
         run_status = "pass"
         if case.get("type") == "llm-judge":
@@ -627,8 +806,10 @@ def run_case(case: dict, skill_dir: Path, promote: bool = False) -> dict:
 
         return {
             "id": case["id"],
+            "case_group_id": case.get("__case_group_id", case["id"]),
+            "artifact_slug": case.get("__artifact_slug"),
             "type": case["type"],
-            "title": case["title"],
+            "title": case.get("title", case["id"]),
             "status": "fail" if failed or run_status == "fail" else "pass",
             "checks": checks,
             "promoted": promoted,

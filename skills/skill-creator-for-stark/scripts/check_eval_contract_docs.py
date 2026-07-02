@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify skill-creator-for-stark case-based eval contract docs/templates."""
+"""skill-creator-for-stark case-based eval 계약 문서와 템플릿을 검증한다."""
 
 from __future__ import annotations
 
@@ -8,8 +8,10 @@ from pathlib import Path
 
 REQUIRED_TOKENS = [
     "evals/<skill-name>.eval.yaml",
-    "evals/cases/*/case.yaml",
+    "evals/<case-id>/case.yaml",
+    "entries:",
     "test_policy",
+    "cases:",
     "run_llm_judge.py",
     "expected_compare: auto",
 ]

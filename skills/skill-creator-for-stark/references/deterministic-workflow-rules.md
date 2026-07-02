@@ -60,14 +60,14 @@
 
 - `scripts/run_pipeline.py`는 deterministic happy-path의 single entrypoint다.
 - step 간 data handoff는 agent가 복사하지 않고 code가 함수 return 값이나 output file path를 연결한다.
-- 각 step script는 개별 `main()`을 유지할 수 있지만 SKILL.md의 happy-path command는 `python3 scripts/run_pipeline.py ...` 하나로 둔다.
+- 각 step script는 개별 `main()`을 유지할 수 있지만 SKILL.md의 happy-path command는 `{python} scripts/run_pipeline.py ...` 하나로 둔다.
 - third-party dependency가 있으면 `requirements.txt`에 선언한다.
 - interactive/branching skill은 무리하게 pipeline으로 만들지 않는다. deterministic 부분만 script로 분리한다.
 
 검증:
 
 ```bash
-python3 scripts/check_pipeline.py <skill-dir>
+uv run python scripts/check_pipeline.py <skill-dir>
 ```
 
 `check_pipeline.py`는 `scripts/`와 `shared/` 아래 Python compile, third-party import 선언, 2개 이상 runnable step이 있을 때 `scripts/run_pipeline.py` 존재 여부를 확인한다. orchestrator wiring의 실제 정합성은 case-based eval suite의 각 `case.yaml`에서 `run.command`로 검증한다.
@@ -78,8 +78,8 @@ python3 scripts/check_pipeline.py <skill-dir>
 
 ```yaml
 run:
-  command: python3 scripts/run_pipeline.py --input {input} --output {output}
+  command: {python} scripts/run_pipeline.py --input {input} --output {output}
   timeout_sec: 120
 ```
 
-그 다음 `python3 scripts/run_evals.py --json`으로 `eval.yaml`에 declared된 case를 실행하고 produced output을 `command`/`llm-judge` assertion으로 채점한다. `llm-judge` adapter의 canonical CLI는 `run_llm_judge.py output --input input.json --output primary-output.json`와 `run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json`다. 기존 runner가 top-level `judge.command`로 실행하는 `run_llm_judge.py --input {judge_packet}` 경로는 migration alias이며, `{judge_packet}` public JSON은 `schema_version`과 `prompt`만 가진다.
+그 다음 `uv run python scripts/run_evals.py --json`으로 `eval.yaml`에 declared된 case를 실행하고 produced output을 `command`/`llm-judge` assertion으로 채점한다. `llm-judge` adapter의 canonical CLI는 `run_llm_judge.py output --input input.json --output primary-output.json`와 `run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json`다. 기존 runner가 top-level `judge.command`로 실행하는 `run_llm_judge.py --input {judge_packet}` 경로는 migration alias이며, `{judge_packet}` public JSON은 `schema_version`과 `prompt`만 가진다.

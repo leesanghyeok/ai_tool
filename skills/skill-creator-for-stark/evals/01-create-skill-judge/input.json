@@ -53,12 +53,12 @@
       "data": {"skill_name": "for-test-weekly-research-brief"}
     },
     {
-      "path": "evals/cases/brief-basic/case.yaml",
+      "path": "evals/brief-basic/case.yaml",
       "template": "templates/case.template.yaml",
       "data": {"case_id": "brief-basic", "case_type": "happy-path"}
     },
     {
-      "path": "evals/cases/source-missing-blocker/case.yaml",
+      "path": "evals/source-missing-blocker/case.yaml",
       "template": "templates/case.template.yaml",
       "data": {"case_id": "source-missing-blocker", "case_type": "safety"}
     }

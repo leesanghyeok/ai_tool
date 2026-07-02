@@ -12,34 +12,32 @@ test_policy:
   llm_judge: required
   promote: allow-overwrite
 
-cases:
+entries:
   - id: <case-id>
     type: happy-path
-    title: <이 case가 검증하는 목적을 한글로 작성>
-    path: cases/<case-id>/case.yaml
+    path: <case-id>/case.yaml
 ```
 
 ## Case skeleton
 
-`evals/cases/<case-id>/case.yaml`:
+`evals/<case-id>/case.yaml`:
 
 ```yaml
 id: <case-id>
 type: happy-path
-title: <이 case가 검증하는 목적을 한글로 작성>
 
-input: input.json
-expected: expected.json
-
-run:
-  command: python3 scripts/run_pipeline.py --input {input} --output {output}
-  timeout_sec: 120
-
-assertions:
-  - id: valid-json
-    title: 출력이 JSON으로 parse되는지 검증
-    type: command
-    cmd: python3 -m json.tool {output}
+cases:
+  - id: <case-id>
+    input: input.json
+    expected: expected.json
+    run:
+      command: {python} scripts/run_pipeline.py --input {input} --output {output}
+      timeout_sec: 120
+    assertions:
+      - id: valid-json
+        title: 출력이 JSON으로 parse되는지 검증
+        type: command
+        cmd: {python} -m json.tool {output}
 
 ```
 
@@ -48,21 +46,23 @@ assertions:
 ```yaml
 id: semantic-quality
 type: llm-judge
-title: 출력이 요구사항을 의미적으로 만족하는지 검증
 
-input: input.json
-
-judge:
-  method: each-session
-  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
-  verifyCommand: python3 scripts/verify_llm_judge_state.py --evidence {judge_evidence}
-  timeout_sec: 300
-
-assertions:
-  - id: actionable-workflow
-    title: 실행 가능한 workflow가 있는지 검증
-    type: llm-judge
-    prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
+cases:
+  - id: semantic-quality
+    input: input.json
+    setup:
+      command: {python} scripts/run_pipeline.py --input {input} --output {pipeline_output}
+      timeout_sec: 120
+    judge:
+      method: each-session
+      command: {python} scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
+      verifyCommand: {python} scripts/verify_llm_judge_state.py --evidence {judge_evidence}
+      timeout_sec: 300
+    assertions:
+      - id: actionable-workflow
+        title: 실행 가능한 workflow가 있는지 검증
+        type: llm-judge
+        prompt: 출력에는 사용자가 바로 실행할 수 있는 구체적인 workflow가 있어야 한다.
 ```
 
 ## 작성 규칙
@@ -74,4 +74,5 @@ assertions:
 - `--promote`는 expected를 생성하거나 overwrite한다.
 - assertion type은 `command`, `llm-judge`만 사용한다.
 - `type: llm-judge` case에는 `run.command`를 두지 않는다.
+- pipeline 산출물을 judge해야 하면 optional top-level `setup.command`를 두고 `{pipeline_output}` placeholder를 반드시 포함한다. runner는 setup output의 hash/status/files_written read-back을 `{judge_evidence}` provenance로 만들고 judge prompt에 포함한다.
 - `type: llm-judge` case의 `judge.command`는 top-level에 두고, assertion에는 `prompt`를 직접 둔다. Canonical adapter CLI는 `run_llm_judge.py output --input input.json --output primary-output.json`와 `run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json`이며, 기존 `--input {judge_packet} --output {judge_output}` 형태는 migration alias다.

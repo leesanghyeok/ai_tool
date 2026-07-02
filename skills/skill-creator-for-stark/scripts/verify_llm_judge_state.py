@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically verify llm-judge evidence produced by run_evals.py."""
+"""run_evals.py가 생성한 llm-judge evidence를 deterministic하게 검증한다."""
 from __future__ import annotations
 
 import argparse
@@ -59,8 +59,36 @@ def verify(evidence_path: Path) -> list[str]:
         if primary_json.get("status") != "success":
             errors.append("primary output status must be success")
         output = primary_json.get("output")
-        if not isinstance(output, dict) or not isinstance(output.get("content"), str) or not output["content"].strip():
-            errors.append("primary output output.content must be non-empty")
+        files_written = primary_json.get("files_written")
+        has_output_content = isinstance(output, dict) and isinstance(output.get("content"), str) and bool(output["content"].strip())
+        has_pipeline_files = isinstance(files_written, list)
+        if not has_output_content and not has_pipeline_files:
+            errors.append("primary output must contain either non-empty output.content or pipeline files_written list")
+
+    setup = evidence.get("setup")
+    if setup is not None:
+        if not isinstance(setup, dict):
+            errors.append("setup must be an object")
+        else:
+            if setup.get("exit_code") != 0:
+                errors.append("setup.exit_code must be 0")
+            pipeline_output = setup.get("pipeline_output")
+            if not isinstance(pipeline_output, str) or not pipeline_output:
+                errors.append("setup.pipeline_output is required")
+            elif Path(pipeline_output) != Path(primary_path_value):
+                errors.append("setup.pipeline_output must match primary_output.path")
+            if setup.get("pipeline_output_status") != "success":
+                errors.append("setup.pipeline_output_status must be success")
+        read_back = evidence.get("files_written_read_back")
+        if not isinstance(read_back, list):
+            errors.append("files_written_read_back must be a list when setup is present")
+        else:
+            for index, item in enumerate(read_back):
+                if not isinstance(item, dict):
+                    errors.append(f"files_written_read_back[{index}] must be an object")
+                    continue
+                if not item.get("exists"):
+                    errors.append(f"files_written_read_back[{index}] target is missing")
 
     artifacts = evidence.get("artifacts")
     if not isinstance(artifacts, list):

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Validate a portable skill package.
+"""portable skill package를 검증한다.
 
 Usage:
   python3 skills/skill-creator-for-stark/scripts/validate-skill-package.py skills/<skill-name>
 """
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import sys
@@ -14,6 +13,7 @@ from pathlib import Path
 
 REQUIRED_KEYS = ["name", "description", "version", "author", "license"]
 ALLOWED_SUPPORT_DIRS = {"references", "templates", "scripts", "assets", "history", "feedback", "evals"}
+IGNORED_TOP_LEVEL_DIRS = {".venv", ".ruff_cache", "__pycache__"}
 REQUIRED_SECTIONS = [
     "## 입력 변수",
     "## 출력 변수",
@@ -318,7 +318,7 @@ def main() -> None:
     check_eval_spec(skill_dir)
 
     for child in skill_dir.iterdir():
-        if child.is_dir() and child.name not in ALLOWED_SUPPORT_DIRS:
+        if child.is_dir() and child.name not in ALLOWED_SUPPORT_DIRS and child.name not in IGNORED_TOP_LEVEL_DIRS:
             fail(f"unsupported support directory: {child.name}")
 
     check_fence_balance(text, "SKILL.md")

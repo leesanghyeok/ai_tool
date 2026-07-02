@@ -7,36 +7,28 @@ test_policy:
   llm_judge: required
   promote: allow-overwrite
 
-cases:
+entries:
   - id: 01-create-skill-judge
     type: llm-judge
-    title: 새 스킬 생성 output의 의미 품질 subagent judge 검증
-    path: cases/01-create-skill-judge/case.yaml
+    path: 01-create-skill-judge/case.yaml
   - id: 02-create-skill
     type: happy-path
-    title: 새 스킬 생성 사용자 시나리오 검증
-    path: cases/02-create-skill/case.yaml
+    path: 02-create-skill/case.yaml
   - id: 03-modify-skill-judge
     type: llm-judge
-    title: 기존 스킬 수정 output의 최소 변경 subagent judge 검증
-    path: cases/03-modify-skill-judge/case.yaml
+    path: 03-modify-skill-judge/case.yaml
   - id: 04-modify-skill
     type: integration
-    title: 기존 스킬 수정 사용자 시나리오 검증
-    path: cases/04-modify-skill/case.yaml
+    path: 04-modify-skill/case.yaml
   - id: 05-migrate-skill-judge
     type: llm-judge
-    title: migration output의 원본 보존 subagent judge 검증
-    path: cases/05-migrate-skill-judge/case.yaml
+    path: 05-migrate-skill-judge/case.yaml
   - id: 06-eval-contract
     type: regression
-    title: case-based eval 계약 문서와 템플릿 정합성 검증
-    path: cases/06-eval-contract/case.yaml
+    path: 06-eval-contract/case.yaml
   - id: 07-validate-package
     type: regression
-    title: 스킬 패키지 구조 validator 통과 여부 검증
-    path: cases/07-validate-package/case.yaml
+    path: 07-validate-package/case.yaml
   - id: 08-runner-regression
     type: regression
-    title: case-based eval runner regression test 통과 여부 검증
-    path: cases/08-runner-regression/case.yaml
+    path: 08-runner-regression/case.yaml

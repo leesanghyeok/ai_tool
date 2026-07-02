@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Portable subprocess adapter for llm-judge output/assertion eval contracts.
+"""llm-judge output/assertion eval 계약을 위한 portable subprocess adapter.
 
 Canonical modes:
   python3 scripts/run_llm_judge.py output --input input.json --output primary-output.json
   python3 scripts/run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json
 
-The legacy migration form remains supported:
+Legacy migration form도 계속 지원한다:
   python3 scripts/run_llm_judge.py --input judge-packet.json --output judge-output.txt
 
-The adapter is intentionally deterministic and performs no external LLM/API call,
-credential access, commit, publish, or promotion. It validates the portable JSON
-contracts and writes bounded smoke-judge artifacts that the eval runner can check.
+이 adapter는 의도적으로 deterministic하며 external LLM/API 호출, credential 접근, commit, publish, promotion을 수행하지 않는다. Portable JSON 계약을 검증하고 eval runner가 확인할 수 있는 bounded smoke-judge artifact를 쓴다.
 """
 from __future__ import annotations
 
@@ -220,7 +218,7 @@ def run_assertion(input_path: Path, output_path: Path) -> int:
 
 
 def run_legacy_alias(input_path: Path, output_path: Path) -> int:
-    """Support the pre-B1 --input/--output judge_packet -> text output shape."""
+    """B1 이전 --input/--output judge_packet -> text output 형식을 지원한다."""
     try:
         packet = _load_json_object(input_path, "judge input")
         prompt = _validate_public_prompt_packet(packet, label="judge input")

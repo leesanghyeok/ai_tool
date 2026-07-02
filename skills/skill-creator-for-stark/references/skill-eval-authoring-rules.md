@@ -8,7 +8,7 @@
 
 - eval generation은 기본값으로 켠다. 사용자가 명시적으로 원하지 않거나 skill이 eval에 부적합할 때만 생략한다.
 - eval은 “더 좋아졌는가” 비교가 아니라 “의도한 대로 동작하는가”를 검증하는 test contract다.
-- `evals/<skill-name>.eval.yaml`이 실행 source of truth다. `evals/cases/` 아래 case directory가 있어도 `eval.yaml`에 선언되지 않으면 실행하지 않고 validation error로 본다.
+- `evals/<skill-name>.eval.yaml`이 실행 source of truth다. `evals/` 아래 case directory가 있어도 `eval.yaml`에 선언되지 않으면 실행하지 않고 validation error로 본다.
 - `eval.yaml`에는 top-level `run.command`, `global_assertions`, `description`을 두지 않는다. `title`, `test_policy`, `cases`만 간결하게 둔다.
 - 각 `case.yaml`은 `id`, `type`, `title`, optional `input`, optional `expected`, optional `run`, `assertions`를 가진다.
 - assertion type은 `command`, `llm-judge` 두 개만 지원한다.
@@ -68,11 +68,11 @@ cases:
   - id: create-basic
     type: happy-path
     title: 기본 생성 workflow 검증
-    path: cases/create-basic/case.yaml
+    path: create-basic/case.yaml
   - id: judge-quality
     type: llm-judge
     title: 생성물 품질을 LLM judge로 검증
-    path: cases/judge-quality/case.yaml
+    path: judge-quality/case.yaml
 ```
 
 ### `test_policy` 의미
@@ -83,7 +83,7 @@ cases:
 | `llm_judge` | `required` | `llm-judge` assertion은 기본 실행에 포함되며 judge command 실패나 verdict fail은 case fail이다. |
 | `promote` | `allow-overwrite` | `--promote`가 있으면 expected가 없을 때 생성하고 이미 있으면 overwrite한다. |
 
-`eval.yaml cases[]`가 validate/run 대상의 source of truth다. `evals/cases/*/case.yaml` 아래에 있어도 manifest에 선언되지 않은 case directory는 기본적으로 무시한다.
+`eval.yaml entries[]`가 validate/run 대상의 source of truth다. `evals/<case-id>/case.yaml` 아래에 있어도 manifest에 선언되지 않은 case directory는 기본적으로 무시한다.
 
 ## `case.yaml` 형식
 
@@ -96,14 +96,14 @@ input: input.json
 expected: expected.json
 
 run:
-  command: python3 scripts/run_pipeline.py --input {input} --output {output}
+  command: {python} scripts/run_pipeline.py --input {input} --output {output}
   timeout_sec: 120
 
 assertions:
   - id: valid-json
     title: 출력이 JSON으로 parse되는지 검증
     type: command
-    cmd: python3 -m json.tool {output}
+    cmd: {python} -m json.tool {output}
 
   - id: package-shape
     title: 필수 스킬 패키지 파일이 생성됐는지 검증
@@ -139,12 +139,12 @@ expected: expected.json
 `--promote`는 명시적 파일쓰기 옵션이다.
 
 ```bash
-python3 scripts/run_evals.py --promote
+uv run python scripts/run_evals.py --promote
 ```
 
 동작:
 
-- expected 없음: `cases/<case-id>/expected.json` 생성
+- expected 없음: `evals/<case-id>/expected.json` 생성
 - expected 있음: 해당 파일 overwrite
 - promote 없음: expected 파일을 쓰지 않음
 
@@ -156,7 +156,7 @@ python3 scripts/run_evals.py --promote
 - id: no-placeholder-left
   title: 템플릿 placeholder가 남아 있지 않은지 검증
   type: command
-  cmd: python3 -c "import sys; t=open(sys.argv[1]).read(); assert '{{' not in t" {output}
+  cmd: {python} -c "import sys; t=open(sys.argv[1]).read(); assert '{{' not in t" {output}
 ```
 
 `cmd` exit code가 0이면 pass다. `{input}`, `{output}`, `{expected}` placeholder를 사용할 수 있다. 단, `{expected}`를 쓰는 command는 case에 `expected`가 있어야 한다.
@@ -172,10 +172,14 @@ title: 생성된 스킬이 Stark 품질 기준을 만족하는지 검증
 
 input: input.json
 
+setup:
+  command: {python} scripts/run_pipeline.py --input {input} --output {pipeline_output}
+  timeout_sec: 120
+
 judge:
   method: each-session
-  command: python3 scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
-  verifyCommand: python3 scripts/verify_llm_judge_state.py --evidence {judge_evidence}
+  command: {python} scripts/run_llm_judge.py assertion --input {assertion_input} --output {judge_output}
+  verifyCommand: {python} scripts/verify_llm_judge_state.py --evidence {judge_evidence}
   timeout_sec: 300
 
 assertions:
@@ -199,23 +203,23 @@ assertions:
 
 ## `type: llm-judge` case
 
-`type: llm-judge` case는 `run.command`를 정의하지 않는다. 이 case는 primary execution이 아니라 judge 검증 자체가 목적이다. 필요한 실행은 top-level `judge.command`가 수행한다.
+`type: llm-judge` case는 `run.command`를 정의하지 않는다. 이 case는 judge 검증 자체가 목적이다. 실제 pipeline 산출물을 judge해야 하는 경우에는 optional top-level `setup.command`를 사용해 case-local temp directory 안의 `{pipeline_output}`에 `run_pipeline.py` 결과를 만들고, runner가 command string, exit code, input/output hash, `pipeline_output.status`, `files_written[]` read-back을 `judge_evidence` provenance로 남긴다. `judge.command` prompt에는 primary output과 provenance excerpt가 함께 전달된다.
 
 ## `run_llm_judge.py` contract
 
 LLM judge adapter의 canonical subprocess contract는 output mode와 assertion mode로 분리한다.
 
 ```bash
-python3 scripts/run_llm_judge.py output --input input.json --output primary-output.json
-python3 scripts/run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json
+{python} scripts/run_llm_judge.py output --input input.json --output primary-output.json
+{python} scripts/run_llm_judge.py assertion --input assertion-input.json --output assertion-output.json
 ```
 
-Migration 기간에는 runner가 assertion-level `prompt`를 `{judge_packet}` JSON의 `prompt` 필드에 넣고 `python3 scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}`를 실행하는 기존 형태도 허용한다. 이 alias의 public `{judge_packet}`은 계속 `schema_version`과 `prompt`만 가진다.
+Migration 기간에는 runner가 assertion-level `prompt`를 `{judge_packet}` JSON의 `prompt` 필드에 넣고 `{python} scripts/run_llm_judge.py --input {judge_packet} --output {judge_output}`를 실행하는 기존 형태도 허용한다. 이 alias의 public `{judge_packet}`은 계속 `schema_version`과 `prompt`만 가진다.
 
 Required judge behavior:
 
 - output mode public `input.json`은 `schema_version`과 `prompt` 두 필드만 허용하고, `primary-output.json`에는 `schema_version`, `status`, `output{format,content,summary}`, `artifacts`, `redactions_applied`, `errors`를 쓴다.
-- assertion mode internal input은 `schema_version`, `method`, `primary_output` 문자열, `assertions[]`를 요구하고, `assertion-output.json`에는 `schema_version`, `status`, normalized `method`, `primary_output_ref.sha256`, `results[]`, `errors[]`를 쓴다.
+- assertion mode internal input은 `schema_version`, `method`, `primary_output` 문자열, `assertions[]`를 요구하고, `assertion-output.json`에는 `schema_version`, `status`, normalized `method`, `primary_output_ref.sha256`, `results[]`, `errors[]`를 쓴다. `setup.command`가 있으면 `primary_output` 문자열은 pipeline output과 case-local provenance evidence 요약을 포함한다.
 - 기존 alias의 `{judge_output}`은 skill에 정의된 자연어 응답이며 고정 JSON verdict/evidence schema가 아니다.
 - command exit code가 0이고 `{judge_output}`이 non-empty이면 runner-level 실행은 통과로 볼 수 있다. 자연어 판단 내용의 정책 결정은 review 단계에서 다룬다.
 
@@ -224,10 +228,10 @@ Required judge behavior:
 생성된 skill root에서 실행한다.
 
 ```bash
-python3 scripts/run_evals.py --validate
-python3 scripts/run_evals.py
-python3 scripts/run_evals.py --promote
-python3 scripts/run_evals.py --json
+uv run python scripts/run_evals.py --validate
+uv run python scripts/run_evals.py
+uv run python scripts/run_evals.py --promote
+uv run python scripts/run_evals.py --json
 ```
 
 - `--validate`: `eval.yaml`과 선언된 `case.yaml` 구조를 검증한다. undeclared case directory도 여기서 잡는다.
@@ -251,13 +255,14 @@ python3 scripts/run_evals.py --json
 - [ ] `eval.yaml`에 `skill`, `title`, `cases`가 있다.
 - [ ] `eval.yaml`에 `description`이 없다.
 - [ ] runner는 `eval.yaml`에 선언된 case만 실행한다.
-- [ ] undeclared `evals/cases/*/case.yaml`은 validation error다.
+- [ ] undeclared `evals/<case-id>/case.yaml`은 validation error다.
 - [ ] 각 case는 `id`, `type`, `title`, `assertions`를 가진다.
 - [ ] 각 assertion은 `id`, `title`, `type`을 가진다.
 - [ ] assertion type은 `command`, `llm-judge`만 사용한다.
 - [ ] non-`llm-judge` case의 `run.command`에는 `{output}`이 있다.
 - [ ] `type: llm-judge` case에는 `run.command`가 없다.
 - [ ] `type: llm-judge` case는 top-level `judge.method`, `judge.command`를 가진다.
+- [ ] pipeline 산출물을 judge하는 `type: llm-judge` case는 `setup.command`에 `{pipeline_output}`을 포함하고 `judge.verifyCommand`로 `{judge_evidence}`를 검증한다.
 - [ ] `llm-judge` assertion은 `prompt`를 직접 가진다.
 - [ ] `judge.method`는 `aggregate` 또는 `subagent`다.
 - [ ] `expected`가 있으면 자동 equality 비교가 수행된다.

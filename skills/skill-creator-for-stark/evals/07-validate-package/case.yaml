@@ -1,0 +1,14 @@
+id: 07-validate-package
+type: regression
+
+cases:
+  - id: 07-validate-package
+    run:
+      command: {python} scripts/validate-skill-package.py . > {output}
+      timeout_sec: 120
+
+    assertions:
+      - id: package-validator-pass
+        title: validate-skill-package.py가 PASS를 출력하는지 검증
+        type: command
+        cmd: grep -q '^PASS:' {output}

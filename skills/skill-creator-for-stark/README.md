@@ -21,7 +21,7 @@
 | 기존 스킬 최소 수정 | 기존 계약을 보존하면서 필요한 파일만 patch | 기존 workflow 보존, 승인 범위, 회귀 방지, read-back |
 | 기존 workflow migration | legacy 흐름을 Stark package 구조로 이전 | 원본 trigger/workflow 보존, create-path equivalence, 불확실성 표시 |
 | 품질 검토만 수행 | target skill과 rubric을 수정하지 않는 평가 결과 | hard gate, scorecard parse 가능성, 개선 제안, 미검증 항목 |
-| eval suite 보강/점검 | `evals/<skill>.eval.yaml`, `evals/cases/*/case.yaml`, runner 검증 | case type, expected baseline, `command`/`llm-judge` 책임 분리 |
+| eval suite 보강/점검 | `evals/<skill>.eval.yaml`, `evals/<case-id>/case.yaml`, runner 검증 | case type, expected baseline, `command`/`llm-judge` 책임 분리 |
 
 ## 주요 기능 맵
 
@@ -29,13 +29,13 @@
 - `references/`: 작성 규칙, eval authoring rules, 품질 루브릭 평가, feedback logging, trigger/history, deterministic workflow 같은 판단 기준을 둔다.
 - `templates/`: `SKILL.template.md`, `eval-spec.template.md`, `skill-output-template.md`, `feedback-log.template.md`처럼 복사 가능한 skeleton을 둔다.
 - `scripts/`: deterministic 검증과 반복 작업을 둔다. 주요 명령은 `scripts/run_evals.py`, `scripts/validate-skill-package.py`, `scripts/run_pipeline.py`, `scripts/run_llm_judge.py`, `scripts/check_pipeline.py`, `scripts/run_evals_template.py`다.
-- `evals/`: `evals/skill-creator-for-stark.eval.yaml`와 declared `evals/cases/*/case.yaml`로 case-based regression/evaluation contract를 관리한다.
+- `evals/`: `evals/skill-creator-for-stark.eval.yaml`와 declared `evals/<case-id>/case.yaml`로 case-based regression/evaluation contract를 관리한다.
 - `history/`: 의미 있는 변경 이력과 이전 migration 기록을 보관한다.
 - `feedback/`: 생성/수정되는 스킬에 포함할 사용자 불만족 사건 기록 절차의 대상 디렉터리다.
 
 ## Eval 방식 가이드
 
-`skill-creator-for-stark`는 case-based eval suite를 기본 단위로 본다. suite manifest는 `evals/<skill>.eval.yaml`, 각 case는 `evals/cases/*/case.yaml`에 둔다. 사용자는 runner 내부 구현을 이해하기보다 “무엇을 deterministic하게 검증할지”와 “무엇을 의미 판단으로 남길지”를 먼저 정하면 된다.
+`skill-creator-for-stark`는 case-based eval suite를 기본 단위로 본다. suite manifest는 `evals/<skill>.eval.yaml`, 각 case는 `evals/<case-id>/case.yaml`에 둔다. 사용자는 runner 내부 구현을 이해하기보다 “무엇을 deterministic하게 검증할지”와 “무엇을 의미 판단으로 남길지”를 먼저 정하면 된다.
 
 ### case type 의미
 
@@ -66,14 +66,16 @@
 
 ```bash
 cd /Users/stark/project/jarvis/ai_tool/skills/skill-creator-for-stark
-python3 scripts/run_evals.py --validate
-python3 scripts/run_evals.py --json
-python3.11 -m unittest discover -s scripts/tests -v
-python3 scripts/validate-skill-package.py .
+bash scripts/test.sh
+uv run ruff check scripts
+uv run python scripts/run_evals.py --validate
+uv run python scripts/run_evals.py --json
+uv run python -m unittest discover -s scripts/tests -v
+uv run python scripts/validate-skill-package.py .
 git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-for-stark
 ```
 
-주의: `/usr/bin/python3`가 Python 3.9일 수 있으므로 `Path | None` syntax가 있는 tests/helper는 `python3.11`로 실행한다. 옵션 이름은 `--validate`이며 `--validation`은 지원하지 않는다.
+주의: standalone 검증은 `uv`가 제공하는 Python 3.14 환경에서 실행한다. 옵션 이름은 `--validate`이며 `--validation`은 지원하지 않는다.
 
 ## 사용자가 준비하면 좋은 입력
 
@@ -96,9 +98,9 @@ git -C /Users/stark/project/jarvis/ai_tool diff --check -- skills/skill-creator-
 
 - 생성/수정된 skill root와 주요 파일 경로를 보고한다.
 - `SKILL.md`, `references/`, `templates/`, `scripts/`, `evals/`, `history/`, `feedback/` 중 실제로 생성/수정한 support files를 구분한다.
-- package 구조는 `python3 scripts/validate-skill-package.py .` 또는 대상 skill root 인자로 검증한다.
-- eval suite는 가능하면 `python3 scripts/run_evals.py --validate`와 `python3 scripts/run_evals.py --json`으로 확인한다.
-- creator 자체의 runner/helper/test를 바꿨다면 `python3.11 -m unittest discover -s scripts/tests -v`를 실행한다.
+- package 구조는 `uv run python scripts/validate-skill-package.py .` 또는 대상 skill root 인자로 검증한다.
+- eval suite는 가능하면 `uv run python scripts/run_evals.py --validate`와 `uv run python scripts/run_evals.py --json`으로 확인한다.
+- creator 자체의 runner/helper/test를 바꿨다면 `uv run python -m unittest discover -s scripts/tests -v`를 실행한다.
 - whitespace와 patch 품질은 `git diff --check`로 확인한다.
 - `create` mode는 `/Users/stark/project/jarvis/ai_tool/rubric/skill/skill-quality-rubric-v1.md` 기준 품질 평가가 필수이며, `certification_score >= 95`와 D1-D5 hard gate 통과 전에는 완료로 보지 않는다.
 - `modify` mode에서 workflow, approval boundary, verification gate, trigger/scope, template/validator/eval contract를 크게 바꾸면 품질 평가를 실행하거나 생략 사유를 명시한다.

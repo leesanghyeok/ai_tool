@@ -15,7 +15,7 @@ modify
 ## 주요 변경
 
 - `evals/skill-creator-for-stark.eval.yaml`을 suite manifest/source of truth로 추가했다.
-- `evals/cases/07-validate-package/case.yaml`, `08-runner-regression/case.yaml`, `06-eval-contract/case.yaml`을 추가했다.
+- `evals/07-validate-package/case.yaml`, `08-runner-regression/case.yaml`, `06-eval-contract/case.yaml`을 추가했다.
 - `scripts/run_evals_template.py`와 `scripts/run_evals.py`를 case-based runner로 교체했다.
 - `scripts/tests/test_run_evals.py`를 case-based runner regression test로 교체했다.
 - `references/skill-eval-authoring-rules.md`, `templates/eval-spec.template.md`, `SKILL.md`, `README.md`, `references/deterministic-workflow-rules.md`를 새 계약에 맞게 갱신했다.
@@ -43,4 +43,4 @@ modify
 
 ## 추가 정리
 
-사용자 승인 후 기존 legacy Markdown eval manifest와 golden fixture directory를 제거했다. 현재 실행 source of truth는 `evals/skill-creator-for-stark.eval.yaml`과 declared `evals/cases/*/case.yaml`이다.
+사용자 승인 후 기존 legacy Markdown eval manifest와 golden fixture directory를 제거했다. 현재 실행 source of truth는 `evals/skill-creator-for-stark.eval.yaml`과 declared `evals/*/case.yaml`이다.
