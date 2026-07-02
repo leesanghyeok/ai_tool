@@ -6,13 +6,16 @@ Spec model:
   evals/<skill>.eval.yaml          # suite manifest + 사람이 읽는 case map
   evals/<case-id>/case.yaml        # canonical case group definition
 
-eval.yaml manifest가 source of truth다. eval.yaml에 선언된 case만 validate/run하며, disk에 남아 있지만 선언되지 않은 case directory는 무시한다.
+eval.yaml manifest가 source of truth다. eval.yaml에 선언된 case만 validate/run하며,
+disk에 남아 있지만 선언되지 않은 case directory는 무시한다.
 
-non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는 top-level judge command와 assertion-level prompts를 가진다. global assertions와 top-level suite run command는 없다. 지원 assertion type은 다음 두 가지다.
+non-llm-judge case는 자체 run command와 assertions를 가진다. llm-judge case는 top-level judge command와
+assertion-level prompts를 가진다. global assertions와 top-level suite run command는 없다. 지원 assertion type은 다음 두 가지다.
   - command: shell command exits 0
   - llm-judge: subprocess judge command가 non-empty natural-language response를 반환
 
-Expected 처리는 자동이다. case가 `expected`를 선언하면 --promote가 없을 때 produced output을 해당 file과 byte-compare한다. --promote를 쓰면 passing case output으로 expected file을 생성하거나 overwrite한다.
+Expected 처리는 자동이다. case가 `expected`를 선언하면 --promote가 없을 때 produced output을 해당 file과
+byte-compare한다. --promote를 쓰면 passing case output으로 expected file을 생성하거나 overwrite한다.
 
 Usage:
   uv run python scripts/run_evals.py [skill_dir] [--validate] [--promote] [--json]
@@ -92,6 +95,42 @@ def _parse_scalar(value: str) -> Any:
         return value
 
 
+def _block_scalar_header(content: str) -> str | None:
+    if content in ("|", ">"):
+        return content
+    if content.endswith(": |") or content.endswith(": >"):
+        return content[:-2].rstrip() + ":"
+    return None
+
+
+def _line_indent(text: str) -> int:
+    return len(text) - len(text.lstrip(" "))
+
+
+def _collect_block_lines(raw: list[str], index: int, indent: int) -> tuple[list[str], int]:
+    block_indent = None
+    block_lines: list[str] = []
+    while index < len(raw):
+        line = raw[index]
+        if not line.strip():
+            block_lines.append("")
+            index += 1
+            continue
+        nindent = _line_indent(line)
+        if nindent <= indent:
+            break
+        block_indent = nindent if block_indent is None else block_indent
+        block_lines.append(line[block_indent:])
+        index += 1
+    return block_lines, index
+
+
+def _logical_block_line(raw: list[str], index: int, indent: int, header: str) -> tuple[tuple[int, str], int]:
+    block_lines, next_index = _collect_block_lines(raw, index + 1, indent)
+    joined = "\n".join(block_lines).rstrip("\n")
+    return (indent, f"{header} {json.dumps(joined, ensure_ascii=False)}"), next_index
+
+
 def _logical_lines(text: str) -> list[tuple[int, str]]:
     raw = text.splitlines()
     out: list[tuple[int, str]] = []
@@ -101,111 +140,117 @@ def _logical_lines(text: str) -> list[tuple[int, str]]:
         if not stripped_comment.strip():
             i += 1
             continue
-        indent = len(stripped_comment) - len(stripped_comment.lstrip(" "))
+        indent = _line_indent(stripped_comment)
         content = stripped_comment.strip()
-        if content.endswith(": |") or content.endswith(": >") or content in ("|", ">"):
-            if content in ("|", ">"):
-                key_prefix = content
-            else:
-                key_prefix = content[:-2].rstrip() + ":"
-            block_indent = None
-            block_lines: list[str] = []
+        header = _block_scalar_header(content)
+        if header is not None:
+            logical, i = _logical_block_line(raw, i, indent, header)
+            out.append(logical)
+        else:
+            out.append((indent, content))
             i += 1
-            while i < len(raw):
-                nxt = raw[i]
-                if not nxt.strip():
-                    block_lines.append("")
-                    i += 1
-                    continue
-                nindent = len(nxt) - len(nxt.lstrip(" "))
-                if nindent <= indent:
-                    break
-                if block_indent is None:
-                    block_indent = nindent
-                block_lines.append(nxt[block_indent:])
-                i += 1
-            joined = "\n".join(block_lines).rstrip("\n")
-            out.append((indent, f"{key_prefix} {json.dumps(joined, ensure_ascii=False)}"))
-            continue
-        out.append((indent, content))
-        i += 1
     return out
+
+
+class YamlSubsetParser:
+    def __init__(self, path: Path, lines: list[tuple[int, str]]) -> None:
+        self.path = path
+        self.lines = lines
+
+    def parse(self) -> Any:
+        if not self.lines:
+            return {}
+        parsed, end = self.parse_block(0, self.lines[0][0])
+        if end != len(self.lines):
+            raise SimpleYamlError(f"{self.path}: could not parse all lines")
+        return parsed
+
+    def parse_block(self, index: int, indent: int) -> tuple[Any, int]:
+        if index >= len(self.lines) or self.lines[index][0] < indent:
+            return {}, index
+        if self.lines[index][1].startswith("- "):
+            return self.parse_list(index, indent)
+        return self.parse_mapping(index, indent)
+
+    def parse_list(self, index: int, indent: int) -> tuple[list[Any], int]:
+        items: list[Any] = []
+        while self._is_list_item(index, indent):
+            value, index = self.parse_list_item(index, indent)
+            items.append(value)
+        return items, index
+
+    def parse_list_item(self, index: int, indent: int) -> tuple[Any, int]:
+        item_text = self.lines[index][1][2:].strip()
+        index += 1
+        if not item_text:
+            return self.parse_block(index, indent + 2)
+        if ":" not in item_text:
+            return _parse_scalar(item_text), index
+        item, index = self.parse_inline_mapping_item(item_text, index, indent)
+        return item, index
+
+    def parse_inline_mapping_item(self, item_text: str, index: int, indent: int) -> tuple[dict[str, Any], int]:
+        key, raw_val = item_text.split(":", 1)
+        item: dict[str, Any] = {}
+        if raw_val.strip():
+            item[key.strip()] = _parse_scalar(raw_val)
+        else:
+            item[key.strip()], index = self.parse_block(index, indent + 2)
+        return self.parse_child_mapping(item, index, indent)
+
+    def parse_child_mapping(self, item: dict[str, Any], index: int, indent: int) -> tuple[dict[str, Any], int]:
+        while index < len(self.lines) and self.lines[index][0] > indent:
+            child_indent, child_text = self.lines[index]
+            if child_indent < indent + 2 or child_text.startswith("- "):
+                break
+            key, value, index = self.parse_key_value(index, child_indent)
+            item[key] = value
+        return item, index
+
+    def parse_mapping(self, index: int, indent: int) -> tuple[dict[str, Any], int]:
+        mapping: dict[str, Any] = {}
+        while self._is_mapping_item(index, indent):
+            key, val, index = self.parse_key_value(index, indent)
+            mapping[key] = val
+        return mapping, index
+
+    def parse_key_value(self, index: int, indent: int) -> tuple[str, Any, int]:
+        text = self._line_at_indent(index, indent)
+        if ":" not in text:
+            raise SimpleYamlError(f"{self.path}: expected key: value at logical line {index + 1}")
+        key, raw_val = text.split(":", 1)
+        return self.parse_value(key.strip(), raw_val.strip(), index + 1, indent)
+
+    def parse_value(self, key: str, raw_val: str, index: int, indent: int) -> tuple[str, Any, int]:
+        if raw_val:
+            return key, _parse_scalar(raw_val), index
+        if index < len(self.lines) and self.lines[index][0] > indent:
+            value, index = self.parse_block(index, self.lines[index][0])
+            return key, value, index
+        return key, None, index
+
+    def _is_list_item(self, index: int, indent: int) -> bool:
+        return index < len(self.lines) and self.lines[index][0] == indent and self.lines[index][1].startswith("- ")
+
+    def _is_mapping_item(self, index: int, indent: int) -> bool:
+        return index < len(self.lines) and self.lines[index][0] == indent and not self.lines[index][1].startswith("- ")
+
+    def _line_at_indent(self, index: int, indent: int) -> str:
+        cur_indent, text = self.lines[index]
+        if cur_indent != indent:
+            raise SimpleYamlError(f"{self.path}: unexpected indent at logical line {index + 1}")
+        return text
 
 
 def parse_yaml_subset(path: Path) -> Any:
     """eval.yaml/case.yaml에서 사용하는 작은 YAML 부분집합을 파싱한다.
 
-    Nested mappings, mappings/scalars list, quoted/unquoted scalars, ints/bools/null, inline JSON arrays/objects, literal/folded blocks를 지원한다.
-    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에 PyYAML dependency를 추가하지 않도록 이 제한된 shape를 유지해야 한다.
+    Nested mappings, mappings/scalars list, quoted/unquoted scalars, ints/bools/null,
+    inline JSON arrays/objects, literal/folded blocks를 지원한다.
+    의도적으로 general YAML parser가 아니다. generated spec은 generated skill에 PyYAML dependency를
+    추가하지 않도록 이 제한된 shape를 유지해야 한다.
     """
-    lines = _logical_lines(path.read_text(encoding="utf-8"))
-    if not lines:
-        return {}
-
-    def parse_block(index: int, indent: int) -> tuple[Any, int]:
-        if index >= len(lines):
-            return {}, index
-        if lines[index][0] < indent:
-            return {}, index
-        is_list = lines[index][1].startswith("- ")
-        if is_list:
-            arr: list[Any] = []
-            while index < len(lines) and lines[index][0] == indent and lines[index][1].startswith("- "):
-                item_text = lines[index][1][2:].strip()
-                index += 1
-                if not item_text:
-                    val, index = parse_block(index, indent + 2)
-                    arr.append(val)
-                    continue
-                if ":" in item_text:
-                    key, raw_val = item_text.split(":", 1)
-                    item: dict[str, Any] = {}
-                    if raw_val.strip():
-                        item[key.strip()] = _parse_scalar(raw_val)
-                    else:
-                        val, index = parse_block(index, indent + 2)
-                        item[key.strip()] = val
-                    while index < len(lines) and lines[index][0] > indent:
-                        child_indent, child_text = lines[index]
-                        if child_indent < indent + 2:
-                            break
-                        if child_text.startswith("- "):
-                            break
-                        ckey, cval, index = parse_key_value(index, child_indent)
-                        item[ckey] = cval
-                    arr.append(item)
-                else:
-                    arr.append(_parse_scalar(item_text))
-            return arr, index
-
-        mapping: dict[str, Any] = {}
-        while index < len(lines) and lines[index][0] == indent and not lines[index][1].startswith("- "):
-            key, val, index = parse_key_value(index, indent)
-            mapping[key] = val
-        return mapping, index
-
-    def parse_key_value(index: int, indent: int) -> tuple[str, Any, int]:
-        cur_indent, text = lines[index]
-        if cur_indent != indent:
-            raise SimpleYamlError(f"{path}: unexpected indent at logical line {index + 1}")
-        if ":" not in text:
-            raise SimpleYamlError(f"{path}: expected key: value at logical line {index + 1}")
-        key, raw_val = text.split(":", 1)
-        key = key.strip()
-        raw_val = raw_val.strip()
-        index += 1
-        if raw_val:
-            return key, _parse_scalar(raw_val), index
-        if index < len(lines) and lines[index][0] > indent:
-            val, index = parse_block(index, lines[index][0])
-            return key, val, index
-        return key, None, index
-
-    parsed, end = parse_block(0, lines[0][0])
-    if end != len(lines):
-        raise SimpleYamlError(f"{path}: could not parse all lines")
-    return parsed
-
+    return YamlSubsetParser(path, _logical_lines(path.read_text(encoding="utf-8"))).parse()
 
 def find_spec(skill_dir: Path) -> Path | None:
     evals_dir = skill_dir / "evals"
