@@ -161,10 +161,12 @@ cases:
 
 class EvalRunnerTestBase(unittest.TestCase):
     """run_evals_template runner 테스트가 공유하는 임시 skill fixture lifecycle을 제공한다."""
+    """각 테스트 호출 전"""
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
 
+    """각 테스트 호출 후"""
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
